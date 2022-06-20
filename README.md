@@ -46,6 +46,11 @@ sensorium2022/
   conda activate sensorium
   ```
 
+## Pull Requests (PRs)
+- Always create a new branch to work on a/any features.
+- When your branch is ready, create a PR on GitHub.
+- Every PR should be reviewed and approved by another person.
+- Once a PR has been approved, the submitter should select **`Squash and merge`** to merge the branch into `main` as a **single** commit.
 ## Reviewing PRs
 Quality reviews are really important. You should spend time reviewing the code your peers write (not just fixing their mistakes without saying anything). If you can't review something because you don't understand what they're doing, there's something very wrong with their code, not you. Ask clarifying questions and suggest ways for them to make their code more interpretable. Request they put comments where comment are necessary.
 
