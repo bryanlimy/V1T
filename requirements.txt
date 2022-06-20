@@ -1,0 +1,12 @@
+tqdm
+h5py
+numpy
+scipy
+pandas
+sklearn
+seaborn
+jupyter
+matplotlib
+ruamel.yaml
+tensorflow-addons
+jupyter_http_over_ws
