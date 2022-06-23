@@ -8,5 +8,5 @@ seaborn
 jupyter
 matplotlib
 ruamel.yaml
-tensorflow-addons
+tensorboard
 jupyter_http_over_ws

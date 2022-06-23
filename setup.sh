@@ -26,19 +26,17 @@ check_requirements() {
     esac
 }
 
-install_tensorflow() {
-    printf "\nInstalling tensorflow...\n"
+install_torch() {
+    printf "\nInstalling PyTorch...\n"
     case $device in
         osx-arm64)
-            conda install -c apple tensorflow-deps -y
-            pip install tensorflow-macos==2.9.1 tensorflow-metal
+            pip install torch torchvision torchaudio
             ;;
         osx-64)
-            pip install tensorflow==2.9.1
+            conda install -c pytorch pytorch torchvision torchaudio -y
             ;;
         linux-64)
-            conda install -c conda-forge cudatoolkit=11.2 cudnn=8.1 nccl -y
-            pip install tensorflow==2.9.1
+            conda install -c pytorch pytorch torchvision torchaudio cudatoolkit=11.3
             ;;
     esac
 }
@@ -51,13 +49,10 @@ install_packages() {
 set_python_path() {
     printf "\nSet conda environment variables...\n"
     conda env config vars set PYTHONPATH=$PYTHONPATH:$current_dir
-    if [ $device = "linux-64" ]; then
-        conda env config vars set LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"$CONDA_PREFIX/lib"
-    fi
 }
 
 check_requirements
-install_tensorflow
+install_torch
 install_packages
 set_python_path
 

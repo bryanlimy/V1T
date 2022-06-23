@@ -9,7 +9,7 @@ Codebase for NeurIPS 2022 Sensorium challenge
 - ICLR2021 paper (SOTA model) from the organizer: [openreview.net/forum?id=Tp7kI90Htd](https://openreview.net/forum?id=Tp7kI90Htd)
 
 ## File structure
-The codebase repository should have the following structure. Check [.gitignore](.gitignore) for the ignored files and [data/README.md](data/README.md) for information regarding how to store the dataset. 
+The codebase repository should have the following structure. Check [.gitignore](.gitignore) for the ignored files and [data/README.md](data/README.md) for information regarding how to store the dataset.
 ```
 sensorium2022/
     data/
@@ -20,6 +20,7 @@ sensorium2022/
         info.yaml
         README.md
     sensorium/
+        ...
     .gitignore
     LICENSE
     README.md
@@ -36,7 +37,7 @@ sensorium2022/
   ```bash
   conda activate sensorium
   ```
-- Install all dependencies (including CUDA and cuDNN) and packages with `setup.sh` script, works on both Linus and macOS. Note: if you are running Mac with Apple Silicon, the script will automatically install `tensorflow-macos` and `tensorflow-metal` for accelerated workload.
+- Install all dependencies and packages using `setup.sh` script. This script install CUDAToolKit and Apple Silicon version of PyTorch on supported machines.
   ```bash
   sh setup.sh
   ```
