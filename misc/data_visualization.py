@@ -4,7 +4,7 @@ import sensorium
 
 
 def main(args):
-    data = sensorium.data.dataset.load_data(args)
+    data = sensorium.data.dataset.load_datasets(args)
 
     print("done")
 
