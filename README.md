@@ -13,11 +13,9 @@ The codebase repository should have the following structure. Check [.gitignore](
 ```
 sensorium2022/
     data/
-        raw_data/
-            static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-            static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-            ...
-        info.yaml
+        static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+        static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+        ...
         README.md
     sensorium/
         ...
