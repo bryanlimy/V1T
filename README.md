@@ -52,14 +52,17 @@ sensorium2022/
 - When your branch is ready, create a PR on GitHub.
 - Every PR should be reviewed and approved by another person.
 - Once a PR has been approved, the submitter should select **`Squash and merge`** to merge the branch into `main` as a **single** commit.
+
 ## Reviewing PRs
 Quality reviews are really important. You should spend time reviewing the code your peers write (not just fixing their mistakes without saying anything). If you can't review something because you don't understand what they're doing, there's something very wrong with their code, not you. Ask clarifying questions and suggest ways for them to make their code more interpretable. Request they put comments where comment are necessary.
 
-If your code is being reviewed, don't be insulted or annoyed at requests to reformat/add comments. Err on the side of helping your colleagues understand your work. We should all have [Black](https://github.com/psf/black) installed (e.g. `pip install black`) and use the following methods to apply `black`:
-- Command line:
-  ```
-  black <file>
-  ```
-- [PyCharm](https://black.readthedocs.io/en/stable/integrations/editors.html#pycharm-intellij-idea)
-- [Visual Studio Code](https://black.readthedocs.io/en/stable/integrations/editors.html#visual-studio-code)
-- [SublimeText 3](https://black.readthedocs.io/en/stable/integrations/editors.html#sublimetext-3)
+If your code is being reviewed, don't be insulted or annoyed at requests to reformat/add comments. Err on the side of helping your colleagues understand your work. We should all have [Black](https://github.com/psf/black) installed:
+- Install [Black](https://github.com/psf/black) `pip install black[jupyter]`, or, if you are using `zsh`: `pip install 'black[jupyter]'`
+- Usage:
+  - Command line:
+    ```
+    black <filename>
+    ```
+  - [PyCharm](https://black.readthedocs.io/en/stable/integrations/editors.html#pycharm-intellij-idea)
+  - [Visual Studio Code](https://black.readthedocs.io/en/stable/integrations/editors.html#visual-studio-code)
+  - [SublimeText 3](https://black.readthedocs.io/en/stable/integrations/editors.html#sublimetext-3)

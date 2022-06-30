@@ -55,16 +55,16 @@ def load_mouse_data(mouse_dir: str):
     return data
 
 
-def load_mice_data(args, mouse_ids: t.List[int] = None):
+def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 1):
     if mouse_ids is None:
         mouse_ids = list(range(len(DATASETS)))
     data = {}
-    unzip_dir = os.path.join(args.dataset, "unzip")
-    for mouse_id in tqdm(mouse_ids, desc="Loading"):
+    unzip_dir = os.path.join(mice_dir, "unzip")
+    for mouse_id in tqdm(mouse_ids, desc="Loading", disable=verbose == 0):
         mouse_dir = os.path.join(unzip_dir, DATASETS[mouse_id])
         if not os.path.isdir(mouse_dir):
             unzip(
-                filename=os.path.join(args.dataset, f"{DATASETS[mouse_id]}.zip"),
+                filename=os.path.join(mice_dir, f"{DATASETS[mouse_id]}.zip"),
                 unzip_dir=unzip_dir,
             )
         data[mouse_id] = load_mouse_data(mouse_dir=mouse_dir)
@@ -74,6 +74,6 @@ def load_mice_data(args, mouse_ids: t.List[int] = None):
 def load_datasets(args):
     assert os.path.isdir(args.dataset)
 
-    data = load_mice_data(args)
+    data = load_mice_data(mice_dir=args.dataset)
 
     return data
