@@ -1,6 +1,7 @@
 ## File structure
 ```
 data/
+    README.md
     static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
     static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
     static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
@@ -8,7 +9,6 @@ data/
     static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
     static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
     static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-    README.md
 ```
 - The `data` folder should contain the ZIP files from [gin.g-node.org/cajal/Sensorium2022](https://gin.g-node.org/cajal/Sensorium2022) with their original filenames.
 - See [sinzlab/sensorium/notebooks/dataset_tutorial](https://github.com/sinzlab/sensorium/tree/main/notebooks/dataset_tutorial) for more information.

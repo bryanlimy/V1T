@@ -21,7 +21,7 @@ DATASETS = {
 
 
 def unzip(filename: str, unzip_dir: str):
-    """Extract filename to unzip_dir"""
+    """Extract zip file with filename to unzip_dir"""
     with ZipFile(filename, mode="r") as file:
         file.extractall(unzip_dir)
 
@@ -31,7 +31,15 @@ def get_num_trials(dir_path: str):
     return len(glob(os.path.join(dir_path, "data", "images", "*.npy")))
 
 
-def load_mouse_data(mouse_dir: str):
+def load_mouse_data(mouse_dir: str) -> t.Dict[str, np.ndarray]:
+    """Load mouse data from mouse_dir.
+    If mouse_dir does not exist, extract the zip data to the same folder.
+    """
+    if not os.path.isdir(mouse_dir):
+        unzip(
+            filename=f"{mouse_dir}.zip",
+            unzip_dir=os.path.dirname(mouse_dir),
+        )
     data_dir = os.path.join(mouse_dir, "data")
     image_dir = os.path.join(data_dir, "images")
     response_dir = os.path.join(data_dir, "responses")
@@ -40,35 +48,30 @@ def load_mouse_data(mouse_dir: str):
 
     num_trials = get_num_trials(dir_path=mouse_dir)
 
-    data = {"image": [], "response": [], "behavior": [], "pupil_center": []}
+    mouse_data = {"image": [], "response": [], "behavior": [], "pupil_center": []}
     for trial in range(num_trials):
         filename = f"{trial}.npy"
         image = np.load(os.path.join(image_dir, filename))
         response = np.load(os.path.join(response_dir, filename))
         behavior = np.load(os.path.join(behavior_dir, filename))
         pupil_center = np.load(os.path.join(pupil_center_dir, filename))
-        data["image"].append(image)
-        data["response"].append(response)
-        data["behavior"].append(behavior)
-        data["pupil_center"].append(pupil_center)
-    data = {k: np.stack(v, axis=0) for k, v in data.items()}
-    return data
+        mouse_data["image"].append(image)
+        mouse_data["response"].append(response)
+        mouse_data["behavior"].append(behavior)
+        mouse_data["pupil_center"].append(pupil_center)
+    mouse_data = {k: np.stack(v, axis=0) for k, v in mouse_data.items()}
+    return mouse_data
 
 
 def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 1):
     if mouse_ids is None:
         mouse_ids = list(range(len(DATASETS)))
-    data = {}
-    unzip_dir = os.path.join(mice_dir, "unzip")
+    mice_data = {}
     for mouse_id in tqdm(mouse_ids, desc="Loading", disable=verbose == 0):
-        mouse_dir = os.path.join(unzip_dir, DATASETS[mouse_id])
-        if not os.path.isdir(mouse_dir):
-            unzip(
-                filename=os.path.join(mice_dir, f"{DATASETS[mouse_id]}.zip"),
-                unzip_dir=unzip_dir,
-            )
-        data[mouse_id] = load_mouse_data(mouse_dir=mouse_dir)
-    return data
+        mice_data[mouse_id] = load_mouse_data(
+            mouse_dir=os.path.join(mice_dir, DATASETS[mouse_id])
+        )
+    return mice_data
 
 
 def load_datasets(args):
