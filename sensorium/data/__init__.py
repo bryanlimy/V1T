@@ -1,3 +1,3 @@
-__all__ = ["dataset"]
+__all__ = ["data"]
 
-from .dataset import *
+from .data import *

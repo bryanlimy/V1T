@@ -34,7 +34,18 @@ def get_num_trials(dir_path: str):
 
 
 def load_mouse_metadata(mouse_dir: str) -> t.Dict[str, np.ndarray]:
-    """Load the relevant metadata of a specific mouse"""
+    """Load the relevant metadata of a specific mouse
+    cell_motor_coordinates: np.ndarray
+        - x, y, z coordinate of each neuron in the cortex
+    frame_image_id: int,
+        - the unique ID for each image
+    tiers: str
+        - 'train' and 'validation': data with labels
+        - 'test': live test set
+        - 'final_test': final test set, exist for mouse 1 and 2
+    trial_id: int,
+        - the unique ID for each trial, hidden for mouse 1 and 2
+    """
     meta_dir = os.path.join(mouse_dir, "meta")
     return {
         "cell_motor_coordinates": np.load(
@@ -50,7 +61,7 @@ def load_mouse_metadata(mouse_dir: str) -> t.Dict[str, np.ndarray]:
 
 def load_mouse_data(mouse_dir: str) -> t.Dict[str, np.ndarray]:
     """Load mouse data from mouse_dir.
-    If mouse_dir does not exist, extract the zip data to the same folder.
+    If mouse_dir does not exist, extract the zip file to the same folder.
     """
     if not os.path.isdir(mouse_dir):
         unzip(
@@ -81,7 +92,6 @@ def load_mouse_data(mouse_dir: str) -> t.Dict[str, np.ndarray]:
 
     # load metadata
     mouse_data["metadata"] = load_mouse_metadata(mouse_dir)
-    unique_tiers = np.unique(mouse_data["metadata"]["tiers"])
     return mouse_data
 
 
