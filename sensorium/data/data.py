@@ -129,12 +129,10 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.filenames)
 
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
-
         (mouse, trial) = self.filenames[idx]
         data = load_trial_data(
             mouse_dir=os.path.join(self.mice_meta[mouse]["mouse_dir"]), trial=trial
         )
-        print(idx)
         return data
 
 
