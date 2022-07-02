@@ -24,13 +24,13 @@ def set_random_seed(seed: int, deterministic: bool = False):
 
 def update_dict(target: dict, source: dict, replace: bool = False):
     """Update target dictionary with values from source dictionary"""
-    for key, value in source.items():
+    for k, v in source.items():
         if replace:
-            target[key] = value
+            target[k] = v
         else:
-            if key not in target:
-                target[key] = []
-            target[key].append(value)
+            if k not in target:
+                target[k] = []
+            target[k].append(v)
 
 
 def check_output(command: list):
