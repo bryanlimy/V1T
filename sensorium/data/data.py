@@ -22,6 +22,8 @@ DATASETS = {
 
 def unzip(filename: str, unzip_dir: str):
     """Extract zip file with filename to unzip_dir"""
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"file {filename} not found.")
     with ZipFile(filename, mode="r") as file:
         file.extractall(unzip_dir)
 
@@ -29,6 +31,21 @@ def unzip(filename: str, unzip_dir: str):
 def get_num_trials(dir_path: str):
     """Get the number of trials in the given mouse directory"""
     return len(glob(os.path.join(dir_path, "data", "images", "*.npy")))
+
+
+def load_mouse_metadata(mouse_dir: str) -> t.Dict[str, np.ndarray]:
+    """Load the relevant metadata of a specific mouse"""
+    meta_dir = os.path.join(mouse_dir, "meta")
+    return {
+        "cell_motor_coordinates": np.load(
+            os.path.join(meta_dir, "neurons", "cell_motor_coordinates.npy")
+        ),
+        "frame_image_id": np.load(
+            os.path.join(meta_dir, "trials", "frame_image_id.npy")
+        ),
+        "tiers": np.load(os.path.join(meta_dir, "trials", "tiers.npy")),
+        "trial_id": np.load(os.path.join(meta_dir, "trials", "trial_idx.npy")),
+    }
 
 
 def load_mouse_data(mouse_dir: str) -> t.Dict[str, np.ndarray]:
@@ -48,18 +65,23 @@ def load_mouse_data(mouse_dir: str) -> t.Dict[str, np.ndarray]:
 
     num_trials = get_num_trials(dir_path=mouse_dir)
 
+    # load data
     mouse_data = {"image": [], "response": [], "behavior": [], "pupil_center": []}
     for trial in range(num_trials):
         filename = f"{trial}.npy"
-        image = np.load(os.path.join(image_dir, filename))
-        response = np.load(os.path.join(response_dir, filename))
-        behavior = np.load(os.path.join(behavior_dir, filename))
-        pupil_center = np.load(os.path.join(pupil_center_dir, filename))
-        mouse_data["image"].append(image)
-        mouse_data["response"].append(response)
-        mouse_data["behavior"].append(behavior)
-        mouse_data["pupil_center"].append(pupil_center)
-    mouse_data = {k: np.stack(v, axis=0) for k, v in mouse_data.items()}
+        mouse_data["image"].append(np.load(os.path.join(image_dir, filename)))
+        mouse_data["response"].append(np.load(os.path.join(response_dir, filename)))
+        mouse_data["behavior"].append(np.load(os.path.join(behavior_dir, filename)))
+        mouse_data["pupil_center"].append(
+            np.load(os.path.join(pupil_center_dir, filename))
+        )
+    mouse_data = {
+        k: np.stack(v, axis=0).astype(np.float32) for k, v in mouse_data.items()
+    }
+
+    # load metadata
+    mouse_data["metadata"] = load_mouse_metadata(mouse_dir)
+    unique_tiers = np.unique(mouse_data["metadata"]["tiers"])
     return mouse_data
 
 
@@ -76,7 +98,10 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 def load_datasets(args):
     assert os.path.isdir(args.dataset)
-
     data = load_mice_data(mice_dir=args.dataset)
-
     return data
+
+
+if __name__ == "__main__":
+    data = load_mice_data(mice_dir="../../data")
+    print(len(data))
