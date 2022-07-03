@@ -63,17 +63,22 @@ def load_mouse_metadata(mouse_dir: str):
         - the statistics (min, max, median, mean, std) for the data
     """
     meta_dir = os.path.join(mouse_dir, "meta")
-    stat_dir = os.path.join(meta_dir, "statistics")
+    neuron_dir = os.path.join(meta_dir, "neurons")
+    trial_dir = os.path.join(meta_dir, "trials")
+    stats_dir = os.path.join(meta_dir, "statistics")
+
+    load_neuron = lambda a: np.load(os.path.join(neuron_dir, a))
+    load_trial = lambda a: np.load(os.path.join(trial_dir, a))
+    load_stat = lambda a, b: np.load(os.path.join(stats_dir, a, "all", f"{b}.npy"))
+
     stat_keys = ["min", "max", "median", "mean", "std"]
-    load_stat = lambda a, b: np.load(os.path.join(stat_dir, a, "all", f"{b}.npy"))
     return {
         "mouse_dir": mouse_dir,
-        "coordinates": np.load(
-            os.path.join(meta_dir, "neurons", "cell_motor_coordinates.npy")
-        ),
-        "frame_id": np.load(os.path.join(meta_dir, "trials", "frame_image_id.npy")),
-        "tiers": np.load(os.path.join(meta_dir, "trials", "tiers.npy")),
-        "trial_id": np.load(os.path.join(meta_dir, "trials", "trial_idx.npy")),
+        "num_neurons": len(load_neuron("unit_ids.npy")),
+        "coordinates": load_neuron("cell_motor_coordinates.npy").astype(np.int32),
+        "frame_id": load_trial("frame_image_id.npy").astype(np.int32),
+        "tiers": load_trial("tiers.npy"),
+        "trial_id": load_trial("trial_idx.npy").astype(np.int32),
         "stats": {
             "image": {k: load_stat("images", k) for k in stat_keys},
             "response": {k: load_stat("responses", k) for k in stat_keys},
@@ -118,21 +123,42 @@ class Dataset(torch.utils.data.Dataset):
     def __init__(self, ds_mode: int, mice_meta: t.Dict):
         assert ds_mode in [0, 1, 2]
         self.mice_meta = mice_meta
-        tier = "train" if ds_mode == 0 else ("validation" if ds_mode == 1 else "test")
+        self.max_neurons = np.max(
+            [self.mice_meta[i]["num_neurons"] for i in self.mice_meta.keys()]
+        )
 
-        self.filenames = []
+        tier = "train" if ds_mode == 0 else ("validation" if ds_mode == 1 else "test")
+        # list of (mouse_id, trial) that belongs to tier
+        self.mouse_trial = []
         for mouse in mice_meta.keys():
-            indexes = np.where(mice_meta[mouse]["tiers"] == tier)[0]
-            self.filenames.extend([(mouse, i) for i in indexes])
+            trials = np.where(mice_meta[mouse]["tiers"] == tier)[0]
+            self.mouse_trial.extend([(mouse, trial) for trial in trials])
 
     def __len__(self):
-        return len(self.filenames)
+        return len(self.mouse_trial)
 
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
-        (mouse, trial) = self.filenames[idx]
+        (mouse_id, trial) = self.mouse_trial[idx]
         data = load_trial_data(
-            mouse_dir=os.path.join(self.mice_meta[mouse]["mouse_dir"]), trial=trial
+            mouse_dir=self.mice_meta[mouse_id]["mouse_dir"], trial=trial
         )
+        # pad array with 0 to match max_neurons number of neurons
+        pad_size = self.max_neurons - len(data["response"])
+
+        data["response"] = np.pad(
+            data["response"],
+            pad_width=(0, pad_size),
+            constant_values=0,
+        )
+        data["mouse_id"] = mouse_id
+        data["coordinates"] = np.pad(
+            self.mice_meta[mouse_id]["coordinates"],
+            pad_width=[(0, pad_size), (0, 0)],
+            constant_values=0,
+        )
+        data["frame_id"] = self.mice_meta[mouse_id]["frame_id"][trial]
+        if type(data["frame_id"]) not in (int, np.int32, np.int64):
+            data["frame_id"] = None
         return data
 
 
@@ -172,8 +198,8 @@ def get_data_loaders(
 
 
 if __name__ == "__main__":
-    train_ds, val_ds, test_ds = get_data_loaders(data_dir="../../data")
+    train_ds, val_ds, test_ds = get_data_loaders(data_dir="../../data", batch_size=4)
 
-    for batch in test_ds:
-        print(batch.keys())
-        break
+    count = 0
+    for batch in tqdm(train_ds):
+        count += 1
