@@ -5,6 +5,7 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
+from torch.utils.data import Dataset, DataLoader
 
 from sensorium.utils import utils
 
@@ -122,7 +123,7 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
     return mice_data, mice_meta
 
 
-class Dataset(torch.utils.data.Dataset):
+class MiceDataset(Dataset):
     def __init__(self, ds_mode: int, mice_meta: t.Dict):
         """Construct Dataset
         Args:
@@ -209,9 +210,9 @@ def get_data_loaders(
         mouse_id: load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
         for mouse_id in mouse_ids
     }
-    train_ds = Dataset(ds_mode=0, mice_meta=mice_meta)
-    val_ds = Dataset(ds_mode=1, mice_meta=mice_meta)
-    test_ds = Dataset(ds_mode=2, mice_meta=mice_meta)
+    train_ds = MiceDataset(ds_mode=0, mice_meta=mice_meta)
+    val_ds = MiceDataset(ds_mode=1, mice_meta=mice_meta)
+    test_ds = MiceDataset(ds_mode=2, mice_meta=mice_meta)
 
     # initialize data loaders
     train_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": True}
@@ -221,16 +222,8 @@ def get_data_loaders(
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    train_ds = torch.utils.data.DataLoader(train_ds, **train_kwargs)
-    val_ds = torch.utils.data.DataLoader(val_ds, **test_kwargs)
-    test_ds = torch.utils.data.DataLoader(test_ds, **test_kwargs)
+    train_ds = DataLoader(train_ds, **train_kwargs)
+    val_ds = DataLoader(val_ds, **test_kwargs)
+    test_ds = DataLoader(test_ds, **test_kwargs)
 
     return train_ds, val_ds, test_ds
-
-
-if __name__ == "__main__":
-    train_ds, val_ds, test_ds = get_data_loaders(data_dir="../../data", batch_size=4)
-
-    count = 0
-    for batch in tqdm(train_ds, desc="Train"):
-        count += 1
