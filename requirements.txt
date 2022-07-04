@@ -1,6 +1,7 @@
 tqdm
 h5py
 numpy
+torch
 scipy
 pandas
 sklearn
