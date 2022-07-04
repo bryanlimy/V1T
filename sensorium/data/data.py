@@ -37,11 +37,14 @@ def get_num_trials(mouse_dir: str):
 def load_trial_data(mouse_dir: str, trial: int):
     """Load data from a single trial in mouse_dir"""
     filename, data_dir = f"{trial}.npy", os.path.join(mouse_dir, "data")
+    load_data = lambda a: np.load(os.path.join(data_dir, a, filename)).astype(
+        np.float32
+    )
     return {
-        "image": np.load(os.path.join(data_dir, "images", filename)),
-        "response": np.load(os.path.join(data_dir, "responses", filename)),
-        "behavior": np.load(os.path.join(data_dir, "behavior", filename)),
-        "pupil_center": np.load(os.path.join(data_dir, "pupil_center", filename)),
+        "image": load_data("images"),
+        "response": load_data("responses"),
+        "behavior": load_data("behavior"),
+        "pupil_center": load_data("pupil_center"),
     }
 
 
@@ -121,7 +124,12 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, ds_mode: int, mice_meta: t.Dict):
-        assert ds_mode in [0, 1, 2]
+        """Construct Dataset
+        Args:
+            - ds_mode: int, 0 - training, 1 - validation and 2 - test set
+            - mice_meta: t.Dict, the metadata of the mice used for this Dataset
+        """
+        assert ds_mode in [0, 1, 2], f"ds_mode must be of value 0, 1 or 2."
         self.mice_meta = mice_meta
         self.max_neurons = np.max(
             [self.mice_meta[i]["num_neurons"] for i in self.mice_meta.keys()]
@@ -138,27 +146,50 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.mouse_trial)
 
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
+        """Return data and metadata
+
+        Note that the shape of the responses and coordinates are different for
+        different mouse, hence 0 padding is needed.
+
+        Returns
+            - data, t.Dict[str, torch.Tensor]
+                - image: the natural image in (C, H, W) format
+                - response: the corresponding response
+                - behavior: pupil size, the derivative of pupil size, and speed
+                - pupil_center: the (x, y) coordinate of the center of the pupil
+                - mouse_id: the mouse ID
+                - num_neurons: the number of neurons in responses
+                - coordinates: the anatomical coordinate (x, y, z) of each neuron
+                - frame_id: the frame image ID
+                - padding_mask: the mask to mask out pads in responses
+        """
         (mouse_id, trial) = self.mouse_trial[idx]
         data = load_trial_data(
             mouse_dir=self.mice_meta[mouse_id]["mouse_dir"], trial=trial
         )
-        # pad array with 0 to match max_neurons number of neurons
-        pad_size = self.max_neurons - len(data["response"])
+        data["mouse_id"] = mouse_id
+        data["num_neurons"] = self.mice_meta[mouse_id]["num_neurons"]
+        data["frame_id"] = self.mice_meta[mouse_id]["frame_id"][trial]
+        if type(data["frame_id"]) not in (int, np.int32, np.int64):
+            data["frame_id"] = None
 
+        # pad array with 0 to match max_neurons number of neurons
+        pad_size = self.max_neurons - data["num_neurons"]
         data["response"] = np.pad(
             data["response"],
             pad_width=(0, pad_size),
             constant_values=0,
         )
-        data["mouse_id"] = mouse_id
         data["coordinates"] = np.pad(
             self.mice_meta[mouse_id]["coordinates"],
             pad_width=[(0, pad_size), (0, 0)],
             constant_values=0,
         )
-        data["frame_id"] = self.mice_meta[mouse_id]["frame_id"][trial]
-        if type(data["frame_id"]) not in (int, np.int32, np.int64):
-            data["frame_id"] = None
+        # padding mask to mask out pads in responses for loss calculation
+        padding_mask = np.ones(self.max_neurons, dtype=np.float32)
+        padding_mask[-pad_size:] = 0
+        data["padding_mask"] = padding_mask
+
         return data
 
 
@@ -166,7 +197,7 @@ def get_data_loaders(
     data_dir: str,
     mouse_ids: t.List[int] = None,
     batch_size: int = 1,
-    use_cuda: bool = False,
+    device: torch.device = torch.device("cpu"),
 ):
     if mouse_ids is None:
         mouse_ids = list(range(2, 7))
@@ -185,7 +216,7 @@ def get_data_loaders(
     # initialize data loaders
     train_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": True}
     test_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": False}
-    if use_cuda:
+    if device.type in ["cuda", "mps"]:
         cuda_kwargs = {"prefetch_factor": 2, "pin_memory": True}
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
@@ -201,5 +232,5 @@ if __name__ == "__main__":
     train_ds, val_ds, test_ds = get_data_loaders(data_dir="../../data", batch_size=4)
 
     count = 0
-    for batch in tqdm(train_ds):
+    for batch in tqdm(train_ds, desc="Train"):
         count += 1
