@@ -9,7 +9,7 @@ Codebase for NeurIPS 2022 Sensorium challenge
 - ICLR2021 paper (SOTA model) from the organizer: [openreview.net/forum?id=Tp7kI90Htd](https://openreview.net/forum?id=Tp7kI90Htd)
 
 ## File structure
-The codebase repository should have the following structure. Check [.gitignore](.gitignore) for the ignored files and [data/README.md](data/README.md) for information regarding how to store the dataset.
+The codebase repository should have the following structure. Check [.gitignore](.gitignore) for the ignored files.
 ```
 sensorium2022/
     data/
@@ -17,14 +17,21 @@ sensorium2022/
         static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
         ...
         README.md
-    sensorium/
-        ...
+    misc/
+    src/
+        sensorium/
+            ...
     .gitignore
     LICENSE
+    pyproject.toml
     README.md
     requirements.txt
+    setup.py
     setup.sh
 ```
+- `data` stores the zip files from [gin.g-node.org/cajal/Sensorium2022](https://gin.g-node.org/cajal/Sensorium2022), check [data/README.md](data/README.md) more information.
+- `misc` contains scripts and notebooks that is not relevant to the main Python package.
+- `src/sensorium` contains the code for the main Python package.
 
 ## Installation
 - Create a new [conda](https://docs.conda.io/en/latest/miniconda.html) environment with Python 3.8.
@@ -52,10 +59,10 @@ Quality reviews are really important. You should spend time reviewing the code y
 If your code is being reviewed, don't be insulted or annoyed at requests to reformat/add comments. Err on the side of helping your colleagues understand your work. We should all have [Black](https://github.com/psf/black) installed:
 - Install [Black](https://github.com/psf/black) `pip install black[jupyter]`, or, if you are using `zsh`: `pip install 'black[jupyter]'`
 - Usage:
-  - Command line:
-    ```
-    black <filename>
-    ```
-  - [PyCharm](https://black.readthedocs.io/en/stable/integrations/editors.html#pycharm-intellij-idea)
-  - [Visual Studio Code](https://black.readthedocs.io/en/stable/integrations/editors.html#visual-studio-code)
-  - [SublimeText 3](https://black.readthedocs.io/en/stable/integrations/editors.html#sublimetext-3)
+    - Command line:
+      ```
+      black <filename>
+      ```
+    - [PyCharm](https://black.readthedocs.io/en/stable/integrations/editors.html#pycharm-intellij-idea)
+    - [Visual Studio Code](https://black.readthedocs.io/en/stable/integrations/editors.html#visual-studio-code)
+    - [SublimeText 3](https://black.readthedocs.io/en/stable/integrations/editors.html#sublimetext-3)
