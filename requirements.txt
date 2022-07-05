@@ -1,12 +1,15 @@
 tqdm
 h5py
 numpy
+torch
 scipy
 pandas
 sklearn
 seaborn
 jupyter
+torchaudio
 matplotlib
 ruamel.yaml
-tensorflow-addons
+tensorboard
+torchvision
 jupyter_http_over_ws
