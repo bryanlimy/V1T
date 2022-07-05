@@ -131,14 +131,16 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(self, ds_mode: int, mice_meta: t.Dict):
+    def __init__(self, ds_mode: int, mice_meta: t.Dict, padding: bool = True):
         """Construct Dataset
         Args:
             - ds_mode: int, 0 - training, 1 - validation and 2 - test set
             - mice_meta: t.Dict, the metadata of the mice used for this Dataset
+            - padding: bool, pad responses and coordinates to have the same shape
         """
         assert ds_mode in [0, 1, 2], f"ds_mode must be of value 0, 1 or 2."
         self.mice_meta = mice_meta
+        self.padding = padding
         self.max_neurons = np.max(
             [self.mice_meta[i]["num_neurons"] for i in self.mice_meta.keys()]
         )
@@ -156,8 +158,8 @@ class MiceDataset(Dataset):
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
 
-        Note that the shape of the responses and coordinates are different for
-        different mouse, hence 0 padding is needed.
+        Note that responses and coordinates are padded with 0s if self.padding
+        is True so that the data matrix can have the same shape across all mice.
 
         Returns
             - data, t.Dict[str, torch.Tensor]
@@ -177,26 +179,28 @@ class MiceDataset(Dataset):
         )
         data["mouse_id"] = mouse_id
         data["num_neurons"] = self.mice_meta[mouse_id]["num_neurons"]
+        data["coordinates"] = self.mice_meta[mouse_id]["coordinates"]
         data["frame_id"] = self.mice_meta[mouse_id]["frame_id"][trial]
         if type(data["frame_id"]) not in (int, np.int32, np.int64):
             data["frame_id"] = None
 
         # pad array with 0 to match max_neurons number of neurons
-        pad_size = self.max_neurons - data["num_neurons"]
-        data["response"] = np.pad(
-            data["response"],
-            pad_width=(0, pad_size),
-            constant_values=0,
-        )
-        data["coordinates"] = np.pad(
-            self.mice_meta[mouse_id]["coordinates"],
-            pad_width=[(0, pad_size), (0, 0)],
-            constant_values=0,
-        )
-        # padding mask to mask out pads in responses for loss calculation
-        padding_mask = np.ones(self.max_neurons, dtype=np.float32)
-        padding_mask[-pad_size:] = 0
-        data["padding_mask"] = padding_mask
+        if self.padding:
+            pad_size = self.max_neurons - data["num_neurons"]
+            data["response"] = np.pad(
+                data["response"],
+                pad_width=(0, pad_size),
+                constant_values=0,
+            )
+            data["coordinates"] = np.pad(
+                data["coordinates"],
+                pad_width=[(0, pad_size), (0, 0)],
+                constant_values=0,
+            )
+            # padding mask to mask out pads in responses for loss calculation
+            padding_mask = np.ones(self.max_neurons, dtype=np.float32)
+            padding_mask[-pad_size:] = 0
+            data["padding_mask"] = padding_mask
 
         return data
 
@@ -234,3 +238,7 @@ def get_data_loaders(
     test_ds = DataLoader(test_ds, **test_kwargs)
 
     return train_ds, val_ds, test_ds
+
+
+if __name__ == "__main__":
+    data, metadata = load_mice_data(mice_dir="../../../data", mouse_ids=[1])
