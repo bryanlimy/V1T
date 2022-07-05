@@ -35,14 +35,9 @@ sensorium2022/
   ```bash
   conda activate sensorium
   ```
-- Install all dependencies and packages using `setup.sh` script. This script install CUDAToolKit and Apple Silicon version of PyTorch on supported machines.
+- Install all dependencies and packages using `setup.sh` script.
   ```bash
   sh setup.sh
-  ```
-- Restart environment
-  ```
-  conda deactivate
-  conda activate sensorium
   ```
 
 ## Pull Requests (PRs)

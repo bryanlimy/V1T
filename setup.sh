@@ -42,18 +42,12 @@ install_torch() {
 }
 
 install_packages() {
-    printf "\nInstalling other Python packages...\n"
-    pip install -r requirements.txt
-}
-
-set_python_path() {
-    printf "\nSet conda environment variables...\n"
-    conda env config vars set PYTHONPATH=$PYTHONPATH:$current_dir
+    printf "\nInstall Python packages...\n"
+    pip install -e .
 }
 
 check_requirements
 install_torch
 install_packages
-set_python_path
 
-printf '\n\nSetup completed. Please restart conda environment\n'
+printf '\n\nSetup completed.\n'

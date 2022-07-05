@@ -7,7 +7,9 @@ pandas
 sklearn
 seaborn
 jupyter
+torchaudio
 matplotlib
 ruamel.yaml
 tensorboard
+torchvision
 jupyter_http_over_ws

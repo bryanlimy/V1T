@@ -66,6 +66,11 @@ def load_mouse_metadata(mouse_dir: str):
     statistics: t.Dict[str, t.Dict[str, np.ndarray]]
         - the statistics (min, max, median, mean, std) for the data
     """
+    if not os.path.isdir(mouse_dir):
+        unzip(
+            filename=f"{mouse_dir}.zip",
+            unzip_dir=os.path.dirname(mouse_dir),
+        )
     meta_dir = os.path.join(mouse_dir, "meta")
     neuron_dir = os.path.join(meta_dir, "neurons")
     trial_dir = os.path.join(meta_dir, "trials")
@@ -76,13 +81,13 @@ def load_mouse_metadata(mouse_dir: str):
     load_stat = lambda a, b: np.load(os.path.join(stats_dir, a, "all", f"{b}.npy"))
 
     stat_keys = ["min", "max", "median", "mean", "std"]
-    return {
+    metadata = {
         "mouse_dir": mouse_dir,
         "num_neurons": len(load_neuron("unit_ids.npy")),
         "coordinates": load_neuron("cell_motor_coordinates.npy").astype(np.int32),
         "frame_id": load_trial("frame_image_id.npy").astype(np.int32),
         "tiers": load_trial("tiers.npy"),
-        "trial_id": load_trial("trial_idx.npy").astype(np.int32),
+        "trial_id": load_trial("trial_idx.npy"),
         "stats": {
             "image": {k: load_stat("images", k) for k in stat_keys},
             "response": {k: load_stat("responses", k) for k in stat_keys},
@@ -90,12 +95,13 @@ def load_mouse_metadata(mouse_dir: str):
             "pupil_center": {k: load_stat("pupil_center", k) for k in stat_keys},
         },
     }
+    if np.issubdtype(metadata["trial_id"].dtype, np.integer):
+        metadata["trial_id"] = metadata["trial_id"].astype(np.int32)
+    return metadata
 
 
 def load_mouse_data(mouse_dir: str):
-    """Load mouse data from mouse_dir.
-    If mouse_dir does not exist, extract the zip file to the same folder.
-    """
+    """Load data and metadata from mouse_dir"""
     if not os.path.isdir(mouse_dir):
         unzip(
             filename=f"{mouse_dir}.zip",
@@ -113,6 +119,7 @@ def load_mouse_data(mouse_dir: str):
 
 
 def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 1):
+    """Load data and metadata for mouse_ids into dictionaries where key is the mouse_id"""
     if mouse_ids is None:
         mouse_ids = list(range(len(MICE)))
     mice_data, mice_meta = {}, {}
