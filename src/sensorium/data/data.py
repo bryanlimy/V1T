@@ -35,6 +35,11 @@ def get_num_trials(mouse_dir: str):
     return len(glob(os.path.join(mouse_dir, "data", "images", "*.npy")))
 
 
+def get_image_shape(data_dir: str):
+    image = np.load(os.path.join(data_dir, MICE[2], "data", "images", "0.npy"))
+    return image.shape
+
+
 def load_trial_data(mouse_dir: str, trial: int):
     """Load data from a single trial in mouse_dir"""
     filename, data_dir = f"{trial}.npy", os.path.join(mouse_dir, "data")
@@ -206,6 +211,7 @@ class MiceDataset(Dataset):
 
 
 def get_data_loaders(
+    args,
     data_dir: str,
     mouse_ids: t.List[int] = None,
     batch_size: int = 1,
@@ -221,11 +227,15 @@ def get_data_loaders(
         mouse_id: load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
         for mouse_id in mouse_ids
     }
+
     train_ds = MiceDataset(ds_mode=0, mice_meta=mice_meta)
     val_ds = MiceDataset(ds_mode=1, mice_meta=mice_meta)
     test_ds = MiceDataset(ds_mode=2, mice_meta=mice_meta)
 
-    # initialize data loaders
+    args.input_shape = get_image_shape(data_dir=data_dir)
+    args.output_shape = (train_ds.max_neurons,)
+
+    # create DataLoaders
     train_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": True}
     test_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": False}
     if device.type in ["cuda", "mps"]:
@@ -238,7 +248,3 @@ def get_data_loaders(
     test_ds = DataLoader(test_ds, **test_kwargs)
 
     return train_ds, val_ds, test_ds
-
-
-if __name__ == "__main__":
-    data, metadata = load_mice_data(mice_dir="../../../data", mouse_ids=[1])

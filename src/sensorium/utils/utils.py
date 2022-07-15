@@ -52,3 +52,13 @@ def load_args(args):
     for key, value in content.items():
         if not hasattr(args, key):
             setattr(args, key, value)
+
+
+def get_available_device(no_acceleration: bool):
+    device = torch.device("cpu")
+    if not no_acceleration:
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+    return device

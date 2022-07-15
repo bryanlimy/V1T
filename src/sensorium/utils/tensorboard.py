@@ -104,26 +104,19 @@ def save_figure(figure: plt.Figure, filename: str, dpi: int = 120, close: bool =
 class Summary(object):
     """Helper class to write TensorBoard summaries"""
 
-    def __init__(self, args, output_dir: str = ""):
+    def __init__(self, args):
         self.dpi = args.dpi
         self.format = args.format
-        self.dataset = args.dataset
         self.save_plots = args.save_plots
 
-        # write TensorBoard summary to specified output_dir or args.output_dir
-        if output_dir:
-            if not os.path.isdir(output_dir):
-                os.makedirs(output_dir)
-            self.writers = [SummaryWriter(output_dir)]
-        else:
-            output_dir = args.output_dir
-            self.writers = [
-                SummaryWriter(output_dir),
-                SummaryWriter(os.path.join(output_dir, "val")),
-                SummaryWriter(os.path.join(output_dir, "test")),
-            ]
+        # create SummaryWriter for train, validation and test set
+        self.writers = [
+            SummaryWriter(args.output_dir),
+            SummaryWriter(os.path.join(args.output_dir, "val")),
+            SummaryWriter(os.path.join(args.output_dir, "test")),
+        ]
 
-        self.plots_dir = os.path.join(output_dir, "plots")
+        self.plots_dir = os.path.join(args.output_dir, "plots")
         if not os.path.isdir(self.plots_dir):
             os.makedirs(self.plots_dir)
 
@@ -131,6 +124,13 @@ class Summary(object):
             matplotlib.use("TkAgg")
 
     def get_writer(self, mode: int = 0):
+        """Get SummaryWriter
+        Args:
+            mode: int, the SummaryWriter to get
+                0 - train set
+                1 - validation set
+                2 - test set
+        """
         return self.writers[mode]
 
     def close(self):
