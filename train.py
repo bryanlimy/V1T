@@ -60,7 +60,7 @@ def main(args):
     )
 
     model = get_model(args)
-    loss_function = torch.nn.CrossEntropyLoss()
+    loss_function = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     summary = tensorboard.Summary(args)
@@ -89,8 +89,6 @@ def main(args):
                 f'Train\t\tloss: {train_results["loss"]:.02f}\n'
                 f"Elapse: {elapse:.02f}s\n"
             )
-
-        epoch += 1
 
 
 if __name__ == "__main__":
