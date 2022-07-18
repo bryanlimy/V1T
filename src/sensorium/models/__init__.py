@@ -1,3 +1,4 @@
-__all__ = ["linear"]
+__all__ = ["linear", "random"]
 
 from .linear import *
+from .random import *

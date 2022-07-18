@@ -5,24 +5,19 @@ from tqdm import tqdm
 from time import time
 from shutil import rmtree
 
-
 from sensorium.data import data
-from sensorium.utils import utils, tensorboard
+from sensorium.utils import utils, tensorboard, metrics
 from sensorium.models.registry import get_model
 
 
 def train_step(data, model, optimizer, loss_function):
     result = {}
-
     optimizer.zero_grad()
-
     outputs = model(data["image"])
     loss = loss_function(data["response"], outputs)
     loss.backward()
     optimizer.step()
-
-    result["loss"] = loss
-
+    result["loss/loss"] = loss
     return result
 
 
@@ -30,19 +25,43 @@ def train(
     args, ds, model, optimizer, loss_function, epoch: int, summary: tensorboard.Summary
 ):
     results = {}
-
     for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
         data = {k: v.to(args.device) for k, v in data.items()}
         result = train_step(
             data=data, model=model, optimizer=optimizer, loss_function=loss_function
         )
         utils.update_dict(results, result)
-
-    for key, value in results.items():
-        results[key] = torch.stack(value).mean()
-        summary.scalar(key, results[key], step=epoch, mode=0)
-
+    for k, v in results.items():
+        results[k] = torch.stack(v).mean()
+        summary.scalar(k, results[k], step=epoch, mode=0)
     return results
+
+
+def validation_step(data, model, loss_function):
+    result = {}
+    outputs = model(data["image"])
+    loss = loss_function(data["response"], outputs)
+    result["loss/loss"] = loss
+    return result
+
+
+def validate(args, ds, model, loss_function, epoch: int, summary: tensorboard.Summary):
+    results = {}
+    for data in tqdm(ds, desc="Validation", disable=args.verbose == 0):
+        data = {k: v.to(args.device) for k, v in data.items()}
+        result = validation_step(data=data, model=model, loss_function=loss_function)
+        utils.update_dict(results, result)
+    for k, v in results.items():
+        results[k] = torch.stack(v).mean()
+        summary.scalar(k, results[k], step=epoch, mode=0)
+    return results
+
+
+def evaluate(args, ds, model, epoch: int, summary: tensorboard.Summary):
+    single_trial_correlations = metrics.single_trial_correlations(
+        ds=ds, model=model, device=args.device
+    )
+    return
 
 
 def main(args):
@@ -65,6 +84,14 @@ def main(args):
 
     summary = tensorboard.Summary(args)
 
+    evaluate(
+        args,
+        ds=val_ds,
+        model=model,
+        epoch=0,
+        summary=summary,
+    )
+
     epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -80,13 +107,22 @@ def main(args):
             epoch=epoch,
             summary=summary,
         )
+        val_results = validate(
+            args,
+            ds=val_ds,
+            model=model,
+            loss_function=loss_function,
+            epoch=epoch,
+            summary=summary,
+        )
         elapse = time() - start
 
         summary.scalar("model/elapse", elapse, step=epoch, mode=0)
 
         if args.verbose:
             print(
-                f'Train\t\tloss: {train_results["loss"]:.02f}\n'
+                f'Train\t\t\tloss: {train_results["loss/loss"]:.02f}\n'
+                f'Validation\t\tloss: {val_results["loss/loss"]:.02f}\n'
                 f"Elapse: {elapse:.02f}s\n"
             )
 

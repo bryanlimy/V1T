@@ -27,7 +27,10 @@ def get_model(args, summary: tensorboard.Summary = None):
 
     # get model summary and write to args.output_dir
     model_info = torchinfo.summary(
-        model, input_size=args.input_shape, device=args.device, verbose=0
+        model,
+        input_size=(args.batch_size, *args.input_shape),
+        device=args.device,
+        verbose=0,
     )
     with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
         file.write(str(model_info))
