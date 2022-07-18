@@ -4,6 +4,7 @@ import platform
 import matplotlib
 import numpy as np
 import typing as t
+import pandas as pd
 from PIL import Image
 import seaborn as sns
 import matplotlib.cm as cm
@@ -184,3 +185,19 @@ class Summary(object):
         self.image(tag, image, step=step, mode=mode)
         if close:
             plt.close(figure)
+
+    def plot_correlation(
+        self,
+        tag: str,
+        data: pd.DataFrame,
+        xlabel: str = "Mouse",
+        ylabel: str = "Correlation",
+        step: int = 0,
+        mode: int = 0,
+    ):
+        figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4), dpi=self.dpi)
+        sns.boxenplot(x="mouse", y="results", data=data, ax=ax)
+        sns.despine(trim=True)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        self.figure(tag, figure=figure, step=step, close=True, mode=mode)

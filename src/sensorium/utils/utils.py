@@ -4,6 +4,8 @@ import torch
 import random
 import subprocess
 import numpy as np
+import typing as t
+import pandas as pd
 
 from sensorium.utils import yaml
 
@@ -62,3 +64,11 @@ def get_available_device(no_acceleration: bool):
         elif torch.backends.mps.is_available():
             device = torch.device("mps")
     return device
+
+
+def metrics2df(results: t.Dict[str, np.ndarray]):
+    mouse_ids, values = [], []
+    for mouse_id, v in results.items():
+        mouse_ids.extend([mouse_id] * len(v))
+        values.extend(v.tolist())
+    return pd.DataFrame({"mouse": mouse_ids, "results": values})

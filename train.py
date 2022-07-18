@@ -58,10 +58,15 @@ def validate(args, ds, model, loss_function, epoch: int, summary: tensorboard.Su
 
 
 def evaluate(args, ds, model, epoch: int, summary: tensorboard.Summary):
-    single_trial_correlations = metrics.single_trial_correlations(
+    trial_correlations = metrics.single_trial_correlations(
         ds=ds, model=model, device=args.device
     )
-    return
+    summary.plot_correlation(
+        "metrics/single_trial_correlation",
+        data=utils.metrics2df(trial_correlations),
+        step=epoch,
+        mode=1,
+    )
 
 
 def main(args):
@@ -125,6 +130,8 @@ def main(args):
                 f'Validation\t\tloss: {val_results["loss/loss"]:.02f}\n'
                 f"Elapse: {elapse:.02f}s\n"
             )
+
+    summary.close()
 
 
 if __name__ == "__main__":
