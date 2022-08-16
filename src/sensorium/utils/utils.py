@@ -66,7 +66,7 @@ def get_available_device(no_acceleration: bool):
     return device
 
 
-def metrics2df(results: t.Dict[str, np.ndarray]):
+def metrics2df(results: t.Dict[str, torch.Tensor]):
     mouse_ids, values = [], []
     for mouse_id, v in results.items():
         mouse_ids.extend([mouse_id] * len(v))

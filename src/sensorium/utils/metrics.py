@@ -2,25 +2,52 @@ import torch
 import numpy as np
 import typing as t
 from tqdm import tqdm
+from torch.utils.data import DataLoader
 
 
-def inference(ds, model, device: torch.device = torch.device("cpu")):
-    predictions, targets = {}, {}
+def inference(
+    ds: DataLoader,
+    model: torch.nn.Module,
+    device: torch.device = torch.device("cpu"),
+):
+    """Inference data in DataLoader ds
+    Returns:
+        results: t.Dict[str, torch.Tensor]
+            - predictions: torch.Tensor, predictions given images
+            - targets: torch.Tensor, the ground-truth responses
+            - mouse_id: torch.Tensor, mouse ID of the corresponding responses
+            - trial_id: torch.Tensor, trial ID of the corresponding responses
+            - frame_id: torch.Tensor, frame ID of the corresponding responses
+    """
+    results = {}
     model.train(False)
     for data in tqdm(ds, desc="Inference"):
         images = data["image"].to(device)
-        responses = model(images)
-        responses = responses.detach().cpu()
-        for i, mouse_id in enumerate(data["mouse_id"].tolist()):
-            if mouse_id not in predictions:
-                predictions[mouse_id] = []
-            if mouse_id not in targets:
-                targets[mouse_id] = []
-            predictions[mouse_id].append(responses[i])
-            targets[mouse_id].append(data["response"][i])
-    predictions = {k: torch.stack(v) for k, v in predictions.items()}
-    targets = {k: torch.stack(v) for k, v in targets.items()}
-    return predictions, targets
+        predictions = model(images)
+        predictions = predictions.detach().cpu()
+        # separate responses by mouse ID
+        for i in range(len(predictions)):
+            mouse_id = int(data["mouse_id"][i])
+            if mouse_id not in results:
+                results[mouse_id] = {
+                    "prediction": [],
+                    "target": [],
+                    "frame_id": [],
+                    "trial_id": [],
+                }
+            results[mouse_id]["prediction"].append(predictions[i])
+            results[mouse_id]["target"].append(data["response"][i])
+            results[mouse_id]["frame_id"].append(data["frame_id"][i])
+            results[mouse_id]["trial_id"].append(data["trial_id"][i])
+    for mouse_id, mouse_result in results.items():
+        mouse_result = {k: torch.stack(v) for k, v in mouse_result.items()}
+        # crop padded neurons if exists
+        if ds.dataset.padding:
+            num_neurons = ds.dataset.mice_meta[mouse_id]["num_neurons"]
+            mouse_result["prediction"] = mouse_result["prediction"][:, :num_neurons]
+            mouse_result["target"] = mouse_result["target"][:, :num_neurons]
+        results[mouse_id] = mouse_result
+    return results
 
 
 def correlation(
@@ -39,16 +66,22 @@ def correlation(
     return torch.mean(y1 * y2, dim=dim)
 
 
-def single_trial_correlations(ds, model, device: torch.device = torch.device("cpu")):
-    predictions, targets = inference(ds=ds, model=model, device=device)
+def single_trial_correlations(
+    ds: DataLoader,
+    model: torch.nn.Module,
+    device: torch.device = torch.device("cpu"),
+):
+    """Compute signal trial correlation"""
+    results = inference(ds=ds, model=model, device=device)
     correlations = {}
-    for mouse_id in predictions.keys():
-        correlations[mouse_id] = correlation(
-            y1=targets[mouse_id], y2=predictions[mouse_id], dim=0
+    for mouse_id, mouse_result in results.items():
+        corr = correlation(
+            y1=mouse_result["target"],
+            y2=mouse_result["prediction"],
+            dim=0,
         )
-        if torch.any(np.isnan(correlations[mouse_id])):
-            print(
-                f"{torch.isnan(correlations[mouse_id]).mean() * 100} NaN values, set to zeros."
-            )
-        correlations[mouse_id] = torch.nan_to_num(correlations[mouse_id])
+        if torch.any(np.isnan(corr)):
+            print(f"set {torch.isnan(corr).mean() * 100} NaN values to zeros.")
+            corr = torch.nan_to_num(corr)
+        correlations[mouse_id] = corr
     return correlations

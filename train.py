@@ -80,7 +80,10 @@ def main(args):
     args.device = utils.get_available_device(args.no_acceleration)
 
     train_ds, val_ds, test_ds = data.get_data_loaders(
-        args, data_dir=args.dataset, batch_size=args.batch_size, device=args.device
+        args,
+        data_dir=args.dataset,
+        batch_size=args.batch_size,
+        device=args.device,
     )
 
     model = get_model(args)

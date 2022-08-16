@@ -58,7 +58,7 @@ We provide the datasets in the .zip format. Unzipping them will create two folde
         - `frame_image_id.npy`: contains unique image id. If the image is presented multiple times (which is the case in the test set) this image ID will be present multiple times.
         - `tiers.npy`: contains labels that are used to split the data into *train*, *validation*, and *test* set
             - The *training* and *validation* split is only present for convenience, and is used by our ready-to-use PyTorch DataLoaders.
-            - The *test* set is used to evaluate the model preformance. In the competition datasets, the responses to all *test* images is withheld.
+            - The *test* set is used to evaluate the model performance. In the competition datasets, the responses to all *test* images is withheld.
             - In the 2 competition datasets, there is the additional tier *final_test*, which contains 100 images and their repetitions. The model performance on these *tiers* will be used to determine the winner of the competition.
 
         - `trial_idx.npy`: contains a unique index for each trial. While the true trial index is available for the “pre-training” datasets, it is hidden (i.e. hashed) in the competition datasets.
@@ -67,7 +67,7 @@ We provide the datasets in the .zip format. Unzipping them will create two folde
 
 ## Competition Datasets (Sensorium & Sensorium+)
 
-The datasets `26872-17-20` (Sensorium) `27204-5-13` (Sensorium+) are different from the 5 other full datasets in these ways:
+The datasets `26872-17-20` (Sensorium) `27204-5-13` (Sensorium+) are different from rest of the datasets in these ways:
 
 - They have 2 types of test images, that reflects how we evaluate the submissions:
     - **live test images**: These are 100 images, and can be found under the tiers *test*. They are also present in all the pre-training datasets

@@ -136,21 +136,20 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(self, ds_mode: int, mice_meta: t.Dict, padding: bool = True):
+    def __init__(self, tier: str, mice_meta: t.Dict, padding: bool = True):
         """Construct Dataset
         Args:
-            - ds_mode: int, 0 - training, 1 - validation and 2 - test set
+            - tier: str, train, validation or test
             - mice_meta: t.Dict, the metadata of the mice used for this Dataset
             - padding: bool, pad responses and coordinates to have the same shape
         """
-        assert ds_mode in [0, 1, 2], f"ds_mode must be of value 0, 1 or 2."
+        assert tier in ("train", "validation", "test")
         self.mice_meta = mice_meta
         self.padding = padding
         self.max_neurons = np.max(
             [self.mice_meta[i]["num_neurons"] for i in self.mice_meta.keys()]
         )
 
-        tier = "train" if ds_mode == 0 else ("validation" if ds_mode == 1 else "test")
         # list of (mouse_id, trial) that belongs to tier
         self.mouse_trial = []
         for mouse in mice_meta.keys():
@@ -176,18 +175,19 @@ class MiceDataset(Dataset):
                 - num_neurons: the number of neurons in responses
                 - coordinates: the anatomical coordinate (x, y, z) of each neuron
                 - frame_id: the frame image ID
+                - trial_id: the trial ID, None if the trial ID is hidden
                 - padding_mask: the mask to mask out pads in responses
         """
         (mouse_id, trial) = self.mouse_trial[idx]
-        data = load_trial_data(
-            mouse_dir=self.mice_meta[mouse_id]["mouse_dir"], trial=trial
-        )
+        metadata = self.mice_meta[mouse_id]
+        data = load_trial_data(mouse_dir=metadata["mouse_dir"], trial=trial)
         data["mouse_id"] = mouse_id
-        data["num_neurons"] = self.mice_meta[mouse_id]["num_neurons"]
-        data["coordinates"] = self.mice_meta[mouse_id]["coordinates"]
-        data["frame_id"] = self.mice_meta[mouse_id]["frame_id"][trial]
-        if type(data["frame_id"]) not in (int, np.int32, np.int64):
-            data["frame_id"] = None
+        data["num_neurons"] = metadata["num_neurons"]
+        data["coordinates"] = metadata["coordinates"]
+        data["frame_id"] = metadata["frame_id"][trial]
+        data["trial_id"] = metadata["trial_id"][trial]
+        if type(data["trial_id"]) not in (int, np.int32, np.int64):
+            data["trial_id"] = None
 
         # pad array with 0 to match max_neurons number of neurons
         if self.padding:
@@ -228,9 +228,9 @@ def get_data_loaders(
         for mouse_id in mouse_ids
     }
 
-    train_ds = MiceDataset(ds_mode=0, mice_meta=mice_meta)
-    val_ds = MiceDataset(ds_mode=1, mice_meta=mice_meta)
-    test_ds = MiceDataset(ds_mode=2, mice_meta=mice_meta)
+    train_ds = MiceDataset(tier="train", mice_meta=mice_meta)
+    val_ds = MiceDataset(tier="validation", mice_meta=mice_meta)
+    test_ds = MiceDataset(tier="test", mice_meta=mice_meta)
 
     args.input_shape = get_image_shape(data_dir=data_dir)
     args.output_shape = (train_ds.max_neurons,)
