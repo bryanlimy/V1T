@@ -75,13 +75,78 @@ def single_trial_correlations(
     results = inference(ds=ds, model=model, device=device)
     correlations = {}
     for mouse_id, mouse_result in results.items():
-        corr = correlation(
+        correlations[mouse_id] = correlation(
             y1=mouse_result["target"],
             y2=mouse_result["prediction"],
             dim=0,
         )
-        if torch.any(np.isnan(corr)):
-            print(f"set {torch.isnan(corr).mean() * 100} NaN values to zeros.")
-            corr = torch.nan_to_num(corr)
-        correlations[mouse_id] = corr
     return correlations
+
+
+def average_image_correlation(
+    ds: DataLoader,
+    model: torch.nn.Module,
+    device: torch.device = torch.device("cpu"),
+):
+    """Compute correlation between average responses and predictions"""
+    results = inference(ds=ds, model=model, device=device)
+    correlations = {}
+    for mouse_id, mouse_result in results.items():
+        mean_responses, mean_predictions = [], []
+        # calculate mean responses and predictions with the same frame ID
+        for frame_id in torch.unique(mouse_result["frame_id"]):
+            indexes = torch.squeeze(torch.nonzero(mouse_result["frame_id"] == frame_id))
+            responses = mouse_result["target"][indexes]
+            predictions = mouse_result["prediction"][indexes]
+            mean_responses.append(torch.mean(responses, dim=0, keepdim=True))
+            mean_predictions.append(torch.mean(predictions, dim=0, keepdim=True))
+        mean_responses = torch.vstack(mean_predictions)
+        mean_predictions = torch.vstack(mean_predictions)
+        correlations[mouse_id] = correlation(
+            y1=mean_responses, y2=mean_predictions, dim=0
+        )
+    return correlations
+
+
+def _feve(
+    targets: t.List[torch.Tensor],
+    predictions: t.List[torch.Tensor],
+    threshold: float = 0.15,
+):
+    """Compute the fraction of explainable variance explained per neuron"""
+    image_var, prediction_var = [], []
+    for target, prediction in zip(targets, predictions):
+        image_var.append(torch.var(target, dim=0))
+        prediction_var.append((target - prediction) ** 2)
+    image_var = torch.vstack(image_var)
+    prediction_var = torch.vstack(prediction_var)
+
+    total_var = torch.var(torch.vstack(targets), dim=0)
+    noise_var = torch.mean(image_var, dim=0)
+    fev = (total_var - noise_var) / total_var
+
+    pred_var = torch.mean(prediction_var, dim=0)
+    fev_e = 1 - (pred_var - noise_var) / (total_var - noise_var)
+
+    # ignore neurons below FEV threshold
+    fev_e = fev_e[fev >= threshold]
+    return fev_e
+
+
+def feve(
+    ds: DataLoader,
+    model: torch.nn.Module,
+    device: torch.device = torch.device("cpu"),
+):
+    """Compute the fraction of explainable variance explained per neuron."""
+    results = inference(ds=ds, model=model, device=device)
+    fev_e = {}
+    for mouse_id, mouse_result in results.items():
+        responses, predictions = [], []
+        # calculate mean responses and predictions with the same frame ID
+        for frame_id in torch.unique(mouse_result["frame_id"]):
+            indexes = torch.squeeze(torch.nonzero(mouse_result["frame_id"] == frame_id))
+            responses.append(mouse_result["target"][indexes])
+            predictions.append(mouse_result["prediction"][indexes])
+        fev_e[mouse_id] = _feve(targets=responses, predictions=predictions)
+    return fev_e

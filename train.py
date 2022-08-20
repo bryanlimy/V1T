@@ -67,6 +67,22 @@ def evaluate(args, ds, model, epoch: int, summary: tensorboard.Summary):
         step=epoch,
         mode=1,
     )
+    image_correlations = metrics.average_image_correlation(
+        ds=ds, model=model, device=args.device
+    )
+    summary.plot_correlation(
+        "metrics/average_image_correlation",
+        data=utils.metrics2df(image_correlations),
+        step=epoch,
+        mode=1,
+    )
+    feve = metrics.feve(ds=ds, model=model, device=args.device)
+    summary.plot_correlation(
+        "metrics/FEVE",
+        data=utils.metrics2df(feve),
+        step=epoch,
+        mode=1,
+    )
 
 
 def main(args):
@@ -94,7 +110,7 @@ def main(args):
 
     evaluate(
         args,
-        ds=val_ds,
+        ds=test_ds,
         model=model,
         epoch=0,
         summary=summary,
