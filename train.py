@@ -81,6 +81,7 @@ def evaluate(args, ds, model, epoch: int, summary: tensorboard.Summary):
         "metrics/FEVE",
         data=utils.metrics2df(feve),
         step=epoch,
+        ylabel="FEVE",
         mode=1,
     )
 
