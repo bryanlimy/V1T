@@ -18,7 +18,7 @@ def register(name):
 
 
 def get_model(args, summary: tensorboard.Summary = None):
-    """Initialize and return model specified in args.model"""
+    """Initialize model with specified core and readout module"""
     if not args.model in _MODELS.keys():
         raise NotImplementedError(f"model {args.model} has not been implemented.")
 

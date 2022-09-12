@@ -1,20 +1,29 @@
 import os
 import torch
 import argparse
+import typing as t
+from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
+from torch.utils.data import DataLoader
 
-from sensorium.data import data
+from sensorium.models import get_model
+from sensorium.data import get_data_loaders
 from sensorium.utils import utils, tensorboard, metrics
-from sensorium.models.registry import get_model
 
 
-def train_step(data, model, optimizer, loss_function):
+def train_step(
+    mouse_id: int,
+    batch: t.Dict[str, torch.Tensor],
+    model: nn.Module,
+    optimizer: torch.optim,
+    loss_function,
+):
     result = {}
     optimizer.zero_grad()
-    outputs = model(data["image"])
-    loss = loss_function(data["response"], outputs)
+    outputs = model(batch["image"], mouse_id=mouse_id)
+    loss = loss_function(batch["response"], outputs)
     loss.backward()
     optimizer.step()
     result["loss/loss"] = loss
@@ -22,61 +31,94 @@ def train_step(data, model, optimizer, loss_function):
 
 
 def train(
-    args, ds, model, optimizer, loss_function, epoch: int, summary: tensorboard.Summary
+    args,
+    ds: t.Dict[int, DataLoader],
+    model: nn.Module,
+    optimizer,
+    loss_function,
+    epoch: int,
+    summary: tensorboard.Summary,
 ):
+    model.train(True)
     results = {}
-    for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
-        data = {k: v.to(args.device) for k, v in data.items()}
-        result = train_step(
-            data=data, model=model, optimizer=optimizer, loss_function=loss_function
-        )
-        utils.update_dict(results, result)
+    disable = args.verbose == 0
+    for mouse_id, data in tqdm(ds.items(), desc="Train", disable=disable, position=0):
+        for batch in tqdm(data, desc=f"Mouse {mouse_id}", disable=disable, position=1):
+            batch = {k: v.to(args.device) for k, v in batch.items()}
+            result = train_step(
+                mouse_id=mouse_id,
+                batch=batch,
+                model=model,
+                optimizer=optimizer,
+                loss_function=loss_function,
+            )
+            utils.update_dict(results, result)
     for k, v in results.items():
         results[k] = torch.stack(v).mean()
         summary.scalar(k, results[k], step=epoch, mode=0)
     return results
 
 
-def validation_step(data, model, loss_function):
+def validation_step(
+    mouse_id: int,
+    batch: t.Dict[str, torch.Tensor],
+    model: nn.Module,
+    loss_function,
+):
     result = {}
-    outputs = model(data["image"])
-    loss = loss_function(data["response"], outputs)
+    outputs = model(batch["image"], mouse_id=mouse_id)
+    loss = loss_function(batch["response"], outputs)
     result["loss/loss"] = loss
     return result
 
 
-def validate(args, ds, model, loss_function, epoch: int, summary: tensorboard.Summary):
+def validate(
+    args,
+    ds: t.Dict[int, DataLoader],
+    model: nn.Module,
+    loss_function,
+    epoch: int,
+    summary: tensorboard.Summary,
+):
+    model.train(False)
     results = {}
-    for data in tqdm(ds, desc="Validation", disable=args.verbose == 0):
-        data = {k: v.to(args.device) for k, v in data.items()}
-        result = validation_step(data=data, model=model, loss_function=loss_function)
-        utils.update_dict(results, result)
+    disable = args.verbose == 0
+    for mouse_id, data in tqdm(ds.items(), desc="Val", disable=disable, position=0):
+        for batch in tqdm(data, desc=f"Mouse {mouse_id}", disable=disable, position=1):
+            batch = {k: v.to(args.device) for k, v in batch.items()}
+            result = validation_step(
+                mouse_id=mouse_id, batch=batch, model=model, loss_function=loss_function
+            )
+            utils.update_dict(results, result)
     for k, v in results.items():
         results[k] = torch.stack(v).mean()
         summary.scalar(k, results[k], step=epoch, mode=0)
     return results
 
 
-def evaluate(args, ds, model, epoch: int, summary: tensorboard.Summary):
-    trial_correlations = metrics.single_trial_correlations(
-        ds=ds, model=model, device=args.device
-    )
+def evaluate(
+    args,
+    ds: t.Dict[int, DataLoader],
+    model: nn.Module,
+    epoch: int,
+    summary: tensorboard.Summary,
+):
+    results = utils.inference(ds=ds, model=model, device=args.device)
+    trial_correlations = metrics.single_trial_correlations(results=results)
     summary.plot_correlation(
         "metrics/single_trial_correlation",
         data=utils.metrics2df(trial_correlations),
         step=epoch,
         mode=1,
     )
-    image_correlations = metrics.average_image_correlation(
-        ds=ds, model=model, device=args.device
-    )
+    image_correlations = metrics.average_image_correlation(results=results)
     summary.plot_correlation(
         "metrics/average_image_correlation",
         data=utils.metrics2df(image_correlations),
         step=epoch,
         mode=1,
     )
-    feve = metrics.feve(ds=ds, model=model, device=args.device)
+    feve = metrics.feve(results=results)
     summary.plot_correlation(
         "metrics/FEVE",
         data=utils.metrics2df(feve),
@@ -96,9 +138,10 @@ def main(args):
 
     args.device = utils.get_available_device(args.no_acceleration)
 
-    train_ds, val_ds, test_ds = data.get_data_loaders(
+    train_ds, val_ds, test_ds = get_data_loaders(
         args,
         data_dir=args.dataset,
+        mouse_ids=[2, 3],
         batch_size=args.batch_size,
         device=args.device,
     )
@@ -161,10 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True)
 
     # model settings
-    parser.add_argument("--model", type=str, default="linear")
-    parser.add_argument("--activation", type=str, default="gelu")
-    parser.add_argument("--normalization", type=str, default="instancenorm")
-    parser.add_argument("--dropout", type=float, default=0.0)
+    parser.add_argument("--core", type=str, default="linear")
+    parser.add_argument("--readout", type=str, default="linear")
 
     # training settings
     parser.add_argument("--epochs", default=200, type=int)

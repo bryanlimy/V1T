@@ -241,8 +241,8 @@ class Gaussian2d(Readout):
 
 class FullGaussian2d(Readout):
     """
-    A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
-    and covariance of that Gaussian are learned.
+    A readout using a spatial transformer layer whose positions are sampled
+    from one Gaussian per neuron. Mean and covariance of that Gaussian are learned.
 
     Args:
         in_shape (list, tuple): shape of the input feature map [channels, width, height]

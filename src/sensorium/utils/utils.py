@@ -6,6 +6,8 @@ import subprocess
 import numpy as np
 import typing as t
 import pandas as pd
+from tqdm import tqdm
+from torch.utils.data import DataLoader
 
 from sensorium.utils import yaml
 
@@ -22,6 +24,36 @@ def set_random_seed(seed: int, deterministic: bool = False):
         torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
     torch.manual_seed(seed)
+
+
+def inference(
+    ds: t.Dict[int, DataLoader],
+    model: torch.nn.Module,
+    device: torch.device = torch.device("cpu"),
+) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
+    """Inference data in DataLoader ds
+    Returns:
+        results: t.Dict[int, t.Dict[str, torch.Tensor]]
+            - mouse_id
+                - predictions: torch.Tensor, predictions given images
+                - targets: torch.Tensor, the ground-truth responses
+                - trial_ids: torch.Tensor, trial ID of the responses
+                - frame_ids: torch.Tensor, frame ID of the responses
+    """
+    results = {}
+    model.train(False)
+    for mouse_id, data in tqdm(ds.items(), desc="Inference"):
+        result = {"predictions": [], "targets": [], "trial_ids": [], "frame_ids": []}
+        for batch in data:
+            images = batch["image"].to(device)
+            predictions = model(images, mouse_id)
+            predictions = predictions.detach().cpu()
+            result["predictions"].append(predictions)
+            result["targets"].append(batch["response"])
+            result["frame_ids"].append(batch["frame_id"])
+            result["trial_ids"].append(batch["trial_id"])
+        results[mouse_id] = {k: torch.cat(v, dim=0) for k, v in result.items()}
+    return results
 
 
 def update_dict(target: dict, source: dict, replace: bool = False):

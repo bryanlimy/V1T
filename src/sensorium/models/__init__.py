@@ -1,4 +1,1 @@
-__all__ = ["linear", "random"]
-
-from .linear import *
-from .random import *
+from .model import get_model

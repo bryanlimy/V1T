@@ -1,53 +1,5 @@
 import torch
-import numpy as np
 import typing as t
-from tqdm import tqdm
-from torch.utils.data import DataLoader
-
-
-def inference(
-    ds: DataLoader,
-    model: torch.nn.Module,
-    device: torch.device = torch.device("cpu"),
-):
-    """Inference data in DataLoader ds
-    Returns:
-        results: t.Dict[str, torch.Tensor]
-            - predictions: torch.Tensor, predictions given images
-            - targets: torch.Tensor, the ground-truth responses
-            - mouse_id: torch.Tensor, mouse ID of the corresponding responses
-            - trial_id: torch.Tensor, trial ID of the corresponding responses
-            - frame_id: torch.Tensor, frame ID of the corresponding responses
-    """
-    results = {}
-    model.train(False)
-    for data in tqdm(ds, desc="Inference"):
-        images = data["image"].to(device)
-        predictions = model(images)
-        predictions = predictions.detach().cpu()
-        # separate responses by mouse ID
-        for i in range(len(predictions)):
-            mouse_id = int(data["mouse_id"][i])
-            if mouse_id not in results:
-                results[mouse_id] = {
-                    "prediction": [],
-                    "target": [],
-                    "frame_id": [],
-                    "trial_id": [],
-                }
-            results[mouse_id]["prediction"].append(predictions[i])
-            results[mouse_id]["target"].append(data["response"][i])
-            results[mouse_id]["frame_id"].append(data["frame_id"][i])
-            results[mouse_id]["trial_id"].append(data["trial_id"][i])
-    for mouse_id, mouse_result in results.items():
-        mouse_result = {k: torch.stack(v) for k, v in mouse_result.items()}
-        # crop padded neurons if exists
-        if ds.dataset.padding:
-            num_neurons = ds.dataset.mice_meta[mouse_id]["num_neurons"]
-            mouse_result["prediction"] = mouse_result["prediction"][:, :num_neurons]
-            mouse_result["target"] = mouse_result["target"][:, :num_neurons]
-        results[mouse_id] = mouse_result
-    return results
 
 
 def correlation(
@@ -66,38 +18,28 @@ def correlation(
     return torch.mean(y1 * y2, dim=dim)
 
 
-def single_trial_correlations(
-    ds: DataLoader,
-    model: torch.nn.Module,
-    device: torch.device = torch.device("cpu"),
-):
+def single_trial_correlations(results: t.Dict[int, t.Dict[str, torch.Tensor]]):
     """Compute signal trial correlation"""
-    results = inference(ds=ds, model=model, device=device)
     correlations = {}
     for mouse_id, mouse_result in results.items():
         correlations[mouse_id] = correlation(
-            y1=mouse_result["target"],
-            y2=mouse_result["prediction"],
+            y1=mouse_result["targets"],
+            y2=mouse_result["predictions"],
             dim=0,
         )
     return correlations
 
 
-def average_image_correlation(
-    ds: DataLoader,
-    model: torch.nn.Module,
-    device: torch.device = torch.device("cpu"),
-):
+def average_image_correlation(results: t.Dict[int, t.Dict[str, torch.Tensor]]):
     """Compute correlation between average responses and predictions"""
-    results = inference(ds=ds, model=model, device=device)
     correlations = {}
     for mouse_id, mouse_result in results.items():
         mean_responses, mean_predictions = [], []
         # calculate mean responses and predictions with the same frame ID
-        for frame_id in torch.unique(mouse_result["frame_id"]):
-            indexes = torch.squeeze(torch.nonzero(mouse_result["frame_id"] == frame_id))
-            responses = mouse_result["target"][indexes]
-            predictions = mouse_result["prediction"][indexes]
+        for frame_id in torch.unique(mouse_result["frame_ids"]):
+            indexes = torch.where(mouse_result["frame_ids"] == frame_id)[0]
+            responses = mouse_result["targets"][indexes]
+            predictions = mouse_result["predictions"][indexes]
             mean_responses.append(torch.mean(responses, dim=0, keepdim=True))
             mean_predictions.append(torch.mean(predictions, dim=0, keepdim=True))
         mean_responses = torch.vstack(mean_predictions)
@@ -133,20 +75,15 @@ def _feve(
     return fev_e
 
 
-def feve(
-    ds: DataLoader,
-    model: torch.nn.Module,
-    device: torch.device = torch.device("cpu"),
-):
+def feve(results: t.Dict[int, t.Dict[str, torch.Tensor]]):
     """Compute the fraction of explainable variance explained per neuron."""
-    results = inference(ds=ds, model=model, device=device)
     fev_e = {}
     for mouse_id, mouse_result in results.items():
         responses, predictions = [], []
         # calculate mean responses and predictions with the same frame ID
-        for frame_id in torch.unique(mouse_result["frame_id"]):
-            indexes = torch.squeeze(torch.nonzero(mouse_result["frame_id"] == frame_id))
-            responses.append(mouse_result["target"][indexes])
-            predictions.append(mouse_result["prediction"][indexes])
+        for frame_id in torch.unique(mouse_result["frame_ids"]):
+            indexes = torch.where(mouse_result["frame_ids"] == frame_id)[0]
+            responses.append(mouse_result["targets"][indexes])
+            predictions.append(mouse_result["predictions"][indexes])
         fev_e[mouse_id] = _feve(targets=responses, predictions=predictions)
     return fev_e
