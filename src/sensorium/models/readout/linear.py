@@ -7,7 +7,7 @@ from torch import nn
 
 @register("linear")
 class LinearReadout(nn.Module):
-    def __init__(self, input_shape: tuple, output_shape: tuple, name: str = None):
+    def __init__(self, args, input_shape: tuple, output_shape: tuple, name: str = None):
         super(LinearReadout, self).__init__()
         self.name = "LinearReadout" if name is None else name
         self._output_shape = output_shape

@@ -23,14 +23,13 @@ class BasicModel(nn.Module):
         self.initialize_readouts(args)
 
     def initialize_core(self, args):
-        self.core = get_core(args)(
-            input_shape=self.input_shape, output_shape=self.input_shape
-        )
+        self.core = get_core(args)(args, input_shape=self.input_shape)
 
     def initialize_readouts(self, args):
         self.readouts = {}
         for mouse_id, output_shape in self.output_shapes.items():
             self.readouts[mouse_id] = get_readout(args)(
+                args,
                 input_shape=self.core.shape,
                 output_shape=output_shape,
                 name=f"Mouse{mouse_id}Readout",

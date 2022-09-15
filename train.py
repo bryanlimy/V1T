@@ -43,7 +43,9 @@ def train(
     results = {}
     disable = args.verbose == 0
     for mouse_id, data in tqdm(ds.items(), desc="Train", disable=disable, position=0):
-        for batch in tqdm(data, desc=f"Mouse {mouse_id}", disable=disable, position=1):
+        for batch in tqdm(
+            data, desc=f"Mouse {mouse_id}", disable=disable, position=1, leave=False
+        ):
             batch = {k: v.to(args.device) for k, v in batch.items()}
             result = train_step(
                 mouse_id=mouse_id,
@@ -84,7 +86,9 @@ def validate(
     results = {}
     disable = args.verbose == 0
     for mouse_id, data in tqdm(ds.items(), desc="Val", disable=disable, position=0):
-        for batch in tqdm(data, desc=f"Mouse {mouse_id}", disable=disable, position=1):
+        for batch in tqdm(
+            data, desc=f"Mouse {mouse_id}", disable=disable, position=1, leave=False
+        ):
             batch = {k: v.to(args.device) for k, v in batch.items()}
             result = validation_step(
                 mouse_id=mouse_id, batch=batch, model=model, loss_function=loss_function
@@ -141,16 +145,16 @@ def main(args):
     train_ds, val_ds, test_ds = get_data_loaders(
         args,
         data_dir=args.dataset,
-        mouse_ids=[2, 3],
+        mouse_ids=[2, 3, 4],
         batch_size=args.batch_size,
         device=args.device,
     )
 
-    model = get_model(args)
+    summary = tensorboard.Summary(args)
+
+    model = get_model(args, summary=summary)
     loss_function = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
-    summary = tensorboard.Summary(args)
 
     evaluate(
         args,
@@ -163,7 +167,7 @@ def main(args):
     epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
-            print(f"Epoch {epoch:03d}/{args.epochs:03d}")
+            print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
         train_results = train(
@@ -207,6 +211,11 @@ if __name__ == "__main__":
     parser.add_argument("--core", type=str, default="linear")
     parser.add_argument("--readout", type=str, default="linear")
 
+    # ConvCore
+    parser.add_argument("--num_filters", type=int, default=8)
+    parser.add_argument("--dropout", type=float, default=0.2)
+    parser.add_argument("--activation", type=str, default="gelu")
+
     # training settings
     parser.add_argument("--epochs", default=200, type=int)
     parser.add_argument("--batch_size", default=64, type=int)
@@ -227,7 +236,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--format",
         type=str,
-        default="pdf",
+        default="svg",
         choices=["pdf", "svg", "png"],
         help="file format when --save_plots",
     )
