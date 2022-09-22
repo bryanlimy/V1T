@@ -46,7 +46,7 @@ def train(
 ):
     model.train(True)
     results = {}
-    disable = args.verbose != 2
+    disable = args.verbose == 0
     for mouse_id, data in tqdm(ds.items(), desc="Train", disable=disable, position=0):
         for batch in tqdm(
             data, desc=f"Mouse {mouse_id}", disable=disable, position=1, leave=False
@@ -89,7 +89,7 @@ def validate(
 ):
     model.train(False)
     results = {}
-    disable = args.verbose != 2
+    disable = args.verbose == 0
     for mouse_id, data in tqdm(ds.items(), desc="Val", disable=disable, position=0):
         for batch in tqdm(
             data, desc=f"Mouse {mouse_id}", disable=disable, position=1, leave=False
