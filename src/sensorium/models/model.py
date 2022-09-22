@@ -5,7 +5,7 @@ from torch import nn
 
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
-from sensorium.models.readout import get_readout
+from sensorium.models.readout import Readouts
 
 
 class BasicModel(nn.Module):
@@ -23,26 +23,23 @@ class BasicModel(nn.Module):
         self.initialize_readouts(args)
 
     def initialize_core(self, args):
-        self.core = get_core(args)(args, input_shape=self.input_shape)
+        self.add_module(
+            name="core", module=get_core(args)(args, input_shape=self.input_shape)
+        )
 
     def initialize_readouts(self, args):
-        self.readouts = {}
-        for mouse_id, output_shape in self.output_shapes.items():
-            self.readouts[mouse_id] = get_readout(args)(
-                args,
+        self.add_module(
+            name="readouts",
+            module=Readouts(
+                model=args.readout,
                 input_shape=self.core.shape,
-                output_shape=output_shape,
-                name=f"Mouse{mouse_id}Readout",
-            )
-
-    def to(self, device: torch.device):
-        self.core.to(device)
-        for mouse_id in self.readouts.keys():
-            self.readouts[mouse_id].to(device)
+                output_shapes=self.output_shapes,
+            ),
+        )
 
     def forward(self, inputs: torch.Tensor, mouse_id: torch.Union[int, torch.Tensor]):
         outputs = self.core(inputs)
-        outputs = self.readouts[mouse_id](outputs)
+        outputs = self.readouts(outputs, mouse_id=mouse_id)
         return outputs
 
 

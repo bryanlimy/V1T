@@ -27,6 +27,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
 
 
 def inference(
+    args,
     ds: t.Dict[int, DataLoader],
     model: torch.nn.Module,
     device: torch.device = torch.device("cpu"),
@@ -42,7 +43,7 @@ def inference(
     """
     results = {}
     model.train(False)
-    for mouse_id, data in tqdm(ds.items(), desc="Inference"):
+    for mouse_id, data in tqdm(ds.items(), desc="Inference", disable=args.verbose == 0):
         result = {"predictions": [], "targets": [], "trial_ids": [], "frame_ids": []}
         for batch in data:
             images = batch["image"].to(device)

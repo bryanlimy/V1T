@@ -22,6 +22,11 @@ def train_step(
 ):
     result = {}
     optimizer.zero_grad()
+    for m in model.readouts.keys():
+        if m == mouse_id:
+            model.readouts[m].requires_grad_(True)
+        else:
+            model.readouts[m].requires_grad_(False)
     outputs = model(batch["image"], mouse_id=mouse_id)
     loss = loss_function(batch["response"], outputs)
     loss.backward()
@@ -106,21 +111,22 @@ def evaluate(
     model: nn.Module,
     epoch: int,
     summary: tensorboard.Summary,
+    mode: int = 1,
 ):
-    results = utils.inference(ds=ds, model=model, device=args.device)
+    results = utils.inference(args, ds=ds, model=model, device=args.device)
     trial_correlations = metrics.single_trial_correlations(results=results)
     summary.plot_correlation(
         "metrics/single_trial_correlation",
         data=utils.metrics2df(trial_correlations),
         step=epoch,
-        mode=1,
+        mode=mode,
     )
     image_correlations = metrics.average_image_correlation(results=results)
     summary.plot_correlation(
         "metrics/average_image_correlation",
         data=utils.metrics2df(image_correlations),
         step=epoch,
-        mode=1,
+        mode=mode,
     )
     feve = metrics.feve(results=results)
     summary.plot_correlation(
@@ -128,7 +134,7 @@ def evaluate(
         data=utils.metrics2df(feve),
         step=epoch,
         ylabel="FEVE",
-        mode=1,
+        mode=mode,
     )
 
 
@@ -156,18 +162,11 @@ def main(args):
     loss_function = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    evaluate(
-        args,
-        ds=test_ds,
-        model=model,
-        epoch=0,
-        summary=summary,
-    )
+    evaluate(args, ds=test_ds, model=model, epoch=0, summary=summary, mode=2)
 
     epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
-        if args.verbose:
-            print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
+        print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
         train_results = train(
@@ -191,14 +190,20 @@ def main(args):
 
         summary.scalar("model/elapse", elapse, step=epoch, mode=0)
 
-        if args.verbose:
-            print(
-                f'Train\t\t\tloss: {train_results["loss/loss"]:.02f}\n'
-                f'Validation\t\tloss: {val_results["loss/loss"]:.02f}\n'
-                f"Elapse: {elapse:.02f}s\n"
-            )
+        print(
+            f'Train\t\t\tloss: {train_results["loss/loss"]:.02f}\n'
+            f'Validation\t\tloss: {val_results["loss/loss"]:.02f}\n'
+            f"Elapse: {elapse:.02f}s\n"
+        )
+
+        if epoch % 10 == 0 or epoch == args.epochs:
+            evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary)
+
+    evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
 
     summary.close()
+
+    print(f"\nResults saved to {args.output_dir}.")
 
 
 if __name__ == "__main__":
