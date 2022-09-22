@@ -159,9 +159,44 @@ class MiceDataset(Dataset):
         self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
         self.frame_ids = metadata["frame_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
+        # standardizer for responses
+        self._response_precision = self.compute_response_precision()
 
     def __len__(self):
         return len(self.indexes)
+
+    def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
+        """Standardize image"""
+        return (image - self.stats["image"]["mean"]) / self.stats["image"]["std"]
+
+    def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
+        """Reverse standardized image"""
+        return (image * self.stats["image"]["std"]) + self.stats["image"]["mean"]
+
+    def compute_response_precision(self):
+        std = self.stats["response"]["std"]
+        threshold = 0.01 * np.mean(std)
+        idx = std > threshold
+        response_precision = np.ones_like(std) / threshold
+        response_precision[idx] = 1 / std[idx]
+        return response_precision
+
+    def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+        """Standardize response by dividing the per neuron std if the std is
+        greater than 1% of the mean std (to avoid division by 0)"""
+        return response * self._response_precision
+
+    def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+        """Reverse standardized response"""
+        return response / self._response_precision
+
+    def transform(self, data: t.Dict[str, t.Union[torch.Tensor, np.ndarray]]):
+        data["image"] = self.transform_image(data["image"])
+        data["response"] = self.transform_response(data["response"])
+
+    def i_transform(self, data: t.Dict[str, t.Union[torch.Tensor, np.ndarray]]):
+        data["image"] = self.i_transform_image(data["image"])
+        data["response"] = self.i_transform_response(data["response"])
 
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
@@ -181,8 +216,7 @@ class MiceDataset(Dataset):
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
-        # scale image to [0, 1]
-        data["image"] = data["image"] / 255.0
+        self.transform(data)
         data["mouse_id"] = self.mouse_id
         data["num_neurons"] = self.num_neurons
         data["coordinates"] = self.coordinates
