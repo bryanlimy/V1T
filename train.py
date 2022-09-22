@@ -22,6 +22,7 @@ def train_step(
 ):
     result = {}
     optimizer.zero_grad()
+    model.core.requires_grad_(True)
     for m in model.readouts.keys():
         if m == mouse_id:
             model.readouts[m].requires_grad_(True)
