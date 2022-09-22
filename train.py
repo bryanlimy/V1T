@@ -106,7 +106,7 @@ def validate(
             utils.update_dict(results, result)
     for k, v in results.items():
         results[k] = torch.stack(v).mean()
-        summary.scalar(k, results[k], step=epoch, mode=0)
+        summary.scalar(k, results[k], step=epoch, mode=1)
     return results
 
 
@@ -118,6 +118,7 @@ def evaluate(
     summary: tensorboard.Summary,
     mode: int = 1,
 ):
+    eval_result = {}
     results = utils.inference(args, ds=ds, model=model, device=args.device)
     trial_correlations = metrics.single_trial_correlations(results=results)
     summary.plot_correlation(
@@ -126,6 +127,8 @@ def evaluate(
         step=epoch,
         mode=mode,
     )
+    for mouse_id, correlation in trial_correlations.items():
+        eval_result[f"trial_correlation/mouse{mouse_id}"] = torch.mean(correlation)
     if mode == 2:  # only test set has repeated images
         image_correlations = metrics.average_image_correlation(results=results)
         summary.plot_correlation(
@@ -134,6 +137,8 @@ def evaluate(
             step=epoch,
             mode=mode,
         )
+        for mouse_id, correlation in image_correlations.items():
+            eval_result[f"image_correlation/mouse{mouse_id}"] = torch.mean(correlation)
         feve = metrics.feve(results=results)
         summary.plot_correlation(
             "metrics/FEVE",
@@ -142,6 +147,11 @@ def evaluate(
             ylabel="FEVE",
             mode=mode,
         )
+        for mouse_id, f_eve in feve.items():
+            eval_result[f"feve/mouse{mouse_id}"] = torch.mean(f_eve)
+    for k, v in eval_result.items():
+        summary.scalar(tag=k, value=v, step=epoch, mode=mode)
+    return eval_result
 
 
 def main(args):
@@ -157,6 +167,7 @@ def main(args):
     train_ds, val_ds, test_ds = get_data_loaders(
         args,
         data_dir=args.dataset,
+        mouse_ids=args.mouse_ids,
         batch_size=args.batch_size,
         device=args.device,
     )
@@ -167,9 +178,9 @@ def main(args):
     loss_function = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+    epoch = utils.load_checkpoint(args, model=model, optimizer=optimizer)
     evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
 
-    epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
@@ -203,6 +214,7 @@ def main(args):
 
         if epoch % 10 == 0 or epoch == args.epochs:
             evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
+            utils.save_checkpoint(args, model=model, optimizer=optimizer, epoch=epoch)
 
     evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
 
@@ -214,8 +226,20 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # dataset settings
-    parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="data",
+        help="path to directory where the compressed dataset is stored.",
+    )
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument(
+        "--mouse_ids",
+        nargs="+",
+        type=int,
+        default=None,
+        help="Mouse to use for training, use Mouse 2-7 if None.",
+    )
 
     # model settings
     parser.add_argument("--core", type=str, default="linear")
