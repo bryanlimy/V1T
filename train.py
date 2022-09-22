@@ -73,6 +73,7 @@ def validation_step(
     loss_function,
 ):
     result = {}
+    model.requires_grad_(False)
     outputs = model(batch["image"], mouse_id=mouse_id)
     loss = loss_function(batch["response"], outputs)
     result["loss/loss"] = loss
@@ -96,7 +97,10 @@ def validate(
         ):
             batch = {k: v.to(args.device) for k, v in batch.items()}
             result = validation_step(
-                mouse_id=mouse_id, batch=batch, model=model, loss_function=loss_function
+                mouse_id=mouse_id,
+                batch=batch,
+                model=model,
+                loss_function=loss_function,
             )
             utils.update_dict(results, result)
     for k, v in results.items():
