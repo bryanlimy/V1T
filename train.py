@@ -152,7 +152,6 @@ def main(args):
     train_ds, val_ds, test_ds = get_data_loaders(
         args,
         data_dir=args.dataset,
-        mouse_ids=[2, 3],
         batch_size=args.batch_size,
         device=args.device,
     )
