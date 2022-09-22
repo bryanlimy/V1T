@@ -219,8 +219,8 @@ def main(args):
         summary.scalar("model/elapse", elapse, step=epoch, mode=0)
 
         print(
-            f'Train\t\t\tloss: {train_results["loss/loss"]:.02f}\n'
-            f'Validation\t\tloss: {val_results["loss/loss"]:.02f}\n'
+            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\n'
+            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\n'
             f"Elapse: {elapse:.02f}s\n"
         )
 
