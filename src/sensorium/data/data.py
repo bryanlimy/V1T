@@ -181,6 +181,8 @@ class MiceDataset(Dataset):
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
+        # scale image to [0, 1]
+        data["image"] = data["image"] / 255.0
         data["mouse_id"] = self.mouse_id
         data["num_neurons"] = self.num_neurons
         data["coordinates"] = self.coordinates
