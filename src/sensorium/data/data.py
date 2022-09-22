@@ -148,6 +148,7 @@ class MiceDataset(Dataset):
             - mouse_id: int, the mouse ID
         """
         assert tier in ("train", "validation", "test")
+        self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
         self.mouse_dir = metadata["mouse_dir"]

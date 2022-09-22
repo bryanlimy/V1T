@@ -36,7 +36,7 @@ install_torch() {
             conda install -c pytorch pytorch torchvision torchaudio -y
             ;;
         linux-64)
-            conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge -y
+            conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch -y
             ;;
         *)
             pip install pytorch torchvision torchaudio

@@ -46,7 +46,7 @@ def train(
 ):
     model.train(True)
     results = {}
-    disable = args.verbose == 0
+    disable = args.verbose != 2
     for mouse_id, data in tqdm(ds.items(), desc="Train", disable=disable, position=0):
         for batch in tqdm(
             data, desc=f"Mouse {mouse_id}", disable=disable, position=1, leave=False
@@ -89,7 +89,7 @@ def validate(
 ):
     model.train(False)
     results = {}
-    disable = args.verbose == 0
+    disable = args.verbose != 2
     for mouse_id, data in tqdm(ds.items(), desc="Val", disable=disable, position=0):
         for batch in tqdm(
             data, desc=f"Mouse {mouse_id}", disable=disable, position=1, leave=False
@@ -121,21 +121,22 @@ def evaluate(
         step=epoch,
         mode=mode,
     )
-    image_correlations = metrics.average_image_correlation(results=results)
-    summary.plot_correlation(
-        "metrics/average_image_correlation",
-        data=utils.metrics2df(image_correlations),
-        step=epoch,
-        mode=mode,
-    )
-    feve = metrics.feve(results=results)
-    summary.plot_correlation(
-        "metrics/FEVE",
-        data=utils.metrics2df(feve),
-        step=epoch,
-        ylabel="FEVE",
-        mode=mode,
-    )
+    if mode == 2:  # only test set has repeated images
+        image_correlations = metrics.average_image_correlation(results=results)
+        summary.plot_correlation(
+            "metrics/average_image_correlation",
+            data=utils.metrics2df(image_correlations),
+            step=epoch,
+            mode=mode,
+        )
+        feve = metrics.feve(results=results)
+        summary.plot_correlation(
+            "metrics/FEVE",
+            data=utils.metrics2df(feve),
+            step=epoch,
+            ylabel="FEVE",
+            mode=mode,
+        )
 
 
 def main(args):
@@ -151,7 +152,7 @@ def main(args):
     train_ds, val_ds, test_ds = get_data_loaders(
         args,
         data_dir=args.dataset,
-        mouse_ids=[2, 3, 4],
+        mouse_ids=[2, 3],
         batch_size=args.batch_size,
         device=args.device,
     )
@@ -162,7 +163,7 @@ def main(args):
     loss_function = torch.nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    evaluate(args, ds=test_ds, model=model, epoch=0, summary=summary, mode=2)
+    evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
 
     epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
@@ -197,7 +198,7 @@ def main(args):
         )
 
         if epoch % 10 == 0 or epoch == args.epochs:
-            evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary)
+            evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
 
     evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
 
