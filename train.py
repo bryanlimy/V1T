@@ -2,16 +2,17 @@ import os
 import torch
 import argparse
 import typing as t
+import numpy as np
 from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
 from torch.utils.data import DataLoader
 
-from sensorium import losses
+from sensorium import losses, metrics
 from sensorium.models import get_model
 from sensorium.data import get_data_loaders
-from sensorium.utils import utils, tensorboard, metrics
+from sensorium.utils import utils, tensorboard
 
 
 def train_step(
@@ -132,27 +133,31 @@ def evaluate(
     mode: int = 1,
 ):
     eval_result = {}
-    results = utils.inference(args, ds=ds, model=model, device=args.device)
-    trial_correlations = metrics.single_trial_correlations(results=results)
+    outputs = utils.inference(args, ds=ds, model=model, device=args.device)
+    trial_correlations = metrics.single_trial_correlations(results=outputs)
     summary.plot_correlation(
         "metrics/single_trial_correlation",
         data=utils.metrics2df(trial_correlations),
         step=epoch,
         mode=mode,
     )
-    for mouse_id, correlation in trial_correlations.items():
-        eval_result[f"trial_correlation/mouse{mouse_id}"] = torch.mean(correlation)
+    eval_result["trial_correlation"] = {
+        mouse_id: torch.mean(correlation)
+        for mouse_id, correlation in trial_correlations.items()
+    }
     if mode == 2:  # only test set has repeated images
-        image_correlations = metrics.average_image_correlation(results=results)
+        image_correlations = metrics.average_image_correlation(results=outputs)
         summary.plot_correlation(
             "metrics/average_image_correlation",
             data=utils.metrics2df(image_correlations),
             step=epoch,
             mode=mode,
         )
-        for mouse_id, correlation in image_correlations.items():
-            eval_result[f"image_correlation/mouse{mouse_id}"] = torch.mean(correlation)
-        feve = metrics.feve(results=results)
+        eval_result["image_correlation"] = {
+            mouse_id: torch.mean(correlation)
+            for mouse_id, correlation in image_correlations.items()
+        }
+        feve = metrics.feve(results=outputs)
         summary.plot_correlation(
             "metrics/FEVE",
             data=utils.metrics2df(feve),
@@ -160,10 +165,28 @@ def evaluate(
             ylabel="FEVE",
             mode=mode,
         )
-        for mouse_id, f_eve in feve.items():
-            eval_result[f"feve/mouse{mouse_id}"] = torch.mean(f_eve)
-    for k, v in eval_result.items():
-        summary.scalar(tag=k, value=v, step=epoch, mode=mode)
+        eval_result["feve"] = {
+            mouse_id: torch.mean(f_eve) for mouse_id, f_eve in feve.items()
+        }
+    # write individual and average results to TensorBoard
+    for metric, results in eval_result.items():
+        for mouse_id, result in results.items():
+            summary.scalar(
+                tag=f"{metric}/mouse{mouse_id}",
+                value=result,
+                step=epoch,
+                mode=mode,
+            )
+        summary.scalar(
+            tag=f"{metric}/average",
+            value=np.mean(list(results.values())),
+            step=epoch,
+            mode=mode,
+        )
+    # plot image and response pairs
+    summary.plot_image_response(
+        tag=f"image_response", results=outputs, step=epoch, mode=mode
+    )
     return eval_result
 
 

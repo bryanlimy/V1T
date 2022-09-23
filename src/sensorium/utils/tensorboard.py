@@ -1,5 +1,6 @@
 import os
 import io
+import torch
 import platform
 import matplotlib
 import numpy as np
@@ -201,3 +202,62 @@ class Summary(object):
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         self.figure(tag, figure=figure, step=step, close=True, mode=mode)
+
+    def plot_image_response(
+        self,
+        tag: str,
+        results: t.Dict[int, t.Dict[str, torch.Tensor]],
+        step: int = 0,
+        mode: int = 1,
+    ):
+        """Plot 3 image-prediction-response for each mouse"""
+        n_samples = 3
+        label_fontsize, tick_fontsize = 12, 10
+        for mouse_id, result in results.items():
+            figure, axes = plt.subplots(
+                nrows=n_samples,
+                ncols=3,
+                gridspec_kw={"wspace": 0.1, "hspace": 0.2},
+                figsize=(10, 2 * n_samples),
+                dpi=self.dpi,
+            )
+
+            x_axis = np.arange(result["predictions"].shape[1])
+
+            for i in range(n_samples):
+                axes[i, 0].scatter(
+                    x=x_axis, y=result["targets"][i], s=2, alpha=0.8, color="orangered"
+                )
+                axes[i, 1].scatter(
+                    x=x_axis,
+                    y=result["predictions"][i],
+                    s=2,
+                    alpha=0.8,
+                    color="dodgerblue",
+                )
+                axes[i, 2].imshow(
+                    result["images"][i][0], cmap=GRAY, vmin=0, vmax=255, aspect="auto"
+                )
+                axes[i, 2].set_xticks([])
+                axes[i, 2].set_yticks([])
+                remove_top_right_spines(axis=axes[i, 0])
+                remove_top_right_spines(axis=axes[i, 1])
+                remove_spines(axis=axes[i, 2])
+                axes[i, 2].set_xlabel(
+                    f"Frame ID: {result['frame_ids'][i]}",
+                    labelpad=0,
+                    fontsize=tick_fontsize,
+                )
+
+            axes[0, 0].set_title("Targets", fontsize=label_fontsize)
+            axes[0, 1].set_title("Predictions", fontsize=label_fontsize)
+            axes[1, 0].set_ylabel("Response", fontsize=label_fontsize)
+            axes[2, 1].set_xlabel("Neurons", fontsize=label_fontsize)
+
+            self.figure(
+                tag=f"{tag}/mouse{mouse_id}",
+                figure=figure,
+                step=step,
+                close=True,
+                mode=mode,
+            )

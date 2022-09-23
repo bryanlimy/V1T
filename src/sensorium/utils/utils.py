@@ -40,6 +40,7 @@ def inference(
             - mouse_id
                 - predictions: torch.Tensor, predictions given images
                 - targets: torch.Tensor, the ground-truth responses
+                - images: torch.Tensor, the natural images
                 - trial_ids: torch.Tensor, trial ID of the responses
                 - frame_ids: torch.Tensor, frame ID of the responses
     """
@@ -48,7 +49,13 @@ def inference(
     for mouse_id, dataloader in tqdm(
         ds.items(), desc="Inference", disable=args.verbose == 0
     ):
-        result = {"predictions": [], "targets": [], "trial_ids": [], "frame_ids": []}
+        result = {
+            "images": [],
+            "predictions": [],
+            "targets": [],
+            "trial_ids": [],
+            "frame_ids": [],
+        }
         for batch in dataloader:
             images = batch["image"].to(device)
             predictions = model(images, mouse_id)
@@ -56,6 +63,8 @@ def inference(
             predictions = dataloader.dataset.i_transform_response(predictions)
             result["predictions"].append(predictions)
             result["targets"].append(batch["response"])
+            images = dataloader.dataset.i_transform_image(images.detach().cpu())
+            result["images"].append(images)
             result["frame_ids"].append(batch["frame_id"])
             result["trial_ids"].append(batch["trial_id"])
         results[mouse_id] = {k: torch.cat(v, dim=0) for k, v in result.items()}
