@@ -11,7 +11,8 @@ from tqdm import tqdm
 from glob import glob
 from torch.utils.data import DataLoader
 
-from sensorium.utils import yaml
+from sensorium import metrics
+from sensorium.utils import yaml, tensorboard
 
 
 def set_random_seed(seed: int, deterministic: bool = False):
@@ -69,6 +70,72 @@ def inference(
             result["trial_ids"].append(batch["trial_id"])
         results[mouse_id] = {k: torch.cat(v, dim=0) for k, v in result.items()}
     return results
+
+
+def evaluate(
+    args,
+    ds: t.Dict[int, DataLoader],
+    model: nn.Module,
+    epoch: int,
+    summary: tensorboard.Summary,
+    mode: int = 1,
+):
+    eval_result = {}
+    outputs = inference(args, ds=ds, model=model, device=args.device)
+    trial_correlations = metrics.single_trial_correlations(results=outputs)
+    summary.plot_correlation(
+        "metrics/single_trial_correlation",
+        data=metrics2df(trial_correlations),
+        step=epoch,
+        mode=mode,
+    )
+    eval_result["trial_correlation"] = {
+        mouse_id: torch.mean(correlation)
+        for mouse_id, correlation in trial_correlations.items()
+    }
+    if mode == 2:  # only test set has repeated images
+        image_correlations = metrics.average_image_correlation(results=outputs)
+        summary.plot_correlation(
+            "metrics/average_image_correlation",
+            data=metrics2df(image_correlations),
+            step=epoch,
+            mode=mode,
+        )
+        eval_result["image_correlation"] = {
+            mouse_id: torch.mean(correlation)
+            for mouse_id, correlation in image_correlations.items()
+        }
+        feve = metrics.feve(results=outputs)
+        summary.plot_correlation(
+            "metrics/FEVE",
+            data=metrics2df(feve),
+            step=epoch,
+            ylabel="FEVE",
+            mode=mode,
+        )
+        eval_result["feve"] = {
+            mouse_id: torch.mean(f_eve) for mouse_id, f_eve in feve.items()
+        }
+    # write individual and average results to TensorBoard
+    for metric, results in eval_result.items():
+        for mouse_id, result in results.items():
+            summary.scalar(
+                tag=f"{metric}/mouse{mouse_id}",
+                value=result,
+                step=epoch,
+                mode=mode,
+            )
+        summary.scalar(
+            tag=f"{metric}/average",
+            value=np.mean(list(results.values())),
+            step=epoch,
+            mode=mode,
+        )
+    # plot image and response pairs
+    summary.plot_image_response(
+        tag=f"image_response", results=outputs, step=epoch, mode=mode
+    )
+    return eval_result
 
 
 def update_dict(target: dict, source: dict, replace: bool = False):

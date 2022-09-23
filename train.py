@@ -2,7 +2,6 @@ import os
 import torch
 import argparse
 import typing as t
-import numpy as np
 from torch import nn
 from tqdm import tqdm
 from time import time
@@ -13,6 +12,12 @@ from sensorium import losses, metrics
 from sensorium.models import get_model
 from sensorium.data import get_data_loaders
 from sensorium.utils import utils, tensorboard
+
+
+def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """Metrics to compute as part of training and validation step"""
+    trial_correlation = metrics.correlation(y1=y_true, y2=y_pred, dim=0)
+    return {"metrics/trial_correlation": torch.mean(trial_correlation)}
 
 
 def train_step(
@@ -35,6 +40,7 @@ def train_step(
     loss.backward()
     optimizer.step()
     result["loss/loss"] = loss
+    result.update(compute_metrics(y_true=batch["response"], y_pred=outputs))
     return result
 
 
@@ -86,6 +92,7 @@ def validation_step(
     outputs = model(batch["image"], mouse_id=mouse_id)
     loss = loss_function(batch["response"], outputs)
     result["loss/loss"] = loss
+    result.update(compute_metrics(y_true=batch["response"], y_pred=outputs))
     return result
 
 
@@ -124,72 +131,6 @@ def validate(
     return results
 
 
-def evaluate(
-    args,
-    ds: t.Dict[int, DataLoader],
-    model: nn.Module,
-    epoch: int,
-    summary: tensorboard.Summary,
-    mode: int = 1,
-):
-    eval_result = {}
-    outputs = utils.inference(args, ds=ds, model=model, device=args.device)
-    trial_correlations = metrics.single_trial_correlations(results=outputs)
-    summary.plot_correlation(
-        "metrics/single_trial_correlation",
-        data=utils.metrics2df(trial_correlations),
-        step=epoch,
-        mode=mode,
-    )
-    eval_result["trial_correlation"] = {
-        mouse_id: torch.mean(correlation)
-        for mouse_id, correlation in trial_correlations.items()
-    }
-    if mode == 2:  # only test set has repeated images
-        image_correlations = metrics.average_image_correlation(results=outputs)
-        summary.plot_correlation(
-            "metrics/average_image_correlation",
-            data=utils.metrics2df(image_correlations),
-            step=epoch,
-            mode=mode,
-        )
-        eval_result["image_correlation"] = {
-            mouse_id: torch.mean(correlation)
-            for mouse_id, correlation in image_correlations.items()
-        }
-        feve = metrics.feve(results=outputs)
-        summary.plot_correlation(
-            "metrics/FEVE",
-            data=utils.metrics2df(feve),
-            step=epoch,
-            ylabel="FEVE",
-            mode=mode,
-        )
-        eval_result["feve"] = {
-            mouse_id: torch.mean(f_eve) for mouse_id, f_eve in feve.items()
-        }
-    # write individual and average results to TensorBoard
-    for metric, results in eval_result.items():
-        for mouse_id, result in results.items():
-            summary.scalar(
-                tag=f"{metric}/mouse{mouse_id}",
-                value=result,
-                step=epoch,
-                mode=mode,
-            )
-        summary.scalar(
-            tag=f"{metric}/average",
-            value=np.mean(list(results.values())),
-            step=epoch,
-            mode=mode,
-        )
-    # plot image and response pairs
-    summary.plot_image_response(
-        tag=f"image_response", results=outputs, step=epoch, mode=mode
-    )
-    return eval_result
-
-
 def main(args):
     if args.clear_output_dir and os.path.isdir(args.output_dir):
         rmtree(args.output_dir)
@@ -215,7 +156,7 @@ def main(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     epoch = utils.load_checkpoint(args, model=model, optimizer=optimizer)
-    evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
+    utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -243,16 +184,18 @@ def main(args):
         summary.scalar("model/elapse", elapse, step=epoch, mode=0)
 
         print(
-            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\n'
-            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\n'
+            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t'
+            f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
+            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t'
+            f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
             f"Elapse: {elapse:.02f}s\n"
         )
 
         if epoch % 10 == 0 or epoch == args.epochs:
-            evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
+            utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
             utils.save_checkpoint(args, model=model, optimizer=optimizer, epoch=epoch)
 
-    evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
+    utils.evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
 
     summary.close()
 
