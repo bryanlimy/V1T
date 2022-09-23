@@ -60,10 +60,12 @@ def inference(
         for batch in dataloader:
             images = batch["image"].to(device)
             predictions = model(images, mouse_id)
-            predictions = predictions.detach().cpu()
-            predictions = dataloader.dataset.i_transform_response(predictions)
-            result["predictions"].append(predictions)
-            result["targets"].append(batch["response"])
+            result["predictions"].append(
+                dataloader.dataset.i_transform_response(predictions.detach().cpu())
+            )
+            result["targets"].append(
+                dataloader.dataset.i_transform_response(batch["response"])
+            )
             images = dataloader.dataset.i_transform_image(images.detach().cpu())
             result["images"].append(images)
             result["frame_ids"].append(batch["frame_id"])
