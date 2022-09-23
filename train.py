@@ -8,6 +8,7 @@ from time import time
 from shutil import rmtree
 from torch.utils.data import DataLoader
 
+from sensorium import losses
 from sensorium.models import get_model
 from sensorium.data import get_data_loaders
 from sensorium.utils import utils, tensorboard, metrics
@@ -187,7 +188,7 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = get_model(args, summary=summary)
-    loss_function = torch.nn.MSELoss()
+    loss_function = losses.mean_sum_squared_error
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     epoch = utils.load_checkpoint(args, model=model, optimizer=optimizer)
