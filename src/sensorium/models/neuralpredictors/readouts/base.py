@@ -43,9 +43,12 @@ class Readout(nn.Module):
         Applies a reduction on the output of the regularizer.
         Args:
             x: output of the regularizer
-            reduction: method of reduction for the regularizer. Currently possible are ['mean', 'sum', None].
+            reduction: method of reduction for the regularizer. Currently
+                        possible are ['mean', 'sum', None].
             average: Deprecated. Whether to average the output of the regularizer.
-                            If not None, it is transformed into the corresponding value of 'reduction' (see method 'resolve_reduction_method').
+                            If not None, it is transformed into the
+                            corresponding value of 'reduction' (see
+                            method 'resolve_reduction_method').
         Returns: reduced value of the regularizer
         """
         reduction = self.resolve_reduction_method(reduction=reduction, average=average)
@@ -58,15 +61,18 @@ class Readout(nn.Module):
             return x
         else:
             raise ValueError(
-                f"Reduction method '{reduction}' is not recognized. Valid values are ['mean', 'sum', None]"
+                f"Reduction method '{reduction}' is not recognized. Valid "
+                f"values are ['mean', 'sum', None]"
             )
 
     def resolve_reduction_method(
         self, reduction: Reduction = "mean", average: Optional[bool] = None
     ) -> Reduction:
         """
-        Helper method which transforms the old and deprecated argument 'average' in the regularizer into
-        the new argument 'reduction' (if average is not None). This is done in order to agree with the terminology in pytorch).
+        Helper method which transforms the old and deprecated argument
+        'average' in the regularizer into the new argument 'reduction'
+        (if average is not None). This is done in order to agree with the
+        terminology in pytorch).
         """
         if average is not None:
             warnings.warn(
@@ -80,7 +86,8 @@ class Readout(nn.Module):
     ) -> float:
         if gamma_readout is not None:
             warnings.warn(
-                "Use of 'gamma_readout' is deprecated. Please consider using the readout's feature-regularization parameter instead"
+                "Use of 'gamma_readout' is deprecated. Please consider using "
+                "the readout's feature-regularization parameter instead"
             )
             feature_reg_weight = gamma_readout
         return feature_reg_weight
@@ -104,9 +111,10 @@ class Readout(nn.Module):
 
 class ClonedReadout(Module):
     """
-    This readout clones another readout while applying a linear transformation on the output. Used for MultiDatasets
-    with matched neurons where the x-y positions in the grid stay the same but the predicted responses are rescaled due
-    to varying experimental conditions.
+    This readout clones another readout while applying a linear transformation
+    on the output. Used for MultiDatasets with matched neurons where the x-y
+    positions in the grid stay the same but the predicted responses are
+    rescaled due to varying experimental conditions.
     """
 
     def __init__(self, original_readout: Readout, **kwargs: Any) -> None:

@@ -11,32 +11,46 @@ from sensorium.models.neuralpredictors.readouts.base import Readout, Configurati
 
 class Gaussian2d(Readout):
     """
-    Instantiates an object that can used to learn a point in the core feature space for each neuron,
-    sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
+    Instantiates an object that can used to learn a point in the core feature
+    space for each neuron, sampled from a Gaussian distribution with some mean
+    and variance at train but set to mean at test time, that best predicts its
+    response.
 
-    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
-    or not bias term is to be used and 'init_range' range for initialising the mean and variance of the gaussian distribution from which we sample to
-    uniform distribution, U(-init_range,init_range) and  uniform distribution, U(0.0, 3*init_range) respectively.
-    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
-    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
-    map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
+    The readout receives the shape of the core as 'in_shape', the number of
+    units/neurons being predicted as 'outdims', 'bias' specifying whether or
+    not bias term is to be used and 'init_range' range for initialising the
+    mean and variance of the gaussian distribution from which we sample to
+    uniform distribution, U(-init_range,init_range) and  uniform distribution,
+    U(0.0, 3*init_range) respectively.
+
+    The grid parameter contains the normalized locations (x, y coordinates in
+    the core feature space) and is clipped to [-1.1] as it a requirement of
+    the torch.grid_sample function. The feature parameter learns the best
+    linear mapping between the feature map from a given location, sample from
+    Gaussian at train time but set to mean at eval time, and the unit's
+    response with or without an additional elu non-linearity.
 
     Args:
         in_shape (list): shape of the input feature map [channels, width, height]
         outdims (int): number of output units
         bias (bool): adds a bias term
-        init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
+        init_mu_range (float): initialises the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
         init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
-                It is recommended however to use a fixed initialization, for faster convergence.
-                For this, set fixed_sigma to True.
-        batch_sample (bool): if True, samples a position for each image in the batch separately
-                            [default: True as it decreases convergence time and performs just as well]
+                                It is recommended however to use a fixed
+                                initialization, for faster convergence.
+                                For this, set fixed_sigma to True.
+        batch_sample (bool): if True, samples a position for each image in the
+                            batch separately [default: True as it decreases
+                            convergence time and performs just as well]
         align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
-                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
-                behavior to pre PyTorch 1.3 functionality for comparability.
-        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
-                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
+                            It changed behavior in PyTorch 1.3. The default of
+                            align_corners = True is setting the behavior to
+                            pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for
+                            backwards compatibility. If true, initialised the
+                            sigma not in a range, but with the exact value
+                            given for all neurons.
     """
 
     def __init__(
@@ -51,17 +65,19 @@ class Gaussian2d(Readout):
         fixed_sigma=False,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None,  # depricated, use feature_reg_weight instead
+        gamma_readout=None,  # deprecated, use feature_reg_weight instead
         **kwargs,
     ):
         warnings.warn(
-            "Gaussian2d is deprecated and will be removed in the future. Use `layers.readout.NonIsoGaussian2d` instead",
+            "Gaussian2d is deprecated and will be removed in the future. "
+            "Use `layers.readout.NonIsoGaussian2d` instead",
             DeprecationWarning,
         )
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
+                "either init_mu_range doesn't belong to [0.0, 1.0] or "
+                "init_sigma_range is non-positive"
             )
         self.in_shape = in_shape
         self.feature_reg_weight = self.resolve_deprecated_gamma_readout(
@@ -95,7 +111,8 @@ class Gaussian2d(Readout):
 
     def initialize(self, mean_activity=None):
         """
-        Initializes the mean, and sigma of the Gaussian readout along with the features weights
+        Initializes the mean, and sigma of the Gaussian readout along with the
+        features weights
         """
         if mean_activity is None:
             mean_activity = self.mean_activity
@@ -105,8 +122,8 @@ class Gaussian2d(Readout):
         else:
             self.sigma.data.uniform_(0, self.init_sigma_range)
             warnings.warn(
-                "sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
-                "fixed_sigma to True"
+                "sigma is sampled from uniform distribution, instead of a "
+                "fixed value. Consider setting fixed_sigma to True"
             )
         self.features.data.fill_(1 / self.in_shape[0])
         if self.bias is not None:
@@ -114,19 +131,25 @@ class Gaussian2d(Readout):
 
     def sample_grid(self, batch_size, sample=None):
         """
-        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Returns the grid locations from the core by sampling from a Gaussian
+        distribution
         Args:
             batch_size (int): size of the batch
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample
+                                from Gaussian distribution, N(mu,sigma),
+                                defined per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does as
+                                instructed
         """
         with torch.no_grad():
             self.mu.clamp_(
                 min=-1, max=1
-            )  # at eval time, only self.mu is used so it must belong to [-1,1]
+            )  # at eval time, only self.mu is used, so it must belong to [-1,1]
             self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
@@ -152,8 +175,10 @@ class Gaussian2d(Readout):
         """
         Returns l1 regularization term for features.
         Args:
-            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
-            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
+            average(bool): Deprecated (see reduction) if True, use mean of
+                            weights for regularization
+            reduction(str): Specifies the reduction to apply to the output:
+                            'none' | 'mean' | 'sum'
         """
         return self.apply_reduction(
             self.features.abs(), reduction=reduction, average=average
@@ -170,11 +195,16 @@ class Gaussian2d(Readout):
         Propagates the input forwards through the readout
         Args:
             x: input data
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample
+                                from Gaussian distribution, N(mu,sigma),
+                                defined per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does as
+                                instructed
             shift (bool): shifts the location of the grid (from eye-tracking data)
             out_idx (bool): index of neurons to be predicted
 
@@ -185,7 +215,8 @@ class Gaussian2d(Readout):
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
+                "the specified feature map dimension is not the readout's "
+                "expected input dimension"
             )
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
@@ -250,44 +281,58 @@ class FullGaussian2d(Readout):
         bias (bool): adds a bias term
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]. Default: 0.1
-        init_sigma (float): The standard deviation of the Gaussian with `init_sigma` when `gauss_type` is
-            'isotropic' or 'uncorrelated'. When `gauss_type='full'` initialize the square root of the
-            covariance matrix with with Uniform([-init_sigma, init_sigma]). Default: 1
-        batch_sample (bool): if True, samples a position for each image in the batch separately
-                            [default: True as it decreases convergence time and performs just as well]
-        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
-                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
-                behavior to pre PyTorch 1.3 functionality for comparability.
-        gauss_type (str): Which Gaussian to use. Options are 'isotropic', 'uncorrelated', or 'full' (default).
-        grid_mean_predictor (dict): Parameters for a predictor of the mean grid locations. Has to have a form like
-                        {
-                        'hidden_layers':0,
-                        'hidden_features':20,
-                        'final_tanh': False,
-                        }
-        shared_features (dict): Used when the feature vectors are shared (within readout between neurons) or between
-                this readout and other readouts. Has to be a dictionary of the form
-               {
-                    'match_ids': (numpy.array),
-                    'shared_features': torch.nn.Parameter or None
-                }
-                The match_ids are used to match things that should be shared within or across scans.
-                If `shared_features` is None, this readout will create its own features. If it is set to
-                a feature Parameter of another readout, it will replace the features of this readout. It will be
-                access in increasing order of the sorted unique match_ids. For instance, if match_ids=[2,0,0,1],
-                there should be 3 features in order [0,1,2]. When this readout creates features, it will do so in
-                that order.
+        init_sigma (float): The standard deviation of the Gaussian with
+        `                   `init_sigma` when `gauss_type` is 'isotropic' or
+                            'uncorrelated'.
+                            When `gauss_type='full'` initialise the square
+                            root of the covariance matrix with
+                            Uniform([-init_sigma, init_sigma]). Default: 1
+        batch_sample (bool): if True, samples a position for each image in the
+                            batch separately [default: True as it decreases
+                            convergence time and performs just as well]
+        align_corners (bool): Keyword argument to gridsample for bilinear
+                            interpolation. It changed behavior in PyTorch 1.3.
+                            The default of align_corners = True is setting the
+                            behavior to pre PyTorch 1.3 functionality for
+                            comparability.
+        gauss_type (str): Which Gaussian to use. Options are 'isotropic',
+                        'uncorrelated', or 'full' (default).
+        grid_mean_predictor (dict): Parameters for a predictor of the mean
+                                    grid locations. Has to have a form like
+                                    {
+                                        'hidden_layers':0,
+                                        'hidden_features':20,
+                                        'final_tanh': False,
+                                    }
+        shared_features (dict): Used when the feature vectors are shared
+                                (within readout between neurons) or between
+                                this readout and other readouts. Has to be a
+                                dictionary of the form
+                                {
+                                    'match_ids': (numpy.array),
+                                    'shared_features': torch.nn.Parameter or None
+                                }
+                                The match_ids are used to match things that
+                                should be shared within or across scans.
+                                If `shared_features` is None, this readout will
+                                create its own features. If it is set to a
+                                feature Parameter of another readout, it will
+                                replace the features of this readout. It will
+                                be accessed in increasing order of the sorted
+                                unique match_ids.
+                                For instance, if match_ids=[2,0,0,1], there
+                                should be 3 features in order [0,1,2]. When
+                                this readout creates features, it will do so
+                                in that order.
         shared_grid (dict): Like `shared_features`. Use dictionary like
-               {
-                    'match_ids': (numpy.array),
-                    'shared_grid': torch.nn.Parameter or None
-                }
-                See documentation of `shared_features` for specification.
-
-        source_grid (numpy.array):
-                Source grid for the grid_mean_predictor.
-                Needs to be of size neurons x grid_mean_predictor[input_dimensions]
-
+                            {
+                                'match_ids': (numpy.array),
+                                'shared_grid': torch.nn.Parameter or None
+                            }
+                            See documentation of `shared_features` for specification.
+        source_grid (numpy.array): Source grid for the grid_mean_predictor.
+                                Needs to be of size neurons x
+                                grid_mean_predictor[input_dimensions]
     """
 
     def __init__(
@@ -306,7 +351,7 @@ class FullGaussian2d(Readout):
         source_grid=None,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None,  # depricated, use feature_reg_weight instead
+        gamma_readout=None,  # deprecated, use feature_reg_weight instead
         **kwargs,
     ):
 
@@ -320,7 +365,8 @@ class FullGaussian2d(Readout):
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
             raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
+                "either init_mu_range doesn't belong to [0.0, 1.0] or "
+                "init_sigma_range is non-positive"
             )
 
         # store statistics about the images and neurons
@@ -412,8 +458,10 @@ class FullGaussian2d(Readout):
         """
         Returns l1 regularization term for features.
         Args:
-            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
-            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
+            average(bool): Deprecated (see reduction) if True, use mean of
+                            weights for regularization
+            reduction(str): Specifies the reduction to apply to the output:
+                            'none' | 'mean' | 'sum'
         """
         if self._original_features:
             return self.apply_reduction(
@@ -444,19 +492,25 @@ class FullGaussian2d(Readout):
 
     def sample_grid(self, batch_size, sample=None):
         """
-        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Returns the grid locations from the core by sampling from a Gaussian
+        distribution
         Args:
             batch_size (int): size of the batch
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample
+                                from Gaussian distribution, N(mu,sigma),
+                                defined per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does as
+                                instructed
         """
         with torch.no_grad():
-            self.mu.clamp_(
-                min=-1, max=1
-            )  # at eval time, only self.mu is used so it must belong to [-1,1] # sigma/variance i    s always a positive quantity
+            # at eval time, only self.mu is used, so it must belong to [-1,1]
+            # sigma/variance is always a positive quantity
+            self.mu.clamp_(min=-1, max=1)
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
@@ -469,22 +523,25 @@ class FullGaussian2d(Readout):
             ).zero_()  # for consistency and CUDA capability
 
         if self.gauss_type != "full":
-            return torch.clamp(
-                norm * self.sigma + self.mu, min=-1, max=1
-            )  # grid locations in feature space sampled randomly around the mean self.mu
+            # grid locations in feature space sampled randomly around the mean self.mu
+            return torch.clamp(norm * self.sigma + self.mu, min=-1, max=1)
         else:
+            # grid locations in feature space sampled randomly around the mean self.mu
             return torch.clamp(
                 torch.einsum("ancd,bnid->bnic", self.sigma, norm) + self.mu,
                 min=-1,
                 max=1,
-            )  # grid locations in feature space sampled randomly around the mean self.mu
+            )
 
     def init_grid_predictor(
         self, source_grid, hidden_features=20, hidden_layers=0, final_tanh=False
     ):
         self._original_grid = False
         layers = [
-            nn.Linear(source_grid.shape[1], hidden_features if hidden_layers > 0 else 2)
+            nn.Linear(
+                in_features=source_grid.shape[1],
+                out_features=hidden_features if hidden_layers > 0 else 2,
+            )
         ]
 
         for i in range(hidden_layers):
@@ -492,7 +549,8 @@ class FullGaussian2d(Readout):
                 [
                     nn.ELU(),
                     nn.Linear(
-                        hidden_features, hidden_features if i < hidden_layers - 1 else 2
+                        in_features=hidden_features,
+                        out_features=hidden_features if i < hidden_layers - 1 else 2,
                     ),
                 ]
             )
@@ -510,7 +568,8 @@ class FullGaussian2d(Readout):
 
     def initialize(self, mean_activity=None):
         """
-        Initializes the mean, and sigma of the Gaussian readout along with the features weights
+        Initializes the mean, and sigma of the Gaussian readout along with
+        the features weights
         """
         if mean_activity is None:
             mean_activity = self.mean_activity
@@ -529,9 +588,11 @@ class FullGaussian2d(Readout):
 
     def initialize_features(self, match_ids=None, shared_features=None):
         """
-        The internal attribute `_original_features` in this function denotes whether this instance of the FullGuassian2d
-        learns the original features (True) or if it uses a copy of the features from another instance of FullGaussian2d
-        via the `shared_features` (False). If it uses a copy, the feature_l1 regularizer for this copy will return 0
+        The internal attribute `_original_features` in this function denotes
+        whether this instance of the FullGaussian2d learns the original
+        features (True) or if it uses a copy of the features from another
+        instance of FullGaussian2d via the `shared_features` (False). If it
+        uses a copy, the feature_l1 regularizer for this copy will return 0
         """
         c, w, h = self.in_shape
         self._original_features = True
@@ -599,11 +660,16 @@ class FullGaussian2d(Readout):
         Propagates the input forwards through the readout
         Args:
             x: input data
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample
+                                from Gaussian distribution, N(mu,sigma),
+                                defined per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does
+                                as instructed
             shift (bool): shifts the location of the grid (from eye-tracking data)
             out_idx (bool): index of neurons to be predicted
 
@@ -614,7 +680,8 @@ class FullGaussian2d(Readout):
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             warnings.warn(
-                "the specified feature map dimension is not the readout's expected input dimension"
+                "the specified feature map dimension is not the readout's "
+                "expected input dimension"
             )
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
@@ -683,8 +750,9 @@ class FullGaussian2d(Readout):
 
 class RemappedGaussian2d(FullGaussian2d):
     """
-    A readout using a spatial transformer layer whose positions are sampled from one Gaussian per neuron. Mean
-    and covariance of that Gaussian are learned. In addition, there is an image dependent remapping of neurons
+    A readout using a spatial transformer layer whose positions are sampled
+    from one Gaussian per neuron. Mean and covariance of that Gaussian are
+    learned. In addition, there is an image dependent remapping of neurons
     locations.
 
     For most parameters see:  FullGaussian2d
@@ -692,9 +760,8 @@ class RemappedGaussian2d(FullGaussian2d):
     Args:
         remap_layers (int): number of layers of the remapping network
         remap_kernel (int): conv kernel size of the remapping network
-        max_remap_amplitude (int): maximal amplitude of remapping (factor on output of remapping network)
-
-
+        max_remap_amplitude (int): maximal amplitude of remapping
+                                (factor on output of remapping network)
     """
 
     def __init__(
@@ -741,7 +808,8 @@ class RemappedGaussian2d(FullGaussian2d):
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
+                "the specified feature map dimension is not the readout's "
+                "expected input dimension"
             )
         feat = self.features.view(1, c, self.outdims)
         bias = self.bias
@@ -779,23 +847,27 @@ class RemappedGaussian2d(FullGaussian2d):
 
 class DeterministicGaussian2d(Readout):
     """
-    'DeterministicGaussian2d' class instantiates an object that can be used to learn a
-    Normal distribution in the core feature space for each neuron, this is
-    applied to the pixel grid to give a simple weighting.
+    'DeterministicGaussian2d' class instantiates an object that can be used to
+    learn a Normal distribution in the core feature space for each neuron,
+    this is applied to the pixel grid to give a simple weighting.
 
     The variance should be decreased over training to achieve localization.
-    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as
-    'outdims', 'bias' specifying whether or not bias term is to be used.
+    The readout receives the shape of the core as 'in_shape', the number of
+    units/neurons being predicted as 'outdims', 'bias' specifying whether or
+    not bias term is to be used.
 
-    From the mean and and variance, a filter unique for each outdim is built, that is of the 2d density of
-    the normal distribution. The filter is applied only on the spatial dimensions of the input.
+    From the mean and variance, a filter unique for each outdim is built,
+    that is of the 2d density of the normal distribution. The filter is applied
+    only on the spatial dimensions of the input.
 
     Args:
         in_shape (list): shape of the input feature map [channels, width, height]
         outdims (int): number of output units
         bias (bool): adds a bias term
-        positive (bool): if True, all weights will be constrained to have positive values, default: False
-        constrain_mode (str): ['default', 'abs', 'elu'] sets the way the weights are constrained, default: 'default'
+        positive (bool): if True, all weights will be constrained to have
+                        positive values, default: False
+        constrain_mode (str): ['default', 'abs', 'elu'] sets the way the
+                            weights are constrained, default: 'default'
 
     Written by Claudius Gruner.
     """
@@ -811,14 +883,15 @@ class DeterministicGaussian2d(Readout):
         constrain_mode="default",
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None,  # depricated, use feature_reg_weight instead
+        gamma_readout=None,  # deprecated, use feature_reg_weight instead
     ):
 
         super().__init__()
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
             raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive"
+                "either init_mu_range doesn't belong to [0.0, 1.0] or "
+                "init_sigma_range is non-positive"
             )
 
         self.in_shape = in_shape
@@ -891,7 +964,8 @@ class DeterministicGaussian2d(Readout):
 
     def initialize(self, mean_activity=None):
         """
-        initialize function initializes the mean, sigma for the Gaussian readout and features weights
+        initialize function initializes the mean, sigma for the Gaussian
+        readout and features weights
         """
         if mean_activity is None:
             mean_activity = self.mean_activity
@@ -905,8 +979,10 @@ class DeterministicGaussian2d(Readout):
         """
         Returns l1 regularization term for features.
         Args:
-            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
-            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
+            average(bool): Deprecated (see reduction) if True, use mean of
+                            weights for regularization
+            reduction(str): Specifies the reduction to apply to the output:
+                            'none' | 'mean' | 'sum'
         """
         return self.apply_reduction(
             self.features.abs(), reduction=reduction, average=average
@@ -914,10 +990,12 @@ class DeterministicGaussian2d(Readout):
 
     def variance_l1(self, reduction="sum", average=None):
         """
-        variance_l1 function returns the l1 regularization term either the mean or just the sum of weights
+        variance_l1 function returns the l1 regularization term either the
+        mean or just the sum of weights
         Args:
             average(bool): if True, use mean of weights for regularization
-            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
+            reduction(str): Specifies the reduction to apply to the output:
+                            'none' | 'mean' | 'sum'
         """
         return self.apply_reduction(
             torch.exp(self.log_var), reduction=reduction, average=average
@@ -985,15 +1063,24 @@ class DeterministicGaussian2d(Readout):
 
 class Gaussian3d(Readout):
     """
-    This readout instantiates an object that can used to learn a point in the core feature space for each neuron,
-    sampled from a Gaussian distribution with some mean and variance at train but set to mean at test time, that best predicts its response.
+    This readout instantiates an object that can used to learn a point in the
+    core feature space for each neuron, sampled from a Gaussian distribution
+    with some mean and variance at train but set to mean at test time, that
+    best predicts its response.
 
-    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
-    or not bias term is to be used and 'init_range' range for initialising the mean and variance of the gaussian distribution from which we sample to
-    uniform distribution, U(-init_mu_range,init_mu_range) and  uniform distribution, U(0.0, init_sigma_range) respectively.
-    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
-    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
-    map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
+    The readout receives the shape of the core as 'in_shape', the number of
+    units/neurons being predicted as 'outdims', 'bias' specifying whether or
+    not bias term is to be used and 'init_range' range for initialising the
+    mean and variance of the gaussian distribution from which we sample to
+    uniform distribution, U(-init_mu_range,init_mu_range) and  uniform
+    distribution, U(0.0, init_sigma_range) respectively.
+
+    The grid parameter contains the normalized locations (x, y coordinates
+    in the core feature space) and is clipped to [-1.1] as it a requirement of
+    the torch.grid_sample function. The feature parameter learns the best
+    linear mapping between the feature map from a given location, sample from
+    Gaussian at train time but set to mean at eval time, and the unit's
+    response with or without an additional elu non-linearity.
 
     Args:
         in_shape (list): shape of the input feature map [channels, width, height]
@@ -1002,15 +1089,20 @@ class Gaussian3d(Readout):
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
         init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range]).
-                It is recommended however to use a fixed initialization, for faster convergence.
-                For this, set fixed_sigma to True.
-        batch_sample (bool): if True, samples a position for each image in the batch separately
-                            [default: True as it decreases convergence time and performs just as well]
-        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
-                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
-                behavior to pre PyTorch 1.3 functionality for comparability.
-        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
-                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
+                                It is recommended however to use a fixed
+                                initialization, for faster convergence.
+                                For this, set fixed_sigma to True.
+        batch_sample (bool): if True, samples a position for each image in
+                            the batch separately [default: True as it decreases
+                            convergence time and performs just as well]
+        align_corners (bool): Keyword argument to gridsample for bilinear interpolation.
+                            It changed behavior in PyTorch 1.3. The default of
+                            align_corners = True is setting the behavior to
+                            pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for
+                            backwards compatibility. If true, initialised the
+                            sigma not in a range, but with the exact value
+                            given for all neurons.
     """
 
     def __init__(
@@ -1025,7 +1117,7 @@ class Gaussian3d(Readout):
         fixed_sigma=False,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None,  # depricated, use feature_reg_weight instead
+        gamma_readout=None,  # deprecated, use feature_reg_weight instead
         **kwargs,
     ):
         super().__init__()
@@ -1064,21 +1156,27 @@ class Gaussian3d(Readout):
 
     def sample_grid(self, batch_size, sample=None):
         """
-        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Returns the grid locations from the core by sampling from a Gaussian
+        distribution
         Args:
             batch_size (int): size of the batch
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample
+                                from Gaussian distribution, N(mu,sigma),
+                                defined per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does
+                                as instructed
         """
 
         with torch.no_grad():
-            self.mu.clamp_(
-                min=-1, max=1
-            )  # at eval time, only self.mu is used so it must belong to [-1,1]
-            self.sigma.clamp_(min=0)  # sigma/variance is always a positive quantity
+            # at eval time, only self.mu is used, so it must belong to [-1,1]
+            self.mu.clamp_(min=-1, max=1)
+            # sigma/variance is always a positive quantity
+            self.sigma.clamp_(min=0)
 
         grid_shape = (batch_size,) + self.grid_shape[1:]
 
@@ -1091,9 +1189,8 @@ class Gaussian3d(Readout):
                 *grid_shape
             ).zero_()  # for consistency and CUDA capability
 
-        return torch.clamp(
-            norm * self.sigma + self.mu, min=-1, max=1
-        )  # grid locations in feature space sampled randomly around the mean self.mu
+        # grid locations in feature space sampled randomly around the mean self.mu
+        return torch.clamp(norm * self.sigma + self.mu, min=-1, max=1)
 
     @property
     def grid(self):
@@ -1108,8 +1205,8 @@ class Gaussian3d(Readout):
         else:
             self.sigma.data.uniform_(0, self.init_sigma_range)
             warnings.warn(
-                "sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
-                "fixed_sigma to True"
+                "sigma is sampled from uniform distribution, instead of a "
+                "fixed value. Consider setting fixed_sigma to True"
             )
         self.features.data.fill_(1 / self.in_shape[0])
         if self.bias is not None:
@@ -1117,7 +1214,8 @@ class Gaussian3d(Readout):
 
     def regularizer(self, reduction="sum", average=None):
         raise NotImplementedError(
-            "The regularizer for this readout needs to be implemented! See issue https://github.com/sinzlab/neuralpredictors/issues/127"
+            "The regularizer for this readout needs to be implemented! "
+            "See issue https://github.com/sinzlab/neuralpredictors/issues/127"
         )
 
     def forward(self, x, sample=None, shift=None, out_idx=None, **kwargs):
@@ -1125,11 +1223,16 @@ class Gaussian3d(Readout):
         Propagates the input forwards through the readout
         Args:
             x: input data
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample
+                                from Gaussian distribution, N(mu,sigma),
+                                defined per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does as
+                                instructed
             shift (bool): shifts the location of the grid (from eye-tracking data)
             out_idx (bool): index of neurons to be predicted
 
@@ -1140,7 +1243,8 @@ class Gaussian3d(Readout):
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
+                "the specified feature map dimension is not the readout's "
+                "expected input dimension"
             )
         x = x.view(N, 1, c, w, h)
         feat = self.features
@@ -1182,16 +1286,25 @@ class Gaussian3d(Readout):
 
 class UltraSparse(Readout):
     """
-    This readout instantiates an object that can used to learn one or more features (with or without
-    a shared mean in the x-y plane) in the core feature space for each neuron, sampled from a Gaussian distribution
-    with some mean and variance at training but set to mean at test time, that best predicts its response.
+    This readout instantiates an object that can used to learn one or more
+    features (with or without a shared mean in the x-y plane) in the core
+    feature space for each neuron, sampled from a Gaussian distribution with
+    some mean and variance at training but set to mean at test time, that
+    best predicts its response.
 
-    The readout receives the shape of the core as 'in_shape', the number of units/neurons being predicted as 'outdims', 'bias' specifying whether
-    or not bias term is to be used and 'init_range' range for initialising the mean and variance of the gaussian distribution from which we sample to
-    uniform distribution, U(-init_mu_range,init_mu_range) and  uniform distribution, U(0.0, init_sigma_range) respectively.
-    The grid parameter contains the normalized locations (x, y coordinates in the core feature space) and is clipped to [-1.1] as it a
-    requirement of the torch.grid_sample function. The feature parameter learns the best linear mapping between the feature
-    map from a given location, sample from Gaussian at train time but set to mean at eval time, and the unit's response with or without an additional elu non-linearity.
+    The readout receives the shape of the core as 'in_shape', the number of
+    units/neurons being predicted as 'outdims', 'bias' specifying whether or
+    not bias term is to be used and 'init_range' range for initialising the
+    mean and variance of the gaussian distribution from which we sample to
+    uniform distribution, U(-init_mu_range,init_mu_range) and  uniform
+    distribution, U(0.0, init_sigma_range) respectively.
+
+    The grid parameter contains the normalized locations (x, y coordinates in
+    the core feature space) and is clipped to [-1.1] as it a requirement of
+    the torch.grid_sample function. The feature parameter learns the best
+    linear mapping between the feature map from a given location, sample
+    from Gaussian at train time but set to mean at eval time, and the unit's
+    response with or without an additional elu non-linearity.
 
     Args:
         in_shape (list): shape of the input feature map [channels, width, height]
@@ -1200,18 +1313,23 @@ class UltraSparse(Readout):
         init_mu_range (float): initialises the the mean with Uniform([-init_range, init_range])
                             [expected: positive value <=1]
         init_sigma_range (float): initialises sigma with Uniform([0.0, init_sigma_range])
-        batch_sample (bool): if True, samples a position for each image in the batch separately
+        batch_sample (bool): if True, samples a position for each image in the
+                            batch separately
                             [default: True as it decreases convergence time and performs just as well]
-        num_filters (int): number of points in the core-features to be learned for each neuron
-                           [default: 1, an instance of sparsest readout]
-        shared_mean (bool): if True, the mean in the x-y plane (image-plane) is shared across all channels
+        num_filters (int): number of points in the core-features to be learned
+                            for each neuron
+                           [default: 1, an instance of the sparsest readout]
+        shared_mean (bool): if True, the mean in the x-y plane (image-plane)
+                            is shared across all channels
                            [default: False]
-
-        align_corners (bool): Keyword agrument to gridsample for bilinear interpolation.
-                It changed behavior in PyTorch 1.3. The default of align_corners = True is setting the
-                behavior to pre PyTorch 1.3 functionality for comparability.
-        fixed_sigma (bool). Recommended behavior: True. But set to false for backwards compatibility.
-                If true, initialized the sigma not in a range, but with the exact value given for all neurons.
+        align_corners (bool): Keyword argument to gridsample for bilinear interpolation.
+                            It changed behavior in PyTorch 1.3. The default of
+                            align_corners = True is setting the behavior to
+                            pre PyTorch 1.3 functionality for comparability.
+        fixed_sigma (bool). Recommended behavior: True. But set to false for
+                            backwards compatibility.
+                            If true, initialised the sigma not in a range,
+                            but with the exact value given for all neurons.
     """
 
     def __init__(
@@ -1228,14 +1346,15 @@ class UltraSparse(Readout):
         fixed_sigma=False,
         mean_activity=None,
         feature_reg_weight=1.0,
-        gamma_readout=None,  # depricated, use feature_reg_weight instead
+        gamma_readout=None,  # deprecated, use feature_reg_weight instead
         **kwargs,
     ):
 
         super().__init__()
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma_range <= 0.0:
             raise ValueError(
-                "either init_mu_range doesn't belong to [0.0, 1.0] or init_sigma_range is non-positive!"
+                "either init_mu_range doesn't belong to [0.0, 1.0] or "
+                "init_sigma_range is non-positive!"
             )
         self.in_shape = in_shape
         c, w, h = in_shape
@@ -1252,29 +1371,22 @@ class UltraSparse(Readout):
 
             self.gridxy_shape = (1, 1, outdims, 1, 2)
             self.gridch_shape = (1, 1, outdims * num_filters, 1, 1)
-            self.mu_xy = Parameter(
-                torch.Tensor(*self.gridxy_shape)
-            )  # mean location (in xy dim) of gaussian for each neuron
-            self.mu_ch = Parameter(
-                torch.Tensor(*self.gridch_shape)
-            )  # mean location (in ch dim) of gaussian for each neuron
-            self.sigma_xy = Parameter(
-                torch.Tensor(*self.gridxy_shape)
-            )  # standard deviation for gaussian for each neuron
+            # mean location (in xy dim) of gaussian for each neuron
+            self.mu_xy = Parameter(torch.Tensor(*self.gridxy_shape))
+            # mean location (in ch dim) of gaussian for each neuron
+            self.mu_ch = Parameter(torch.Tensor(*self.gridch_shape))
+            # standard deviation for gaussian for each neuron
+            self.sigma_xy = Parameter(torch.Tensor(*self.gridxy_shape))
             self.sigma_ch = Parameter(torch.Tensor(*self.gridch_shape))
 
         else:
+            # mean location of gaussian for each neuron
+            self.mu = Parameter(torch.Tensor(*self.grid_shape))
+            # standard deviation for gaussian for each neuron
+            self.sigma = Parameter(torch.Tensor(*self.grid_shape))
 
-            self.mu = Parameter(
-                torch.Tensor(*self.grid_shape)
-            )  # mean location of gaussian for each neuron
-            self.sigma = Parameter(
-                torch.Tensor(*self.grid_shape)
-            )  # standard deviation for gaussian for each neuron
-
-        self.features = Parameter(
-            torch.Tensor(1, 1, outdims, num_filters)
-        )  # saliency  weights for each channel from core
+        # saliency  weights for each channel from core
+        self.features = Parameter(torch.Tensor(1, 1, outdims, num_filters))
 
         if bias:
             bias = Parameter(torch.Tensor(outdims))
@@ -1290,26 +1402,31 @@ class UltraSparse(Readout):
 
     def sample_grid(self, batch_size, sample=None):
         """
-        Returns the grid locations from the core by sampling from a Gaussian distribution
+        Returns the grid locations from the core by sampling from a
+        Gaussian distribution
         Args:
             batch_size (int): size of the batch
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample
+                                from Gaussian distribution, N(mu,sigma),
+                                defined per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does
+                                as instructed
         """
 
         if self.shared_mean:
-            # sample an xy location and keep it same across all filter channels
-            # explicit clamping of mu and sigma along the channel dimension was needed as the clamping post cat was not working
+            # sample a xy location and keep it same across all filter channels
+            # explicit clamping of mu and sigma along the channel dimension
+            # was needed as the clamping post cat was not working
             with torch.no_grad():
-                self.mu_ch.clamp_(
-                    min=-1, max=1
-                )  # at eval time, only self.mu is used so it must belong to [-1,1]
-                self.sigma_ch.clamp_(
-                    min=0
-                )  # sigma/variance is always a positive quantity
+                # at eval time, only self.mu is used so it must belong to [-1,1]
+                self.mu_ch.clamp_(min=-1, max=1)
+                # sigma/variance is always a positive quantity
+                self.sigma_ch.clamp_(min=0)
             self.mu = torch.cat(
                 (self.mu_xy.repeat(1, 1, self.num_filters, 1, 1), self.mu_ch), 4
             )
@@ -1344,8 +1461,10 @@ class UltraSparse(Readout):
         """
         Returns l1 regularization term for features.
         Args:
-            average(bool): Deprecated (see reduction) if True, use mean of weights for regularization
-            reduction(str): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'
+            average(bool): Deprecated (see reduction) if True, use mean of
+                            weights for regularization
+            reduction(str): Specifies the reduction to apply to the output:
+                            'none' | 'mean' | 'sum'
         """
         return self.apply_reduction(
             self.features.abs(), reduction=reduction, average=average
@@ -1376,8 +1495,8 @@ class UltraSparse(Readout):
                 self.sigma_ch.data.uniform_(0, self.init_sigma_range)
                 self.sigma_xy.data.uniform_(0, self.init_sigma_range)
                 warnings.warn(
-                    "sigma is sampled from uniform distribuiton, instead of a fixed value. Consider setting "
-                    "fixed_sigma to True"
+                    "sigma is sampled from uniform distribution, instead of a "
+                    "fixed value. Consider setting fixed_sigma to True"
                 )
 
         else:
@@ -1394,11 +1513,16 @@ class UltraSparse(Readout):
         Propagates the input forwards through the readout
         Args:
             x: input data
-            sample (bool/None): sample determines whether we draw a sample from Gaussian distribution, N(mu,sigma), defined per neuron
-                            or use the mean, mu, of the Gaussian distribution without sampling.
-                           if sample is None (default), samples from the N(mu,sigma) during training phase and
-                             fixes to the mean, mu, during evaluation phase.
-                           if sample is True/False, overrides the model_state (i.e training or eval) and does as instructed
+            sample (bool/None): sample determines whether we draw a sample from
+                                Gaussian distribution, N(mu,sigma), defined
+                                per neuron or use the mean, mu, of the
+                                Gaussian distribution without sampling.
+                                If sample is None (default), samples from the
+                                N(mu,sigma) during training phase and fixes to
+                                the mean, mu, during evaluation phase.
+                                If sample is True/False, overrides the
+                                model_state (i.e. training or eval) and does as
+                                instructed
             shift (bool): shifts the location of the grid (from eye-tracking data)
             out_idx (bool): index of neurons to be predicted
 
@@ -1410,7 +1534,8 @@ class UltraSparse(Readout):
         c_in, w_in, h_in = self.in_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError(
-                "the specified feature map dimension is not the readout's expected input dimension"
+                "the specified feature map dimension is not the readout's "
+                "expected input dimension"
             )
         x = x.view(N, 1, c, w, h)
         feat = self.features
