@@ -20,16 +20,26 @@ class FiringRateEncoder(nn.Module):
         nonlinearity_config=None
     ):
         """
-        An Encoder that wraps the core, readout and optionally a shifter amd modulator into one model.
-        The output is one positive value that can be interpreted as a firing rate, for example for a Poisson distribution.
+        An Encoder that wraps the core, readout and optionally a shifter amd
+        modulator into one model.
+        The output is one positive value that can be interpreted as a firing
+        rate, for example for a Poisson distribution.
         Args:
             core (nn.Module): Core model. Refer to neuralpredictors.layers.cores
-            readout (nn.ModuleDict): MultiReadout model. Refer to neuralpredictors.layers.readouts
-            elu_offset (float): Offset value in the final elu non-linearity. Defaults to 0.
-            shifter (optional[nn.ModuleDict]): Shifter network. Refer to neuralpredictors.layers.shifters. Defaults to None.
-            modulator (optional[nn.ModuleDict]): Modulator network. Modulator networks are not implemented atm (24/06/2021). Defaults to None.
+            readout (nn.ModuleDict): MultiReadout model.
+                                    Refer to neuralpredictors.layers.readouts
+            elu_offset (float): Offset value in the final elu non-linearity.
+                                Defaults to 0.
+            shifter (optional[nn.ModuleDict]): Shifter network.
+                                            Refer to neuralpredictors.layers.shifters.
+                                            Defaults to None.
+            modulator (optional[nn.ModuleDict]): Modulator network. Modulator
+                                                networks are not implemented
+                                                atm (24/06/2021).
+                                                Defaults to None.
             nonlinearity (str): Non-linearity type to use. Defaults to 'elu'.
-            nonlinearity_config (optional[dict]): Non-linearity configuration. Defaults to None.
+            nonlinearity_config (optional[dict]): Non-linearity configuration.
+                                                Defaults to None.
         """
         super().__init__()
         self.core = core

@@ -41,25 +41,30 @@ def stacked_core_full_gauss_readout(
     core_bias=False,
 ):
     """
-    Model class of a stacked2dCore (from neuralpredictors) and a pointpooled (spatial transformer) readout
+    Model class of a stacked2dCore (from neuralpredictors) and a
+    pointpooled (spatial transformer) readout
     Args:
         dataloaders: a dictionary of dataloaders, one loader per session
             in the format {'data_key': dataloader object, .. }
         seed: random seed
         grid_mean_predictor: if not None, needs to be a dictionary of the form
             {
-            'type': 'cortex',
-            'input_dimensions': 2,
-            'hidden_layers':0,
-            'hidden_features':20,
-            'final_tanh': False,
+                'type': 'cortex',
+                'input_dimensions': 2,
+                'hidden_layers':0,
+                'hidden_features':20,
+                'final_tanh': False,
             }
-            In that case the datasets need to have the property `neurons.cell_motor_coordinates`
-        share_features: whether to share features between readouts. This requires that the datasets
-            have the properties `neurons.multi_match_id` which are used for matching. Every dataset
-            has to have all these ids and cannot have any more.
-        all other args: See Documentation of Stacked2dCore in neuralpredictors.layers.cores and
-            PointPooled2D in neuralpredictors.layers.readouts
+            In that case the datasets need to have the property
+            `neurons.cell_motor_coordinates`
+        share_features: whether to share features between readouts.
+                        This requires that the datasets have the properties
+                        `neurons.multi_match_id` which are used for matching.
+                        Every dataset has to have all these ids and cannot have
+                        anymore.
+        all other args: See Documentation of Stacked2dCore in
+                        neuralpredictors.layers.cores and PointPooled2D in
+                        neuralpredictors.layers.readouts
     Returns: An initialized model which consists of model.core and model.readout
     """
 
