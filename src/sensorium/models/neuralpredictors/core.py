@@ -71,9 +71,8 @@ class Core(ABC):
 
 class Stacked2dCore(Core, nn.Module):
     """
-    An instantiation of the Core base class. Made up of layers layers of
-    nn.sequential modules.
-    Allows for the flexible implementations of many different architectures,
+    An instantiation of the Core base class. Made up of layers of nn.Sequential
+    modules. Allows for the flexible implementations of many architectures,
     such as convolutional layers, or self-attention layers.
     """
 
@@ -112,48 +111,71 @@ class Stacked2dCore(Core, nn.Module):
         """
         Args:
             input_channels:     Integer, number of input channels as in
-            hidden_channels:    Integer or list of numbers of hidden channels (i.e feature maps) in each hidden layer
+            hidden_channels:    Integer or list of numbers of hidden channels
+                                (i.e. feature maps) in each hidden layer
             input_kern:     kernel size of the first layer (i.e. the input layer)
             hidden_kern:    kernel size of each hidden layer's kernel
             layers:         number of layers
             gamma_hidden:   regularizer factor for group sparsity
-            gamma_input:    regularizer factor for the input weights (default: LaplaceL2, see neuralpredictors.regularizers)
+            gamma_input:    regularizer factor for the input weights
+                            (default: LaplaceL2, see neuralpredictors.regularizers)
             skip:           Adds a skip connection
             stride:         stride of the 2d conv layer.
-            final_nonlinearity: Boolean, if true, appends an ELU layer after the last BatchNorm (if BN=True)
-            elu_shift: a tuple to shift the elu in the following way: Elu(x - elu_xshift) + elu_yshift
+            final_nonlinearity: Boolean, if true, appends an ELU layer after
+                                the last BatchNorm (if BN=True)
+            elu_shift: a tuple to shift the elu in the following way:
+                        Elu(x - elu_xshift) + elu_yshift
             bias:           Adds a bias layer.
             momentum:       momentum in the batchnorm layer.
-            pad_input:      Boolean, if True, applies zero padding to all convolutions
-            hidden_padding: int or list of int. Padding for hidden layers. Note that this will apply to all the layers
-                            except the first (input) layer.
-            batch_norm:     Boolean, if True appends a BN layer after each convolutional layer
+            pad_input:      Boolean, if True, applies zero padding to all
+                            convolutions
+            hidden_padding: int or list of int. Padding for hidden layers.
+                            Note that this will apply to all the layers except
+                            the first (input) layer.
+            batch_norm:     Boolean, if True appends a BN layer after each
+                            convolutional layer
             batch_norm_scale: If True, a scaling factor after BN will be learned.
-            final_batchnorm_scale: If True, the final layer's BN will learn a scale. Defaults to True.
-            independent_bn_bias: Deprecated. If False, will allow for scaling the batch norm, so that batchnorm
-                                    and bias can both be true. Defaults to True.
-            hidden_dilation:    If set to > 1, will apply dilated convs for all hidden layers
-            laplace_padding: Padding size for the laplace convolution. If padding = None, it defaults to half of
-                the kernel size (recommended). Setting Padding to 0 is not recommended and leads to artefacts,
-                zero is the default however to recreate backwards compatibility.
-            input_regularizer:  String that must match one of the regularizers in ..regularizers
-            stack:        Int or iterable. Selects which layers of the core should be stacked for the readout.
-                            default value will stack all layers on top of each other.
-                            Implemented as layers_to_stack = layers[stack:]. thus:
-                                stack = -1 will only select the last layer as the readout layer.
-                                stack of -2 will read out from the last two layers.
-                                And stack of 1 will read out from layer 1 (0 indexed) until the last layer.
-            use_avg_reg:    bool. Whether to use the averaged value of regularizer(s) or the summed.
-            depth_separable: Boolean, if True, uses depth-separable convolutions in all layers after the first one.
-            attention_conv: Boolean, if True, uses self-attention instead of convolution for all layers after the first one.
+            final_batchnorm_scale: If True, the final layer's BN will learn a
+                                    scale. Defaults to True.
+            independent_bn_bias: Deprecated. If False, will allow for scaling
+                                the batch norm, so that batchnorm and bias can
+                                both be true. Defaults to True.
+            hidden_dilation: If set to > 1, will apply dilated convs for
+                            all hidden layers
+            laplace_padding: Padding size for the laplace convolution. If
+                            padding = None, it defaults to half of the kernel
+                            size (recommended). Setting Padding to 0 is not
+                            recommended and leads to artefacts, zero is the
+                            default however to recreate backwards compatibility.
+            input_regularizer:  String that must match one of the regularizers
+                            in ..regularizers
+            stack: Int or iterable. Selects which layers of the core
+                    should be stacked for the readout.
+                    default value will stack all layers on top of each other.
+                    Implemented as layers_to_stack = layers[stack:]. thus:
+                    stack = -1 will only select the last layer as the readout layer.
+                    stack of -2 will read out from the last two layers.
+                    And stack of 1 will read out from layer 1 (0 indexed)
+                    until the last layer.
+            use_avg_reg: bool. Whether to use the averaged value of
+                        regularizer(s) or the summed.
+            depth_separable: Boolean, if True, uses depth-separable
+                            convolutions in all layers after the first one.
+            attention_conv: Boolean, if True, uses self-attention instead of
+                            convolution for all layers after the first one.
             linear:         Boolean, if True, removes all nonlinearities
-            nonlinearity_type: String to set the used nonlinearity type loaded from neuralpredictors.layers.activation
+            nonlinearity_type: String to set the used nonlinearity type loaded
+                                from neuralpredictors.layers.activation
             nonlinearity_config: Dict of the nonlinearities __init__ parameters.
-            To enable learning batch_norms bias and scale independently, the arguments bias, batch_norm and batch_norm_scale
-            work together: By default, all are true. In this case there won't be a bias learned in the convolutional layer, but
-            batch_norm will learn both its bias and scale. If batch_norm is false, but bias true, a bias will be learned in the
-            convolutional layer. If batch_norm and bias are true, but batch_norm_scale is false, batch_norm won't have learnable
-            parameters and a BiasLayer will be added after the batch_norm layer.
+            To enable learning batch_norms bias and scale independently, the
+            arguments bias, batch_norm and batch_norm_scale work together:
+            By default, all are true. In this case there won't be a bias
+            learned in the convolutional layer, but batch_norm will learn
+            both its bias and scale. If batch_norm is false, but bias true,
+            a bias will be learned in the convolutional layer. If batch_norm
+            and bias are true, but batch_norm_scale is false, batch_norm won't
+            have learnable parameters and a BiasLayer will be added after the
+            batch_norm layer.
         """
 
         if depth_separable and attention_conv:
@@ -161,14 +183,16 @@ class Stacked2dCore(Core, nn.Module):
 
         if independent_bn_bias:
             warnings.warn(
-                "Deprecated `independent_bn_bias` argument will be removed in the future. Set "
-                "`independent_bn_bias=False` and control batch norm behavior by setting "
-                "`batch_norm`, `batch_norm_scale`, `final_batchnorm_scale`."
+                "Deprecated `independent_bn_bias` argument will be removed in "
+                "the future. Set `independent_bn_bias=False` and control batch "
+                "norm behavior by setting `batch_norm`, `batch_norm_scale`, "
+                "`final_batchnorm_scale`."
             )
             if not bias or not batch_norm_scale or not final_batchnorm_scale:
                 raise ValueError(
-                    "Setting `independent_bn_bias=True` leads to `bias=False` or `batch_norm_scale=False` or "
-                    "`final_batchnorm_scale=False` being ignored."
+                    "Setting `independent_bn_bias=True` leads to `bias=False` "
+                    "or `batch_norm_scale=False` or `final_batchnorm_scale=False` "
+                    "being ignored."
                 )
         self.batch_norm = batch_norm
         self.final_batchnorm_scale = final_batchnorm_scale
@@ -192,7 +216,8 @@ class Stacked2dCore(Core, nn.Module):
 
         if isinstance(hidden_channels, Iterable) and skip > 1:
             raise NotImplementedError(
-                "Passing a list of hidden channels and `skip > 1` at the same time is not yet implemented."
+                "Passing a list of hidden channels and `skip > 1` at the same "
+                "time is not yet implemented."
             )
         self.hidden_channels = (
             hidden_channels
@@ -245,7 +270,9 @@ class Stacked2dCore(Core, nn.Module):
 
         if self.ignore_group_sparsity and gamma_hidden > 0:
             warnings.warn(
-                "group sparsity can not be calculated for the requested conv type. Hidden channels will not be regularized and gamma_hidden is ignored."
+                "group sparsity can not be calculated for the requested conv "
+                "type. Hidden channels will not be regularized and gamma_hidden "
+                "is ignored."
             )
         self.set_batchnorm_type()
         self.features = nn.Sequential()
@@ -343,7 +370,8 @@ class Stacked2dCore(Core, nn.Module):
     class AttentionConvWrapper(conv.AttentionConv):
         def __init__(self, dilation=None, **kwargs):
             """
-            Helper class to make an attention conv layer accept input args of a pytorch.nn.Conv2d layer.
+            Helper class to make an attention conv layer accept input args of
+            a pytorch.nn.Conv2d layer.
             Args:
                 dilation: catches this argument from the input args, and ignores it
                 **kwargs:
@@ -371,7 +399,8 @@ class Stacked2dCore(Core, nn.Module):
 
     def group_sparsity(self):
         """
-        Sparsity regularization on the filters of all the conv2d layers except the first one.
+        Sparsity regularization on the filters of all the conv2d layers except
+        the first one.
         """
         ret = 0
         if self.ignore_group_sparsity:
@@ -401,7 +430,8 @@ class Stacked2dCore(Core, nn.Module):
 
 class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
     """
-    A core built of 2d rotation-equivariant layers. For more info refer to https://openreview.net/forum?id=H1fU8iAqKX.
+    A core built of 2d rotation-equivariant layers. For more info refer to
+    https://openreview.net/forum?id=H1fU8iAqKX.
     """
 
     def __init__(
@@ -566,9 +596,9 @@ class RotationEquivariant2dCore(Stacked2dCore, nn.Module):
 
 class TransferLearningCore(Core, nn.Module):
     """
-    Core based on popular image recognition networks from torchvision such as VGG or AlexNet.
-    Can be instantiated as random or pretrained. Core is frozen by default, which can be changed with the fine_tune
-    argument.
+    Core based on popular image recognition networks from torchvision such as
+    VGG or AlexNet. Can be instantiated as random or pretrained. Core is
+    frozen by default, which can be changed with the fine_tune argument.
     """
 
     def __init__(

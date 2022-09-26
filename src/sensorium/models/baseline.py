@@ -71,7 +71,8 @@ def stacked_core_full_gauss_readout(
     if "train" in dataloaders.keys():
         dataloaders = dataloaders["train"]
 
-    # Obtain the named tuple fields from the first entry of the first dataloader in the dictionary
+    # Obtain the named tuple fields from the first entry of the first
+    # dataloader in the dictionary
     batch = next(iter(list(dataloaders.values())[0]))
     in_name, out_name = (
         list(batch.keys())[:2] if isinstance(batch, dict) else batch._fields[:2]

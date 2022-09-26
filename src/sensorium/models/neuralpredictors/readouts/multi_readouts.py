@@ -44,7 +44,8 @@ class MultiReadoutBase(torch.nn.ModuleDict):
         **kwargs,
     ):
 
-        # The `base_readout` can be overridden only if the static property `_base_readout` is not set
+        # The `base_readout` can be overridden only if the static property
+        # `_base_readout` is not set
         if self._base_readout is None:
             self._base_readout = base_readout
 
