@@ -8,19 +8,22 @@ from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
 
 
-class BasicModel(nn.Module):
+class Model(nn.Module):
     def __init__(self, args):
-        super(BasicModel, self).__init__()
+        super(Model, self).__init__()
 
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
+        self.response_stats = args.response_stats
         assert isinstance(
             self.output_shapes, dict
         ), "output_shapes must be a dictionary of mouse_id and output_shape"
 
         self.initialize_core(args)
         self.initialize_readouts(args)
+
+        self.elu = nn.ELU()
 
     def initialize_core(self, args):
         self.add_module(
@@ -34,20 +37,37 @@ class BasicModel(nn.Module):
                 model=args.readout,
                 input_shape=self.core.shape,
                 output_shapes=self.output_shapes,
+                response_stats=self.response_stats,
             ),
         )
 
     def forward(self, inputs: torch.Tensor, mouse_id: torch.Union[int, torch.Tensor]):
         outputs = self.core(inputs)
         outputs = self.readouts(outputs, mouse_id=mouse_id)
+        outputs = self.elu(outputs) + 1
         return outputs
 
 
 def get_model(args, summary: tensorboard.Summary = None):
-    model = BasicModel(args)
+    model = Model(args)
     model.to(args.device)
 
-    # get model summary and write to args.output_dir
+    # get model summary for the first rodent
+    model_info = torchinfo.summary(
+        model,
+        input_size=(args.batch_size, *args.input_shape),
+        device=args.device,
+        verbose=0,
+        mouse_id=list(args.output_shapes.keys())[0],
+    )
+    with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
+        file.write(str(model_info))
+    if args.verbose == 2:
+        print(str(model_info))
+    if summary is not None:
+        summary.scalar("model/trainable_parameters", model_info.trainable_params)
+
+    # get core model summary
     core_info = torchinfo.summary(
         model.core,
         input_size=(args.batch_size, *args.input_shape),
@@ -56,11 +76,10 @@ def get_model(args, summary: tensorboard.Summary = None):
     )
     with open(os.path.join(args.output_dir, "model_core.txt"), "w") as file:
         file.write(str(core_info))
-    if args.verbose == 2:
-        print(str(core_info))
     if summary is not None:
-        summary.scalar("model/core/trainable_parameters", core_info.trainable_params)
+        summary.scalar("model/trainable_parameters/core", core_info.trainable_params)
 
+    # get readout model summary for the first rodent
     mouse_id = list(model.readouts.keys())[0]
     readout_info = torchinfo.summary(
         model.readouts[mouse_id],
@@ -70,11 +89,10 @@ def get_model(args, summary: tensorboard.Summary = None):
     )
     with open(os.path.join(args.output_dir, "model_readout.txt"), "w") as file:
         file.write(str(readout_info))
-    if args.verbose == 2:
-        print(str(readout_info))
     if summary is not None:
         summary.scalar(
-            "model/readout/trainable_parameters", readout_info.trainable_params
+            f"model/trainable_parameters/Mouse{mouse_id}Readout",
+            readout_info.trainable_params,
         )
 
     return model

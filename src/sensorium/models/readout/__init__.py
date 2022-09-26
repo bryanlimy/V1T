@@ -1,5 +1,6 @@
-__all__ = ["linear", "dense"]
+__all__ = ["dense", "gaussian2d", "linear"]
 
-from .linear import *
-from .dense import *
+from .dense import DenseReadout
+from .gaussian2d import *
+from .linear import LinearReadout
 from .readout import Readouts
