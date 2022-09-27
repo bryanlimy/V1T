@@ -159,6 +159,8 @@ class MiceDataset(Dataset):
         self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
         self.frame_ids = metadata["frame_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
+        # neurons cortical coordinates
+        self.neurons_coordinate = metadata["coordinates"]
         # standardizer for responses
         self._response_precision = self.compute_response_precision()
 

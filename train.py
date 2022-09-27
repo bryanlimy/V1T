@@ -139,7 +139,7 @@ def main(args):
 
     utils.set_random_seed(args.seed)
 
-    args.device = utils.get_available_device(args.no_acceleration)
+    utils.set_device(args)
 
     train_ds, val_ds, test_ds = get_data_loaders(
         args,
@@ -151,7 +151,7 @@ def main(args):
 
     summary = tensorboard.Summary(args)
 
-    model = get_model(args, summary=summary)
+    model = get_model(args, ds=train_ds, summary=summary)
     loss_function = losses.mean_sum_squared_error
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -234,9 +234,12 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=64, type=int)
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(
-        "--no_acceleration",
-        action="store_true",
-        help="disable accelerated training and train on CPU.",
+        "--device",
+        type=str,
+        choices=["cpu", "cuda", "mps"],
+        default="",
+        help="Device to use for computation. "
+        "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--mixed_precision", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)

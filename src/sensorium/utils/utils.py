@@ -172,14 +172,16 @@ def load_args(args):
             setattr(args, key, value)
 
 
-def get_available_device(no_acceleration: bool):
-    device = torch.device("cpu")
-    if not no_acceleration:
+def set_device(args):
+    """Set args.device to a torch.device"""
+    device = args.device
+    if not device:
+        device = "cpu"
         if torch.cuda.is_available():
-            device = torch.device("cuda")
+            device = "cuda"
         elif torch.backends.mps.is_available():
-            device = torch.device("mps")
-    return device
+            device = "mps"
+    args.device = torch.device(device)
 
 
 def metrics2df(results: t.Dict[str, torch.Tensor]):

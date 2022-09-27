@@ -3,6 +3,7 @@ from .readout import register, Readout
 import torch
 import numpy as np
 from torch import nn
+from torch.utils.data import DataLoader
 
 
 @register("dense")
@@ -11,14 +12,11 @@ class DenseReadout(Readout):
         self,
         input_shape: tuple,
         output_shape: tuple,
-        mean_response: np.ndarray = None,
+        ds: DataLoader,
         name: str = "DenseReadout",
     ):
         super(DenseReadout, self).__init__(
-            input_shape=input_shape,
-            output_shape=output_shape,
-            mean_response=mean_response,
-            name=name,
+            input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
         )
 
         out_features = int(np.prod(output_shape))

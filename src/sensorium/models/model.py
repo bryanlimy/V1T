@@ -1,7 +1,10 @@
 import os
 import torch
 import torchinfo
+import typing as t
+import numpy as np
 from torch import nn
+from torch.utils.data import DataLoader
 
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
@@ -9,19 +12,18 @@ from sensorium.models.readout import Readouts
 
 
 class Model(nn.Module):
-    def __init__(self, args):
+    def __init__(self, args, ds: t.Dict[int, DataLoader]):
         super(Model, self).__init__()
 
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
-        self.response_stats = args.response_stats
         assert isinstance(
             self.output_shapes, dict
         ), "output_shapes must be a dictionary of mouse_id and output_shape"
 
         self.initialize_core(args)
-        self.initialize_readouts(args)
+        self.initialize_readouts(args, ds=ds)
 
         self.elu = nn.ELU()
 
@@ -30,14 +32,14 @@ class Model(nn.Module):
             name="core", module=get_core(args)(args, input_shape=self.input_shape)
         )
 
-    def initialize_readouts(self, args):
+    def initialize_readouts(self, args, ds: t.Dict[int, DataLoader]):
         self.add_module(
             name="readouts",
             module=Readouts(
                 model=args.readout,
                 input_shape=self.core.shape,
                 output_shapes=self.output_shapes,
-                response_stats=self.response_stats,
+                ds=ds,
             ),
         )
 
@@ -48,8 +50,8 @@ class Model(nn.Module):
         return outputs
 
 
-def get_model(args, summary: tensorboard.Summary = None):
-    model = Model(args)
+def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
+    model = Model(args, ds=ds)
     model.to(args.device)
 
     # get model summary for the first rodent
