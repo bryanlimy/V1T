@@ -1,9 +1,11 @@
 import os
 import io
+import torch
 import platform
 import matplotlib
 import numpy as np
 import typing as t
+import pandas as pd
 from PIL import Image
 import seaborn as sns
 import matplotlib.cm as cm
@@ -104,26 +106,19 @@ def save_figure(figure: plt.Figure, filename: str, dpi: int = 120, close: bool =
 class Summary(object):
     """Helper class to write TensorBoard summaries"""
 
-    def __init__(self, args, output_dir: str = ""):
+    def __init__(self, args):
         self.dpi = args.dpi
         self.format = args.format
-        self.dataset = args.dataset
         self.save_plots = args.save_plots
 
-        # write TensorBoard summary to specified output_dir or args.output_dir
-        if output_dir:
-            if not os.path.isdir(output_dir):
-                os.makedirs(output_dir)
-            self.writers = [SummaryWriter(output_dir)]
-        else:
-            output_dir = args.output_dir
-            self.writers = [
-                SummaryWriter(output_dir),
-                SummaryWriter(os.path.join(output_dir, "val")),
-                SummaryWriter(os.path.join(output_dir, "test")),
-            ]
+        # create SummaryWriter for train, validation and test set
+        self.writers = [
+            SummaryWriter(args.output_dir),
+            SummaryWriter(os.path.join(args.output_dir, "val")),
+            SummaryWriter(os.path.join(args.output_dir, "test")),
+        ]
 
-        self.plots_dir = os.path.join(output_dir, "plots")
+        self.plots_dir = os.path.join(args.output_dir, "plots")
         if not os.path.isdir(self.plots_dir):
             os.makedirs(self.plots_dir)
 
@@ -131,6 +126,13 @@ class Summary(object):
             matplotlib.use("TkAgg")
 
     def get_writer(self, mode: int = 0):
+        """Get SummaryWriter
+        Args:
+            mode: int, the SummaryWriter to get
+                0 - train set
+                1 - validation set
+                2 - test set
+        """
         return self.writers[mode]
 
     def close(self):
@@ -184,3 +186,78 @@ class Summary(object):
         self.image(tag, image, step=step, mode=mode)
         if close:
             plt.close(figure)
+
+    def plot_correlation(
+        self,
+        tag: str,
+        data: pd.DataFrame,
+        xlabel: str = "Mouse",
+        ylabel: str = "Correlation",
+        step: int = 0,
+        mode: int = 0,
+    ):
+        figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4), dpi=self.dpi)
+        sns.boxenplot(x="mouse", y="results", data=data, ax=ax)
+        sns.despine(trim=True)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        self.figure(tag, figure=figure, step=step, close=True, mode=mode)
+
+    def plot_image_response(
+        self,
+        tag: str,
+        results: t.Dict[int, t.Dict[str, torch.Tensor]],
+        step: int = 0,
+        mode: int = 1,
+    ):
+        """Plot 3 image-prediction-response for each mouse"""
+        n_samples = 3
+        label_fontsize, tick_fontsize = 12, 10
+        for mouse_id, result in results.items():
+            figure, axes = plt.subplots(
+                nrows=n_samples,
+                ncols=3,
+                gridspec_kw={"wspace": 0.1, "hspace": 0.2},
+                figsize=(10, 2 * n_samples),
+                dpi=self.dpi,
+            )
+
+            x_axis = np.arange(result["predictions"].shape[1])
+
+            for i in range(n_samples):
+                axes[i, 0].scatter(
+                    x=x_axis, y=result["targets"][i], s=2, alpha=0.8, color="orangered"
+                )
+                axes[i, 1].scatter(
+                    x=x_axis,
+                    y=result["predictions"][i],
+                    s=2,
+                    alpha=0.8,
+                    color="dodgerblue",
+                )
+                axes[i, 2].imshow(
+                    result["images"][i][0], cmap=GRAY, vmin=0, vmax=255, aspect="auto"
+                )
+                axes[i, 2].set_xticks([])
+                axes[i, 2].set_yticks([])
+                remove_top_right_spines(axis=axes[i, 0])
+                remove_top_right_spines(axis=axes[i, 1])
+                remove_spines(axis=axes[i, 2])
+                axes[i, 2].set_xlabel(
+                    f"Frame ID: {result['frame_ids'][i]}",
+                    labelpad=0,
+                    fontsize=tick_fontsize,
+                )
+
+            axes[0, 0].set_title("Targets", fontsize=label_fontsize)
+            axes[0, 1].set_title("Predictions", fontsize=label_fontsize)
+            axes[1, 0].set_ylabel("Response", fontsize=label_fontsize)
+            axes[2, 1].set_xlabel("Neurons", fontsize=label_fontsize)
+
+            self.figure(
+                tag=f"{tag}/mouse{mouse_id}",
+                figure=figure,
+                step=step,
+                close=True,
+                mode=mode,
+            )
