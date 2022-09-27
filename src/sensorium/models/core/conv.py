@@ -39,6 +39,7 @@ class ConvCore(nn.Module):
             stride=stride,
         )
 
+        stride = 1
         self.conv_block2 = nn.Sequential(
             nn.Conv2d(
                 in_channels=output_shape[0],
@@ -75,22 +76,6 @@ class ConvCore(nn.Module):
             stride=stride,
         )
 
-        self.conv_block4 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=output_shape[0],
-                out_channels=1,
-                kernel_size=kernel_size,
-                stride=stride,
-            ),
-            nn.InstanceNorm2d(num_features=args.num_filters),
-            nn.GELU(),
-        )
-        output_shape = utils.conv2d_output_shape(
-            output_shape,
-            num_filters=1,
-            kernel_size=kernel_size,
-            stride=stride,
-        )
         self._output_shape = output_shape
 
     @property
@@ -101,5 +86,4 @@ class ConvCore(nn.Module):
         outputs = self.conv_block1(inputs)
         outputs = self.conv_block2(outputs)
         outputs = self.conv_block3(outputs)
-        outputs = self.conv_block4(outputs)
         return outputs

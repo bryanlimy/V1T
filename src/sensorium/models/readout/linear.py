@@ -19,19 +19,12 @@ class LinearReadout(Readout):
             input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
         )
 
-        self.flatten = nn.Flatten()
-        self.linear = nn.Linear(
-            in_features=int(np.prod(input_shape)),
-            out_features=int(np.prod(output_shape)),
+        self.linear = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(
+                in_features=int(np.prod(input_shape)), out_features=self.num_neurons
+            ),
         )
 
-    @property
-    def shape(self):
-        return self._output_shape
-
     def forward(self, inputs: torch.Tensor):
-        batch_size = inputs.shape[0]
-        outputs = self.flatten(inputs)
-        outputs = self.linear(outputs)
-        outputs = outputs.view((batch_size,) + self.shape)
-        return outputs
+        return self.linear(inputs)
