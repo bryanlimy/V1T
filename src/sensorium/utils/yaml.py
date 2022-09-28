@@ -14,7 +14,7 @@ def array2py(data: t.Dict):
     """
     for k, v in data.items():
         if isinstance(v, torch.Tensor):
-            data[k] = v.numpy().tolist()
+            data[k] = v.cpu().numpy().tolist()
         elif isinstance(v, np.ndarray):
             data[k] = v.tolist()
         elif isinstance(v, np.float32) or isinstance(v, np.float64):

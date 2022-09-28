@@ -158,7 +158,7 @@ def main(args):
 
     utils.save_args(args)
 
-    checkpoint = Checkpoint(args, model=model, optimizer=optimizer)
+    checkpoint = Checkpoint(args, model=model, optimizer=optimizer, min_epochs=10)
     epoch = checkpoint.restore()
 
     utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
