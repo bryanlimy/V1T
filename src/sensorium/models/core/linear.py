@@ -1,4 +1,4 @@
-from .core import register
+from .core import register, Core
 
 import torch
 import numpy as np
@@ -6,10 +6,9 @@ from torch import nn
 
 
 @register("linear")
-class LinearCore(nn.Module):
-    def __init__(self, args, input_shape: tuple, name: str = None):
-        super(LinearCore, self).__init__()
-        self.name = "LinearReadout" if name is None else name
+class LinearCore(Core):
+    def __init__(self, args, input_shape: tuple, name: str = "LinearCore"):
+        super(LinearCore, self).__init__(args, input_shape=input_shape, name=name)
         self._output_shape = input_shape
 
         self.flatten = nn.Flatten()

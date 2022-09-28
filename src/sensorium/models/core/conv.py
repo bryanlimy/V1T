@@ -1,4 +1,4 @@
-from .core import register
+from .core import register, Core
 
 import torch
 import numpy as np
@@ -8,17 +8,16 @@ from sensorium.models import utils
 
 
 @register("conv")
-class ConvCore(nn.Module):
+class ConvCore(Core):
     def __init__(
         self,
         args,
         input_shape: tuple,
         kernel_size: int = 3,
         stride: int = 2,
-        name: str = None,
+        name: str = "ConvCore",
     ):
-        super(ConvCore, self).__init__()
-        self.name = "ConvCore" if name is None else name
+        super(ConvCore, self).__init__(args, input_shape=input_shape, name=name)
 
         output_shape = input_shape
         self.conv_block1 = nn.Sequential(
@@ -77,10 +76,6 @@ class ConvCore(nn.Module):
         )
 
         self._output_shape = output_shape
-
-    @property
-    def shape(self):
-        return self._output_shape
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.conv_block1(inputs)
