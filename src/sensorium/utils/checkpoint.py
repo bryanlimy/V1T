@@ -63,7 +63,7 @@ class Checkpoint:
             f=filename,
         )
         if self._verbose:
-            print(f"\nCheckpoint saved to {filename}.\n")
+            print(f"\nCheckpoint saved to {filename}.")
 
     def restore(self) -> int:
         """Load the best model in self.checkpoint_dir and return the epoch"""
