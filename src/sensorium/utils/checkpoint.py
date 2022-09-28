@@ -1,10 +1,8 @@
 import os
 import torch
+import typing as t
 import numpy as np
 from torch import nn
-from glob import glob
-import typing as t
-from sensorium.utils import yaml
 
 
 class Checkpoint:
@@ -21,6 +19,7 @@ class Checkpoint:
         args,
         model: nn.Module,
         optimizer: torch.optim,
+        scheduler: torch.optim.lr_scheduler,
         patience: int = 10,
         min_epochs: int = 50,
     ):
@@ -29,6 +28,7 @@ class Checkpoint:
             args: argparse parameters.
             model: nn.Module, model.
             optimizer: torch.optim, optimizer.
+            scheduler: torch.optim.lr_scheduler, scheduler.
             patience: int, the number of epochs to wait until terminate if the
                 loss value does not improve.
             min_epochs: int, number of epochs to train the model before early
@@ -36,6 +36,7 @@ class Checkpoint:
         """
         self._model = model
         self._optimizer = optimizer
+        self._scheduler = scheduler
         self.patience = patience
         self.min_epochs = min_epochs
 
@@ -59,6 +60,7 @@ class Checkpoint:
                 "loss": float(loss),
                 "model_state_dict": self._model.state_dict(),
                 "optimizer_state_dict": self._optimizer.state_dict(),
+                "scheduler_state_dict": self._scheduler.state_dict(),
             },
             f=filename,
         )
@@ -73,6 +75,7 @@ class Checkpoint:
             checkpoint = torch.load(filename, map_location=self._device)
             self._model.load_state_dict(checkpoint["model_state_dict"])
             self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            self._scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
             epoch = checkpoint["epoch"]
             if self._verbose:
                 print(f"\nLoaded checkpoint from {filename}.\n")

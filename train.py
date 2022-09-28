@@ -49,7 +49,7 @@ def train(
     args,
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
-    optimizer,
+    optimizer: torch.optim,
     loss_function,
     epoch: int,
     summary: tensorboard.Summary,
@@ -153,12 +153,21 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = get_model(args, ds=train_ds, summary=summary)
-    loss_function = losses.mean_sum_squared_error
+    loss_function = losses.poisson_loss
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer=optimizer,
+        mode="min",
+        factor=0.1,
+        patience=10,
+        threshold_mode="abs",
+        min_lr=1e-6,
+        verbose=False,
+    )
 
     utils.save_args(args)
 
-    checkpoint = Checkpoint(args, model=model, optimizer=optimizer, min_epochs=10)
+    checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = checkpoint.restore()
 
     utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
@@ -184,10 +193,16 @@ def main(args):
             epoch=epoch,
             summary=summary,
         )
+
         elapse = time() - start
 
-        summary.scalar("model/elapse", elapse, step=epoch, mode=0)
-
+        summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
+        summary.scalar(
+            "model/learning_rate",
+            value=optimizer.param_groups[0]["lr"],
+            step=epoch,
+            mode=0,
+        )
         print(
             f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t'
             f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
@@ -195,6 +210,8 @@ def main(args):
             f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
             f"Elapse: {elapse:.02f}s"
         )
+
+        scheduler.step(val_results["loss/loss"])
 
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
