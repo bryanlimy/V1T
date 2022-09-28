@@ -75,7 +75,7 @@ class Checkpoint:
             self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             epoch = checkpoint["epoch"]
             if self._verbose:
-                print(f"Loaded checkpoint from {checkpoint[-1]}.")
+                print(f"Loaded checkpoint from {checkpoint}.")
         return epoch
 
     def monitor(self, loss: float, epoch: int) -> bool:
