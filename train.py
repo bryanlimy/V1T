@@ -193,7 +193,7 @@ def main(args):
             f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
             f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t'
             f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
-            f"Elapse: {elapse:.02f}s\n"
+            f"Elapse: {elapse:.02f}s"
         )
 
         if epoch % 10 == 0 or epoch == args.epochs:

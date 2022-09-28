@@ -48,7 +48,7 @@ def inference(
     results = {}
     model.train(False)
     for mouse_id, dataloader in tqdm(
-        ds.items(), desc="Inference", disable=args.verbose == 0
+        ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
         result = {
             "images": [],

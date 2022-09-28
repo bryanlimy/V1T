@@ -63,7 +63,7 @@ class Checkpoint:
             f=filename,
         )
         if self._verbose:
-            print(f"Checkpoint saved to {filename}.")
+            print(f"\n Checkpoint saved to {filename}.\n")
 
     def restore(self) -> int:
         """Load the best model in self.checkpoint_dir and return the epoch"""
@@ -75,7 +75,7 @@ class Checkpoint:
             self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             epoch = checkpoint["epoch"]
             if self._verbose:
-                print(f"Loaded checkpoint from {filename}.")
+                print(f"\nLoaded checkpoint from {filename}.\n")
         return epoch
 
     def monitor(self, loss: float, epoch: int) -> bool:
