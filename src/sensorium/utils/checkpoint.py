@@ -68,14 +68,14 @@ class Checkpoint:
     def restore(self) -> int:
         """Load the best model in self.checkpoint_dir and return the epoch"""
         epoch = 0
-        checkpoint = os.path.join(self.checkpoint_dir, "best_model.pt")
-        if os.path.exists(checkpoint):
-            checkpoint = torch.load(checkpoint, map_location=self._device)
+        filename = os.path.join(self.checkpoint_dir, "best_model.pt")
+        if os.path.exists(filename):
+            checkpoint = torch.load(filename, map_location=self._device)
             self._model.load_state_dict(checkpoint["model_state_dict"])
             self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             epoch = checkpoint["epoch"]
             if self._verbose:
-                print(f"Loaded checkpoint from {checkpoint}.")
+                print(f"Loaded checkpoint from {filename}.")
         return epoch
 
     def monitor(self, loss: float, epoch: int) -> bool:
