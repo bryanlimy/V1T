@@ -12,6 +12,7 @@ from sensorium import losses, metrics
 from sensorium.models import get_model
 from sensorium.data import get_data_loaders
 from sensorium.utils import utils, tensorboard
+from sensorium.utils.checkpoint import Checkpoint
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
@@ -155,7 +156,11 @@ def main(args):
     loss_function = losses.mean_sum_squared_error
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    epoch = utils.load_checkpoint(args, model=model, optimizer=optimizer)
+    utils.save_args(args)
+
+    checkpoint = Checkpoint(args, model=model, optimizer=optimizer)
+    epoch = checkpoint.restore()
+
     utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
@@ -193,7 +198,10 @@ def main(args):
 
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
-            utils.save_checkpoint(args, model=model, optimizer=optimizer, epoch=epoch)
+        if checkpoint.monitor(loss=val_results["loss/loss"], epoch=epoch):
+            break
+
+    checkpoint.restore()
 
     utils.evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
 
