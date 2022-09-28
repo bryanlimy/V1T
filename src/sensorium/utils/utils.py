@@ -48,7 +48,7 @@ def inference(
     results = {}
     model.train(False)
     for mouse_id, dataloader in tqdm(
-        ds.items(), desc="Inference", disable=args.verbose == 0
+        ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
         result = {
             "images": [],
@@ -190,35 +190,3 @@ def metrics2df(results: t.Dict[str, torch.Tensor]):
         mouse_ids.extend([mouse_id] * len(v))
         values.extend(v.tolist())
     return pd.DataFrame({"mouse": mouse_ids, "results": values})
-
-
-def save_checkpoint(args, model: nn.Module, optimizer: torch.optim, epoch: int):
-    if not os.path.isdir(ckpt_dir := os.path.join(args.output_dir, "ckpt")):
-        os.makedirs(ckpt_dir)
-    filename = os.path.join(ckpt_dir, f"epoch-{epoch:03d}.pt")
-    torch.save(
-        {
-            "epoch": epoch,
-            "model_state_dict": model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-        },
-        f=filename,
-    )
-    if args.verbose:
-        print(f"Checkpoint saved to {filename}.")
-
-
-def load_checkpoint(args, model: nn.Module, optimizer: torch.optim):
-    epoch = 0
-    if not os.path.isdir(ckpt_dir := os.path.join(args.output_dir, "ckpt")):
-        os.makedirs(ckpt_dir)
-    checkpoints = sorted(glob(os.path.join(ckpt_dir, "epoch-*.pt")))
-    if checkpoints:
-        # load last checkpoint
-        checkpoint = torch.load(checkpoints[-1])
-        model.load_state_dict(checkpoint["model_state_dict"])
-        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        epoch = checkpoint["epoch"]
-        if args.verbose:
-            print(f"Loaded checkpoint from {checkpoint[-1]}.")
-    return epoch
