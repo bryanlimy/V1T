@@ -12,6 +12,11 @@ from sensorium.models import utils
 
 @register("stn")
 class SpatialTransformerCore(Core):
+    """
+    Spatial Transformer Networks
+    https://arxiv.org/abs/1506.02025
+    """
+
     def __init__(
         self, args, input_shape: t.Tuple[int], name: str = "SpatialTransformerCore"
     ):
