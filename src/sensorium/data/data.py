@@ -26,6 +26,7 @@ def unzip(filename: str, unzip_dir: str):
     """Extract zip file with filename to unzip_dir"""
     if not os.path.exists(filename):
         raise FileNotFoundError(f"file {filename} not found.")
+    print(f"Unzipping {filename}...")
     with ZipFile(filename, mode="r") as file:
         file.extractall(unzip_dir)
 
