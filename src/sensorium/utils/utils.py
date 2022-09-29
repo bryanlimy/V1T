@@ -70,10 +70,7 @@ def inference(
             result["images"].append(images)
             result["frame_ids"].append(batch["frame_id"])
             result["trial_ids"].append(batch["trial_id"])
-        results[mouse_id] = {
-            k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
-            for k, v in result.items()
-        }
+        results[mouse_id] = {k: torch.cat(v, dim=0) for k, v in result.items()}
     return results
 
 

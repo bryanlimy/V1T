@@ -221,6 +221,8 @@ class MiceDataset(Dataset):
         data["mouse_id"] = self.mouse_id
         data["frame_id"] = self.frame_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
+        if type(data["trial_id"]) not in (int, np.int32, np.int64):
+            data["trial_id"] = -1
         return data
 
 
