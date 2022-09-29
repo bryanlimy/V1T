@@ -3,7 +3,9 @@ import torch
 import argparse
 import typing as t
 import pandas as pd
+from torch import nn
 from tqdm import tqdm
+from datetime import datetime
 from torch.utils.data import DataLoader
 
 from sensorium.utils import utils
@@ -12,19 +14,17 @@ from sensorium.data import get_submission_ds
 from sensorium.utils.checkpoint import Checkpoint
 
 
-def save_csv(filename: str, results: t.Dict[str, torch.Tensor]):
-    if os.path.exists(os.path.dirname(filename)):
+def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
+    if not os.path.exists(os.path.dirname(filename)):
         os.makedirs(os.path.dirname(filename))
-
     df = pd.DataFrame(
         {
-            "trial_indices": results["trial_ids"].numpy(),
-            "image_ids": results["frame_ids"].numpy(),
-            "responses": results["predictions"].numpy(),
-            "neuron_ids": results["neuron_ids"].numpy(),
+            "trial_indices": results["trial_ids"],
+            "image_ids": results["frame_ids"],
+            "responses": results["predictions"],
+            "neuron_ids": results["neuron_ids"],
         }
     )
-
     df.to_csv(filename, index=False)
     print(f"Saved submission file {filename}.")
 
@@ -32,41 +32,75 @@ def save_csv(filename: str, results: t.Dict[str, torch.Tensor]):
 def inference(
     args,
     ds: DataLoader,
-    model: torch.nn.Module,
+    model: nn.Module,
     mouse_id: int,
     device: torch.device = torch.device("cpu"),
-) -> t.Dict[str, torch.Tensor]:
+) -> t.Dict[str, t.List[t.Union[float, int]]]:
     """
     Inference test and final test sets
 
     NOTE: the ground-truth file is storing **standardized responses**, meaning
     the responses of each neuron normalized by its own standard deviation.
 
-    Returns:
-        results: t.Dict[str, torch.Tensor]
-            - predictions: torch.Tensor, predictions given images
-            - frame_ids: torch.Tensor, frame (image) ID of the responses
-            - trial_ids: torch.Tensor, trial ID of the responses
-            - neuron_ids: torch.Tensor, neuron IDs of the responses
+    Return:
+        results: t.Dict[str, t.List[t.List[float, int or str]]
+            - predictions: t.List[t.List[float]], predictions given images
+            - frame_ids: t.List[t.List[int]], frame (image) ID of the responses
+            - trial_ids: t.List[t.List[str]], trial ID of the responses
+            - neuron_ids: t.List[t.List[int]], neuron IDs of the responses
     """
-    result = {
+    results = {
         "predictions": [],
         "frame_ids": [],
         "trial_ids": [],
     }
     model.train(False)
-    for data in tqdm(ds, desc="Inference", disable=args.verbose == 0):
+    for data in tqdm(ds, disable=args.verbose == 0):
         images = data["image"].to(device)
-        predictions = model(images, mouse_id)
-        result["predictions"].append(predictions.detach().cpu())
-        result["frame_ids"].append(data["frame_id"])
-        result["trial_ids"].append(data["trial_id"])
-    results = {k: torch.cat(v, dim=0) for k, v in result.items()}
+        predictions = model(images, mouse_id=mouse_id)
+        results["predictions"].extend(predictions.detach().cpu().numpy().tolist())
+        results["frame_ids"].extend(data["frame_id"].numpy().tolist())
+        results["trial_ids"].extend(data["trial_id"])
     # create neuron IDs for each prediction
-    results["neuron_ids"] = torch.arange(
-        start=1, end=ds.dataset.num_neurons + 1, dtype=torch.int32
-    ).repeat(len(results["predictions"]))
+    results["neuron_ids"] = [list(range(1, ds.dataset.num_neurons + 1))] * len(
+        results["predictions"]
+    )
     return results
+
+
+def generate_submission(
+    args,
+    mouse_id: int,
+    test_ds: t.Dict[int, DataLoader],
+    final_test_ds: t.Dict[int, DataLoader],
+    model: nn.Module,
+    csv_dir: str,
+):
+    print(f"Generate results for Mouse {mouse_id}")
+    # live test results
+    test_results = inference(
+        args,
+        ds=test_ds[mouse_id],
+        model=model,
+        mouse_id=mouse_id,
+        device=args.device,
+    )
+    save_csv(
+        filename=os.path.join(csv_dir, "live_test.csv"),
+        results=test_results,
+    )
+    # final test results
+    final_test_results = inference(
+        args,
+        ds=final_test_ds[mouse_id],
+        model=model,
+        mouse_id=mouse_id,
+        device=args.device,
+    )
+    save_csv(
+        filename=os.path.join(csv_dir, "final_test.csv"),
+        results=final_test_results,
+    )
 
 
 def main(args):
@@ -74,6 +108,11 @@ def main(args):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
 
     utils.load_args(args)
+
+    assert (
+        0 in args.output_shapes and 1 in args.output_shapes
+    ), "The saved model was not trained on Mouse 1 and 2."
+
     utils.set_device(args)
 
     test_ds, final_test_ds = get_submission_ds(
@@ -88,24 +127,28 @@ def main(args):
     checkpoint = Checkpoint(args, model=model)
     checkpoint.restore(force=True)
 
-    # create CSV dir to save results
-    args.csv_dir = os.path.join(args.output_dir, "submissions")
+    # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
+    timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
+    csv_dir = os.path.join(args.output_dir, "submissions", timestamp)
 
-    # Sensorium challenge live test results
-    test_results = inference(
-        args, ds=test_ds[0], model=model, mouse_id=0, device=args.device
+    # Sensorium challenge
+    generate_submission(
+        args,
+        mouse_id=0,
+        test_ds=test_ds,
+        final_test_ds=final_test_ds,
+        model=model,
+        csv_dir=os.path.join(csv_dir, "sensorium"),
     )
-    save_csv(
-        filename=os.path.join(args.csv_dir, "sensorium", "live_test.csv"),
-        results=test_results,
-    )
-    # Sensorium challenge final test results
-    final_test_results = inference(
-        args, ds=final_test_ds[0], model=model, mouse_id=0, device=args.device
-    )
-    save_csv(
-        filename=os.path.join(args.csv_dir, "sensorium", "final_test.csv"),
-        results=final_test_results,
+
+    # Sensorium+ challenge
+    generate_submission(
+        args,
+        mouse_id=1,
+        test_ds=test_ds,
+        final_test_ds=final_test_ds,
+        model=model,
+        csv_dir=os.path.join(csv_dir, "sensorium+"),
     )
 
     print(f"\nSubmission results saved to {args.csv_dir}.")

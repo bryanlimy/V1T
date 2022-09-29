@@ -137,7 +137,13 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(self, tier: str, data_dir: str, mouse_id: int):
+    def __init__(
+        self,
+        tier: str,
+        data_dir: str,
+        mouse_id: int,
+        replace_trial_id: bool = True,
+    ):
         """Construct Dataset
 
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
@@ -147,10 +153,15 @@ class MiceDataset(Dataset):
             - tier: str, train, validation, test or final_test
             - data_dir: str, path to where all data are stored
             - mouse_id: int, the mouse ID
+            - replace_trial_id: bool, replace trial IDs with -1 if they are
+                not integer, i.e. hash code for Mouse 1 and 2.
+                This is added for convenience so that we can perform PyTorch
+                operations without errors.
         """
         assert tier in ("train", "validation", "test", "final_test")
         self.tier = tier
         self.mouse_id = mouse_id
+        self._replace_trial_id = replace_trial_id and mouse_id in (0, 1)
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
         self.mouse_dir = metadata["mouse_dir"]
         self.num_neurons = metadata["num_neurons"]
@@ -213,7 +224,7 @@ class MiceDataset(Dataset):
                 - mouse_id: the mouse ID
                 - num_neurons: the number of neurons in responses
                 - frame_id: the frame image ID
-                - trial_id: the trial ID, None if the trial ID is hidden
+                - trial_id: the trial ID, -1 if the trial ID is hashed
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
@@ -221,7 +232,9 @@ class MiceDataset(Dataset):
         data["mouse_id"] = self.mouse_id
         data["frame_id"] = self.frame_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
-        if type(data["trial_id"]) not in (int, np.int32, np.int64):
+        # replace trial ID with -1 if self._replace_trial_id is True and
+        # trial ID is hashed
+        if self._replace_trial_id and isinstance(data["trial_id"], str):
             data["trial_id"] = -1
         return data
 
@@ -306,21 +319,29 @@ def get_submission_ds(
     if device.type in ["cuda", "mps"]:
         test_kwargs.update({"prefetch_factor": 2, "pin_memory": True})
 
-    # a dictionary of DataLoader for each train, validation and test set
+    # a dictionary of DataLoader for each live test and final test set
     test_ds, final_test_ds = {}, {}
-    args.output_shapes = {}
 
-    for mouse_id in [0, 1]:
+    for mouse_id in list(args.output_shapes.keys()):
         test_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="test", data_dir=data_dir, mouse_id=mouse_id),
+            MiceDataset(
+                tier="test",
+                data_dir=data_dir,
+                mouse_id=mouse_id,
+                replace_trial_id=False,
+            ),
             **test_kwargs,
         )
+    for mouse_id in [0, 1]:
         final_test_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="final_test", data_dir=data_dir, mouse_id=mouse_id),
+            MiceDataset(
+                tier="final_test",
+                data_dir=data_dir,
+                mouse_id=mouse_id,
+                replace_trial_id=False,
+            ),
             **test_kwargs,
         )
         args.output_shapes[mouse_id] = (test_ds[mouse_id].dataset.num_neurons,)
-
-    args.input_shape = get_image_shape(data_dir=data_dir)
 
     return test_ds, final_test_ds

@@ -68,7 +68,14 @@ class Checkpoint:
             print(f"\nCheckpoint saved to {filename}.")
 
     def restore(self, force: bool = False) -> int:
-        """Load the best model in self.checkpoint_dir and return the epoch"""
+        """
+        Load the best model in self.checkpoint_dir and return the epoch
+        Args:
+            force: bool, raise an error if checkpoint is not found.
+        Return:
+            epoch: int, the number of epoch the model has been trained for,
+                return 0 if no checkpoint was found.
+        """
         epoch = 0
         filename = os.path.join(self.checkpoint_dir, "best_model.pt")
         if os.path.exists(filename):
