@@ -20,7 +20,7 @@ class Checkpoint:
         model: nn.Module,
         optimizer: torch.optim,
         scheduler: torch.optim.lr_scheduler,
-        patience: int = 10,
+        patience: int = 20,
         min_epochs: int = 50,
     ):
         """
@@ -78,7 +78,7 @@ class Checkpoint:
             self._scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
             epoch = checkpoint["epoch"]
             if self._verbose:
-                print(f"\nLoaded checkpoint from {filename}.\n")
+                print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")
         return epoch
 
     def monitor(self, loss: float, epoch: int) -> bool:
@@ -95,5 +95,5 @@ class Checkpoint:
                 terminate = True
                 self.restore()
                 if self._verbose:
-                    print(f"model has not improved in {self._wait} epochs.\n")
+                    print(f"Model has not improved in {self._wait} epochs.")
         return terminate

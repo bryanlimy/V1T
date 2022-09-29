@@ -159,8 +159,8 @@ def main(args):
         optimizer=optimizer,
         mode="min",
         factor=0.1,
-        patience=10,
-        threshold_mode="abs",
+        patience=5,
+        threshold_mode="rel",
         min_lr=1e-6,
         verbose=False,
     )
