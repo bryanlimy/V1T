@@ -211,9 +211,8 @@ class Gaussian2DReadout(Readout):
         if sample:
             norm = self.mu.new(*grid_shape).normal_()
         else:
-            norm = self.mu.new(
-                *grid_shape
-            ).zero_()  # for consistency and CUDA capability
+            # for consistency and CUDA capability
+            norm = self.mu.new(*grid_shape).zero_()
 
         if self.gaussian_type != "full":
             # grid locations in feature space sampled randomly around the mean self.mu

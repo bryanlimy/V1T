@@ -51,7 +51,7 @@ class Readout(nn.Module):
         pass
 
     def regularizer(self, reduction: str):
-        pass
+        return 0
 
 
 class Readouts(nn.ModuleDict):

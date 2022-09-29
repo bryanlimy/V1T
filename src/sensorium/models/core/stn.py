@@ -101,5 +101,5 @@ class SpatialTransformerCore(Core):
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.stn(inputs)
-        outputs = self.feedforward(outputs)
+        outputs = self.network(outputs)
         return outputs
