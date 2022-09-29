@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from sensorium import losses, metrics
 from sensorium.models import get_model
-from sensorium.data import get_data_loaders
+from sensorium.data import get_training_ds
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
 
@@ -142,7 +142,7 @@ def main(args):
 
     utils.set_device(args)
 
-    train_ds, val_ds, test_ds = get_data_loaders(
+    train_ds, val_ds, test_ds = get_training_ds(
         args,
         data_dir=args.dataset,
         mouse_ids=args.mouse_ids,
@@ -259,7 +259,9 @@ if __name__ == "__main__":
     parser.add_argument("--activation", type=str, default="gelu")
 
     # training settings
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument(
+        "--epochs", default=200, type=int, help="maximum epochs to train the model."
+    )
     parser.add_argument("--batch_size", default=64, type=int)
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(

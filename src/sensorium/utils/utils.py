@@ -82,6 +82,7 @@ def evaluate(
     summary: tensorboard.Summary,
     mode: int = 1,
 ):
+    """Evaluate DataLoaders ds on the 3 challenge metrics"""
     eval_result = {}
     outputs = inference(args, ds=ds, model=model, device=args.device)
     trial_correlations = metrics.single_trial_correlations(results=outputs)
