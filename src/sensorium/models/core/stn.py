@@ -80,13 +80,13 @@ class SpatialTransformerCore(Core):
         self._output_shape = output_shape
 
     # Spatial transformer network forward function
-    def stn(self, inputs: torch.Tensor):
+    def stn(self, inputs: torch.Tensor, align_corners: bool = False):
         spatial = self.localization(inputs)
         spatial = self.flatten(spatial)
         theta = self.localization_feedforward(spatial)
         theta = theta.view(-1, 2, 3)
-        grid = F.affine_grid(theta, size=inputs.size(), align_corners=False)
-        outputs = F.grid_sample(inputs, grid=grid, align_corners=False)
+        grid = F.affine_grid(theta, size=inputs.size(), align_corners=align_corners)
+        outputs = F.grid_sample(inputs, grid=grid, align_corners=align_corners)
         return outputs
 
     def forward(self, inputs: torch.Tensor):
