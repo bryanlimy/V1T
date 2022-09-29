@@ -214,7 +214,6 @@ class MiceDataset(Dataset):
                 - num_neurons: the number of neurons in responses
                 - frame_id: the frame image ID
                 - trial_id: the trial ID, None if the trial ID is hidden
-                - padding_mask: the mask to mask out pads in responses
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
