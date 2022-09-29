@@ -28,10 +28,10 @@ class SpatialTransformerCore(Core):
         self.localization = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=8, kernel_size=7),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.ReLU(True),
+            nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=8, out_channels=10, kernel_size=5),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.ReLU(True),
+            nn.ReLU(inplace=True),
         )
 
         stn_shape = utils.conv2d_output_shape(
@@ -46,21 +46,28 @@ class SpatialTransformerCore(Core):
         self.flatten = nn.Flatten()
 
         # Regressor for the 3 * 2 affine matrix
-        self.fc_loc = nn.Sequential(
+        self.localization_feedforward = nn.Sequential(
             nn.Linear(in_features=int(np.prod(stn_shape)), out_features=32),
             nn.ReLU(True),
             nn.Linear(in_features=32, out_features=3 * 2),
         )
 
         # Initialize the weights/bias with identity transformation
-        self.fc_loc[2].weight.data.zero_()
-        self.fc_loc[2].bias.data.copy_(
+        self.localization_feedforward[2].weight.data.zero_()
+        self.localization_feedforward[2].bias.data.copy_(
             torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32)
         )
 
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=10, kernel_size=5)
-        self.conv2 = nn.Conv2d(in_channels=10, out_channels=20, kernel_size=5)
-        self.dropout2d = nn.Dropout2d(p=0.25)
+        # Feedforward network
+        self.feedforward = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=10, kernel_size=5),
+            nn.MaxPool2d(kernel_size=2),
+            nn.GELU(),
+            nn.Conv2d(in_channels=10, out_channels=20, kernel_size=5),
+            nn.Dropout2d(p=args.dropout),
+            nn.MaxPool2d(kernel_size=2),
+            nn.GELU(),
+        )
 
         output_shape = utils.conv2d_output_shape(
             input_shape=input_shape, num_filters=10, kernel_size=5
@@ -76,22 +83,13 @@ class SpatialTransformerCore(Core):
     def stn(self, inputs: torch.Tensor):
         spatial = self.localization(inputs)
         spatial = self.flatten(spatial)
-        theta = self.fc_loc(spatial)
+        theta = self.localization_feedforward(spatial)
         theta = theta.view(-1, 2, 3)
-        grid = F.affine_grid(theta, inputs.size())
-        outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
+        grid = F.affine_grid(theta, size=inputs.size(), align_corners=False)
+        outputs = F.grid_sample(inputs, grid=grid, align_corners=False)
         return outputs
 
     def forward(self, inputs: torch.Tensor):
-        # transform the input
         outputs = self.stn(inputs)
-
-        # Perform the usual forward pass
-        outputs = self.conv1(outputs)
-        outputs = F.max_pool2d(outputs, kernel_size=2)
-        outputs = F.gelu(outputs)
-        outputs = self.conv2(outputs)
-        outputs = self.dropout2d(outputs)
-        outputs = F.max_pool2d(outputs, kernel_size=2)
-        outputs = F.gelu(outputs)
+        outputs = self.feedforward(outputs)
         return outputs
