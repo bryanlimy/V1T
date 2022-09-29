@@ -35,6 +35,7 @@ def inference(
     model: nn.Module,
     mouse_id: int,
     device: torch.device = torch.device("cpu"),
+    desc: str = "",
 ) -> t.Dict[str, t.List[t.Union[float, int]]]:
     """
     Inference test and final test sets
@@ -55,7 +56,7 @@ def inference(
         "trial_ids": [],
     }
     model.train(False)
-    for data in tqdm(ds, disable=args.verbose == 0):
+    for data in tqdm(ds, desc=desc, disable=args.verbose == 0):
         images = data["image"].to(device)
         predictions = model(images, mouse_id=mouse_id)
         results["predictions"].extend(predictions.detach().cpu().numpy().tolist())
@@ -76,7 +77,7 @@ def generate_submission(
     model: nn.Module,
     csv_dir: str,
 ):
-    print(f"Generate results for Mouse {mouse_id}")
+    print(f"\nGenerate results for Mouse {mouse_id}")
     # live test results
     test_results = inference(
         args,
@@ -84,6 +85,7 @@ def generate_submission(
         model=model,
         mouse_id=mouse_id,
         device=args.device,
+        desc="Live test",
     )
     save_csv(
         filename=os.path.join(csv_dir, "live_test.csv"),
@@ -96,6 +98,7 @@ def generate_submission(
         model=model,
         mouse_id=mouse_id,
         device=args.device,
+        desc="Final test",
     )
     save_csv(
         filename=os.path.join(csv_dir, "final_test.csv"),
@@ -151,7 +154,7 @@ def main(args):
         csv_dir=os.path.join(csv_dir, "sensorium+"),
     )
 
-    print(f"\nSubmission results saved to {args.csv_dir}.")
+    print(f"\nSubmission results saved to {csv_dir}.")
 
 
 if __name__ == "__main__":
