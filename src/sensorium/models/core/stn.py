@@ -43,18 +43,17 @@ class SpatialTransformerCore(Core):
         )
         stn_shape = (stn_shape[0], stn_shape[1] // 2, stn_shape[2] // 2)
 
-        self.flatten = nn.Flatten()
-
         # Regressor for the 3 * 2 affine matrix
-        self.localization_feedforward = nn.Sequential(
+        self.regressor = nn.Sequential(
+            nn.Flatten(),
             nn.Linear(in_features=int(np.prod(stn_shape)), out_features=32),
             nn.ReLU(True),
             nn.Linear(in_features=32, out_features=3 * 2),
         )
 
         # Initialize the weights/bias with identity transformation
-        self.localization_feedforward[2].weight.data.zero_()
-        self.localization_feedforward[2].bias.data.copy_(
+        self.regressor[3].weight.data.zero_()
+        self.regressor[3].bias.data.copy_(
             torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32)
         )
 
@@ -82,8 +81,7 @@ class SpatialTransformerCore(Core):
     # Spatial transformer network forward function
     def stn(self, inputs: torch.Tensor, align_corners: bool = False):
         spatial = self.localization(inputs)
-        spatial = self.flatten(spatial)
-        theta = self.localization_feedforward(spatial)
+        theta = self.regressor(spatial)
         theta = theta.view(-1, 2, 3)
         grid = F.affine_grid(theta, size=inputs.size(), align_corners=align_corners)
         outputs = F.grid_sample(inputs, grid=grid, align_corners=align_corners)

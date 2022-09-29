@@ -246,8 +246,12 @@ if __name__ == "__main__":
     )
 
     # model settings
-    parser.add_argument("--core", type=str, default="linear")
-    parser.add_argument("--readout", type=str, default="linear")
+    parser.add_argument(
+        "--core", type=str, required=True, help="The core module to use."
+    )
+    parser.add_argument(
+        "--readout", type=str, required=True, help="The readout module to use."
+    )
 
     # ConvCore
     parser.add_argument("--num_filters", type=int, default=8)
