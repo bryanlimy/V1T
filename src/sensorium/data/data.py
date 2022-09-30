@@ -137,13 +137,7 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(
-        self,
-        tier: str,
-        data_dir: str,
-        mouse_id: int,
-        replace_trial_id: bool = True,
-    ):
+    def __init__(self, tier: str, data_dir: str, mouse_id: int):
         """Construct Dataset
 
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
@@ -153,15 +147,10 @@ class MiceDataset(Dataset):
             - tier: str, train, validation, test or final_test
             - data_dir: str, path to where all data are stored
             - mouse_id: int, the mouse ID
-            - replace_trial_id: bool, replace trial IDs with -1 if they are
-                not integer, i.e. hash code for Mouse 1 and 2.
-                This is added for convenience so that we can perform PyTorch
-                operations without errors.
         """
         assert tier in ("train", "validation", "test", "final_test")
         self.tier = tier
         self.mouse_id = mouse_id
-        self._replace_trial_id = replace_trial_id and mouse_id in (0, 1)
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
         self.mouse_dir = metadata["mouse_dir"]
         self.num_neurons = metadata["num_neurons"]
@@ -221,21 +210,14 @@ class MiceDataset(Dataset):
                 - response: the corresponding response
                 - behavior: pupil size, the derivative of pupil size, and speed
                 - pupil_center: the (x, y) coordinate of the center of the pupil
-                - mouse_id: the mouse ID
-                - num_neurons: the number of neurons in responses
                 - frame_id: the frame image ID
-                - trial_id: the trial ID, -1 if the trial ID is hashed
+                - trial_id: the trial ID
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
         self.transform(data)
-        data["mouse_id"] = self.mouse_id
         data["frame_id"] = self.frame_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
-        # replace trial ID with -1 if self._replace_trial_id is True and
-        # trial ID is hashed
-        # if self._replace_trial_id and isinstance(data["trial_id"], str):
-        #     data["trial_id"] = -1
         return data
 
 
@@ -324,22 +306,12 @@ def get_submission_ds(
 
     for mouse_id in list(args.output_shapes.keys()):
         test_ds[mouse_id] = DataLoader(
-            MiceDataset(
-                tier="test",
-                data_dir=data_dir,
-                mouse_id=mouse_id,
-                replace_trial_id=False,
-            ),
+            MiceDataset(tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
     for mouse_id in [0, 1]:
         final_test_ds[mouse_id] = DataLoader(
-            MiceDataset(
-                tier="final_test",
-                data_dir=data_dir,
-                mouse_id=mouse_id,
-                replace_trial_id=False,
-            ),
+            MiceDataset(tier="final_test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
         args.output_shapes[mouse_id] = (test_ds[mouse_id].dataset.num_neurons,)
