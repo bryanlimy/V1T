@@ -173,8 +173,8 @@ def load_args(args):
             setattr(args, key, value)
 
 
-def set_device(args):
-    """Set args.device to a torch.device"""
+def get_device(args):
+    """Get the appropriate torch.device from args.device argument"""
     device = args.device
     if not device:
         device = "cpu"
@@ -191,3 +191,49 @@ def metrics2df(results: t.Dict[str, torch.Tensor]):
         mouse_ids.extend([mouse_id] * len(v))
         values.extend(v.tolist())
     return pd.DataFrame({"mouse": mouse_ids, "results": values})
+
+
+def log_metrics(
+    results: t.Union[
+        t.Dict[str, t.List[torch.Tensor]],
+        t.Dict[int, t.Dict[str, torch.Tensor]],
+    ],
+    epoch: int,
+    mode: int,
+    summary: tensorboard.Summary,
+    mouse_id: int = None,
+):
+    """Compute the mean of the metrics in results and log to Summary
+
+    Args:
+        results: t.Union[
+                t.Dict[str, t.List[torch.Tensor]],
+                t.Dict[int, t.Dict[str, torch.Tensor]]
+            ]: a dictionary of tensors where keys are the name of the metrics
+            that represent results from of a mouse, or a dictionary of a
+            dictionary of tensors where the keys are the mouse IDs that
+            represents the average results of multiple mice.
+            When mouse_id is provided, it assumes the former.
+        epoch: int, the current epoch number.
+        mode: int, Summary logging mode.
+        summary: tensorboard.Summary, Summary class
+        mouse_id: int, the mouse_id of the result dictionary, None if the
+            dictionary represents results from multiple mice.
+    """
+    if mouse_id is not None:
+        for metric, values in results.items():
+            results[metric] = torch.stack(values).mean()
+            summary.scalar(
+                f"{metric}/mouse{mouse_id}",
+                value=results[metric],
+                step=epoch,
+                mode=mode,
+            )
+    else:
+        mouse_ids = list(results.keys())
+        metrics = list(results[mouse_ids[0]].keys())
+        for metric in metrics:
+            results[metric] = torch.stack(
+                [results[mouse_id][metric] for mouse_id in mouse_ids]
+            ).mean()
+            summary.scalar(metric, value=results[metric], step=epoch, mode=mode)

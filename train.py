@@ -60,6 +60,7 @@ def train(
     for mouse_id, dataloader in tqdm(
         ds.items(), desc="Train", disable=disable, position=0
     ):
+        mouse_result = {}
         for batch in tqdm(
             dataloader,
             desc=f"Mouse {mouse_id}",
@@ -75,10 +76,16 @@ def train(
                 optimizer=optimizer,
                 loss_function=loss_function,
             )
-            utils.update_dict(results, result)
-    for k, v in results.items():
-        results[k] = torch.stack(v).mean()
-        summary.scalar(k, results[k], step=epoch, mode=0)
+            utils.update_dict(mouse_result, result)
+        utils.log_metrics(
+            results=mouse_result,
+            epoch=epoch,
+            mode=0,
+            summary=summary,
+            mouse_id=mouse_id,
+        )
+        results[mouse_id] = mouse_result
+    utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
     return results
 
 
@@ -111,6 +118,7 @@ def validate(
     for mouse_id, dataloader in tqdm(
         ds.items(), desc="Val", disable=disable, position=0
     ):
+        mouse_result = {}
         for batch in tqdm(
             dataloader,
             desc=f"Mouse {mouse_id}",
@@ -125,10 +133,16 @@ def validate(
                 model=model,
                 loss_function=loss_function,
             )
-            utils.update_dict(results, result)
-    for k, v in results.items():
-        results[k] = torch.stack(v).mean()
-        summary.scalar(k, results[k], step=epoch, mode=1)
+            utils.update_dict(mouse_result, result)
+        utils.log_metrics(
+            results=mouse_result,
+            epoch=epoch,
+            mode=1,
+            summary=summary,
+            mouse_id=mouse_id,
+        )
+        results[mouse_id] = mouse_result
+    utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
     return results
 
 
@@ -140,7 +154,7 @@ def main(args):
 
     utils.set_random_seed(args.seed)
 
-    utils.set_device(args)
+    utils.get_device(args)
 
     train_ds, val_ds, test_ds = get_training_ds(
         args,
