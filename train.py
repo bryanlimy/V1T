@@ -26,7 +26,7 @@ def train_step(
     data: t.Dict[str, torch.Tensor],
     model: nn.Module,
     optimizer: torch.optim,
-    loss_function,
+    criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
     result = {}
     optimizer.zero_grad()
@@ -39,7 +39,7 @@ def train_step(
     images = data["image"].to(model.device)
     responses = data["response"].to(model.device)
     outputs = model(images, mouse_id=mouse_id)
-    loss = loss_function(responses, outputs)
+    loss = criterion(responses, outputs)
     loss.backward()
     optimizer.step()
     result["loss/loss"] = loss
@@ -52,7 +52,7 @@ def train(
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
     optimizer: torch.optim,
-    loss_function,
+    criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
@@ -69,7 +69,7 @@ def train(
                     data=data,
                     model=model,
                     optimizer=optimizer,
-                    loss_function=loss_function,
+                    criterion=criterion,
                 )
                 utils.update_dict(mouse_result, result)
                 pbar.update(1)
@@ -90,7 +90,7 @@ def concurrent_train(
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
     optimizer: torch.optim,
-    loss_function,
+    criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
@@ -108,7 +108,7 @@ def concurrent_train(
                 images = data["image"].to(model.device)
                 responses = data["response"].to(model.device)
                 outputs = model(images, mouse_id=mouse_id)
-                loss = loss_function(y_true=responses, y_pred=outputs)
+                loss = criterion(y_true=responses, y_pred=outputs)
                 total_loss.append(loss)
                 results[mouse_id]["loss/loss"].append(loss.detach())
                 utils.update_dict(
@@ -135,14 +135,14 @@ def validation_step(
     mouse_id: int,
     data: t.Dict[str, torch.Tensor],
     model: nn.Module,
-    loss_function,
+    criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
     result = {}
     model.requires_grad_(False)
     images = data["image"].to(model.device)
     responses = data["response"].to(model.device)
     outputs = model(images, mouse_id=mouse_id)
-    loss = loss_function(responses, outputs)
+    loss = criterion(responses, outputs)
     result["loss/loss"] = loss
     result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
     return result
@@ -152,7 +152,7 @@ def validate(
     args,
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
-    loss_function,
+    criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
@@ -166,7 +166,7 @@ def validate(
                     mouse_id=mouse_id,
                     data=data,
                     model=model,
-                    loss_function=loss_function,
+                    criterion=criterion,
                 )
                 utils.update_dict(mouse_result, result)
                 pbar.update(1)
@@ -203,7 +203,7 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = get_model(args, ds=train_ds, summary=summary)
-    loss_function = losses.poisson_loss
+    criterion = losses.get_criterion(args)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
@@ -220,7 +220,7 @@ def main(args):
     checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = checkpoint.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -231,7 +231,7 @@ def main(args):
             ds=train_ds,
             model=model,
             optimizer=optimizer,
-            loss_function=loss_function,
+            criterion=criterion,
             epoch=epoch,
             summary=summary,
         )
@@ -239,7 +239,7 @@ def main(args):
             args,
             ds=val_ds,
             model=model,
-            loss_function=loss_function,
+            criterion=criterion,
             epoch=epoch,
             summary=summary,
         )
@@ -313,6 +313,12 @@ if __name__ == "__main__":
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
     parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument(
+        "--criterion",
+        default="poisson",
+        type=str,
+        help="criterion (loss function) to use.",
+    )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(
         "--device",
