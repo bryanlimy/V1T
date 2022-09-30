@@ -234,8 +234,8 @@ class MiceDataset(Dataset):
         data["trial_id"] = self.trial_ids[idx]
         # replace trial ID with -1 if self._replace_trial_id is True and
         # trial ID is hashed
-        if self._replace_trial_id and isinstance(data["trial_id"], str):
-            data["trial_id"] = -1
+        # if self._replace_trial_id and isinstance(data["trial_id"], str):
+        #     data["trial_id"] = -1
         return data
 
 
