@@ -299,7 +299,7 @@ def get_submission_ds(
             the final test set where keys are the mouse IDs.
     """
     # settings for DataLoader
-    test_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": False}
+    test_kwargs = {"batch_size": batch_size, "num_workers": 1, "shuffle": False}
     if device.type in ["cuda", "mps"]:
         test_kwargs.update({"prefetch_factor": 2, "pin_memory": True})
 
