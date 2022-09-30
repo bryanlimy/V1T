@@ -92,7 +92,7 @@ class Checkpoint:
             raise FileNotFoundError(f"Cannot find checkpoint in {self.checkpoint_dir}.")
         return epoch
 
-    def monitor(self, loss: float, epoch: int) -> bool:
+    def monitor(self, loss: t.Union[float, torch.Tensor], epoch: int) -> bool:
         terminate = False
         if loss < self.best_loss:
             self.best_loss = loss

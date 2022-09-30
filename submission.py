@@ -116,7 +116,7 @@ def main(args):
         0 in args.output_shapes and 1 in args.output_shapes
     ), "The saved model was not trained on Mouse 1 and 2."
 
-    utils.set_device(args)
+    utils.get_device(args)
 
     test_ds, final_test_ds = get_submission_ds(
         args,

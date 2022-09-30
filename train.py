@@ -23,7 +23,7 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 def train_step(
     mouse_id: int,
-    batch: t.Dict[str, torch.Tensor],
+    data: t.Dict[str, torch.Tensor],
     model: nn.Module,
     optimizer: torch.optim,
     loss_function,
@@ -36,12 +36,14 @@ def train_step(
             model.readouts[m].requires_grad_(True)
         else:
             model.readouts[m].requires_grad_(False)
-    outputs = model(batch["image"], mouse_id=mouse_id)
-    loss = loss_function(batch["response"], outputs)
+    images = data["image"].to(model.device)
+    responses = data["response"].to(model.device)
+    outputs = model(images, mouse_id=mouse_id)
+    loss = loss_function(responses, outputs)
     loss.backward()
     optimizer.step()
     result["loss/loss"] = loss
-    result.update(compute_metrics(y_true=batch["response"], y_pred=outputs))
+    result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
     return result
 
 
@@ -57,21 +59,20 @@ def train(
     model.train(True)
     results = {}
     disable = args.verbose == 0
-    for mouse_id, dataloader in tqdm(
+    for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Train", disable=disable, position=0
     ):
         mouse_result = {}
-        for batch in tqdm(
-            dataloader,
+        for data in tqdm(
+            mouse_ds,
             desc=f"Mouse {mouse_id}",
             disable=disable,
             position=1,
             leave=False,
         ):
-            batch = {k: v.to(args.device) for k, v in batch.items()}
             result = train_step(
                 mouse_id=mouse_id,
-                batch=batch,
+                data=data,
                 model=model,
                 optimizer=optimizer,
                 loss_function=loss_function,
@@ -91,16 +92,18 @@ def train(
 
 def validation_step(
     mouse_id: int,
-    batch: t.Dict[str, torch.Tensor],
+    data: t.Dict[str, torch.Tensor],
     model: nn.Module,
     loss_function,
 ):
     result = {}
     model.requires_grad_(False)
-    outputs = model(batch["image"], mouse_id=mouse_id)
-    loss = loss_function(batch["response"], outputs)
+    images = data["image"].to(model.device)
+    responses = data["response"].to(model.device)
+    outputs = model(images, mouse_id=mouse_id)
+    loss = loss_function(responses, outputs)
     result["loss/loss"] = loss
-    result.update(compute_metrics(y_true=batch["response"], y_pred=outputs))
+    result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
     return result
 
 
@@ -115,21 +118,18 @@ def validate(
     model.train(False)
     results = {}
     disable = args.verbose == 0
-    for mouse_id, dataloader in tqdm(
-        ds.items(), desc="Val", disable=disable, position=0
-    ):
+    for mouse_id, mouse_ds in tqdm(ds.items(), desc="Val", disable=disable, position=0):
         mouse_result = {}
-        for batch in tqdm(
-            dataloader,
+        for data in tqdm(
+            mouse_ds,
             desc=f"Mouse {mouse_id}",
             disable=disable,
             position=1,
             leave=False,
         ):
-            batch = {k: v.to(args.device) for k, v in batch.items()}
             result = validation_step(
                 mouse_id=mouse_id,
-                batch=batch,
+                data=data,
                 model=model,
                 loss_function=loss_function,
             )
@@ -184,7 +184,7 @@ def main(args):
     checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = checkpoint.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    utils.evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")

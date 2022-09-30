@@ -30,10 +30,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
 
 
 def inference(
-    args,
-    ds: t.Dict[int, DataLoader],
-    model: torch.nn.Module,
-    device: torch.device = torch.device("cpu"),
+    args, ds: t.Dict[int, DataLoader], model: torch.nn.Module
 ) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     """Inference data in DataLoader ds
     Returns:
@@ -47,9 +44,12 @@ def inference(
     """
     results = {}
     model.train(False)
-    for mouse_id, dataloader in tqdm(
+    for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
+        if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
+            # skip Mouse 1 and 2 on test set as target responses are not provided
+            continue
         result = {
             "images": [],
             "predictions": [],
@@ -57,19 +57,19 @@ def inference(
             "trial_ids": [],
             "frame_ids": [],
         }
-        for batch in dataloader:
-            images = batch["image"].to(device)
-            predictions = model(images, mouse_id)
+        for data in mouse_ds:
+            predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
+            predictions = predictions.detach().cpu()
             result["predictions"].append(
-                dataloader.dataset.i_transform_response(predictions.detach().cpu())
+                mouse_ds.dataset.i_transform_response(predictions)
             )
             result["targets"].append(
-                dataloader.dataset.i_transform_response(batch["response"])
+                mouse_ds.dataset.i_transform_response(data["response"])
             )
-            images = dataloader.dataset.i_transform_image(images.detach().cpu())
+            images = mouse_ds.dataset.i_transform_image(data["image"])
             result["images"].append(images)
-            result["frame_ids"].append(batch["frame_id"])
-            result["trial_ids"].append(batch["trial_id"])
+            result["frame_ids"].append(data["frame_id"])
+            result["trial_ids"].append(data["trial_id"])
         results[mouse_id] = {k: torch.cat(v, dim=0) for k, v in result.items()}
     return results
 
@@ -84,7 +84,7 @@ def evaluate(
 ):
     """Evaluate DataLoaders ds on the 3 challenge metrics"""
     eval_result = {}
-    outputs = inference(args, ds=ds, model=model, device=args.device)
+    outputs = inference(args, ds=ds, model=model)
     trial_correlations = metrics.single_trial_correlations(results=outputs)
     summary.plot_correlation(
         "metrics/single_trial_correlation",
