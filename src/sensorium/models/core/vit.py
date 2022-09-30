@@ -110,18 +110,21 @@ class ViTCore(Core):
         self,
         args,
         input_shape: t.Tuple[int, int, int],
-        patch_size: t.Union[int, t.Tuple[int]] = 4,
-        dim: int = 128,
-        depth: int = 3,
-        heads: int = 3,
-        dim_head: int = 64,
-        mlp_dim: int = 128,
-        dropout: float = 0.0,
-        emb_dropout: float = 0.0,
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
+
         (channels, image_height, image_width) = input_shape
+
+        patch_size = args.patch_size
+        dim = args.emb_dim
+        heads = args.num_heads
+        mlp_dim = args.mlp_dim
+        depth = args.num_layers
+        dim_head = args.dim_head
+        dropout = args.dropout
+        emb_dropout = args.dropout
+
         if isinstance(patch_size, int):
             patch_height, patch_width = patch_size, patch_size
         else:

@@ -262,6 +262,14 @@ if __name__ == "__main__":
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--activation", type=str, default="gelu")
 
+    # ViTCore
+    parser.add_argument("--patch_size", type=int, default=4)
+    parser.add_argument("--emb_dim", type=int, default=64)
+    parser.add_argument("--num_heads", type=int, default=3)
+    parser.add_argument("--mlp_dim", type=int, default=64)
+    parser.add_argument("--num_layers", type=int, default=3)
+    parser.add_argument("--dim_head", type=int, default=64)
+
     # training settings
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
