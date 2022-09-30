@@ -22,28 +22,28 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def train_step(
-    mouse_id: int,
-    data: t.Dict[str, torch.Tensor],
+    mice_data: t.Tuple[t.Dict[str, torch.Tensor]],
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
-) -> t.Dict[str, torch.Tensor]:
+) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     result = {}
     optimizer.zero_grad()
-    model.core.requires_grad_(True)
-    for m in model.readouts.keys():
-        if m == mouse_id:
-            model.readouts[m].requires_grad_(True)
-        else:
-            model.readouts[m].requires_grad_(False)
-    images = data["image"].to(model.device)
-    responses = data["response"].to(model.device)
-    outputs = model(images, mouse_id=mouse_id)
-    loss = criterion(responses, outputs)
-    loss.backward()
+    total_loss = []
+    for data in mice_data:
+        mouse_id = int(data["mouse_id"][0])
+        images = data["image"].to(model.device)
+        responses = data["response"].to(model.device)
+        outputs = model(images, mouse_id=mouse_id)
+        loss = criterion(y_true=responses, y_pred=outputs)
+        total_loss.append(loss)
+        result[mouse_id] = {
+            "loss/loss": loss.detach(),
+            **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+        }
+    total_loss = torch.sum(torch.stack(total_loss))
+    total_loss.backward()
     optimizer.step()
-    result["loss/loss"] = loss
-    result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
     return result
 
 
@@ -57,69 +57,23 @@ def train(
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(True)
-    results = {}
-    with tqdm(
-        desc="Train", total=utils.num_steps(ds), disable=args.verbose == 0
-    ) as pbar:
-        for mouse_id, mouse_ds in ds.items():
-            mouse_result = {}
-            for data in mouse_ds:
-                result = train_step(
-                    mouse_id=mouse_id,
-                    data=data,
-                    model=model,
-                    optimizer=optimizer,
-                    criterion=criterion,
-                )
-                utils.update_dict(mouse_result, result)
-                pbar.update(1)
-            utils.log_metrics(
-                results=mouse_result,
-                epoch=epoch,
-                mode=0,
-                summary=summary,
-                mouse_id=mouse_id,
-            )
-            results[mouse_id] = mouse_result
-    utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
-    return results
-
-
-def concurrent_train(
-    args,
-    ds: t.Dict[int, DataLoader],
-    model: nn.Module,
-    optimizer: torch.optim,
-    criterion: losses.Loss,
-    epoch: int,
-    summary: tensorboard.Summary,
-) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
-    model.train(True)
     model.requires_grad_(True)
-    results = {mouse_id: {"loss/loss": []} for mouse_id in ds.keys()}
+    mouse_ids = list(ds.keys())
+    results = {mouse_id: {} for mouse_id in mouse_ids}
     with tqdm(
-        desc="Train", total=len(ds[list(ds.keys())[0]]), disable=args.verbose == 0
+        desc="Train", total=len(ds[mouse_ids[0]]), disable=args.verbose == 0
     ) as pbar:
         for mice_data in zip(*ds.values()):
-            optimizer.zero_grad()
-            total_loss = []
-            for data in mice_data:
-                mouse_id = int(data["mouse_id"][0])
-                images = data["image"].to(model.device)
-                responses = data["response"].to(model.device)
-                outputs = model(images, mouse_id=mouse_id)
-                loss = criterion(y_true=responses, y_pred=outputs)
-                total_loss.append(loss)
-                results[mouse_id]["loss/loss"].append(loss.detach())
-                utils.update_dict(
-                    results[mouse_id],
-                    compute_metrics(y_true=responses, y_pred=outputs.detach()),
-                )
-            total_loss = torch.sum(torch.stack(total_loss))
-            total_loss.backward()
-            optimizer.step()
+            step_results = train_step(
+                mice_data=mice_data,
+                model=model,
+                optimizer=optimizer,
+                criterion=criterion,
+            )
+            for mouse_id in mouse_ids:
+                utils.update_dict(results[mouse_id], step_results[mouse_id])
             pbar.update(1)
-    for mouse_id in results.keys():
+    for mouse_id in mouse_ids:
         utils.log_metrics(
             results=results[mouse_id],
             epoch=epoch,
@@ -138,7 +92,6 @@ def validation_step(
     criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
     result = {}
-    model.requires_grad_(False)
     images = data["image"].to(model.device)
     responses = data["response"].to(model.device)
     outputs = model(images, mouse_id=mouse_id)
@@ -157,6 +110,7 @@ def validate(
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
+    model.requires_grad_(False)
     results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
         for mouse_id, mouse_ds in ds.items():
@@ -220,13 +174,13 @@ def main(args):
     checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = checkpoint.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        train_results = concurrent_train(
+        train_results = train(
             args,
             ds=train_ds,
             model=model,
