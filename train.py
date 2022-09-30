@@ -58,34 +58,29 @@ def train(
 ):
     model.train(True)
     results = {}
-    disable = args.verbose == 0
-    for mouse_id, mouse_ds in tqdm(
-        ds.items(), desc="Train", disable=disable, position=0
-    ):
-        mouse_result = {}
-        for data in tqdm(
-            mouse_ds,
-            desc=f"Mouse {mouse_id}",
-            disable=disable,
-            position=1,
-            leave=False,
-        ):
-            result = train_step(
+    with tqdm(
+        desc="Train", total=utils.num_steps(ds), disable=args.verbose == 0
+    ) as pbar:
+        for mouse_id, mouse_ds in ds.items():
+            mouse_result = {}
+            for data in mouse_ds:
+                result = train_step(
+                    mouse_id=mouse_id,
+                    data=data,
+                    model=model,
+                    optimizer=optimizer,
+                    loss_function=loss_function,
+                )
+                utils.update_dict(mouse_result, result)
+                pbar.update(1)
+            utils.log_metrics(
+                results=mouse_result,
+                epoch=epoch,
+                mode=0,
+                summary=summary,
                 mouse_id=mouse_id,
-                data=data,
-                model=model,
-                optimizer=optimizer,
-                loss_function=loss_function,
             )
-            utils.update_dict(mouse_result, result)
-        utils.log_metrics(
-            results=mouse_result,
-            epoch=epoch,
-            mode=0,
-            summary=summary,
-            mouse_id=mouse_id,
-        )
-        results[mouse_id] = mouse_result
+            results[mouse_id] = mouse_result
     utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
     return results
 
@@ -117,31 +112,26 @@ def validate(
 ):
     model.train(False)
     results = {}
-    disable = args.verbose == 0
-    for mouse_id, mouse_ds in tqdm(ds.items(), desc="Val", disable=disable, position=0):
-        mouse_result = {}
-        for data in tqdm(
-            mouse_ds,
-            desc=f"Mouse {mouse_id}",
-            disable=disable,
-            position=1,
-            leave=False,
-        ):
-            result = validation_step(
+    with tqdm(desc="Val", total=utils.num_steps(ds), disbale=args.verbose == 0) as pbar:
+        for mouse_id, mouse_ds in ds.items():
+            mouse_result = {}
+            for data in mouse_ds:
+                result = validation_step(
+                    mouse_id=mouse_id,
+                    data=data,
+                    model=model,
+                    loss_function=loss_function,
+                )
+                utils.update_dict(mouse_result, result)
+                pbar.update(1)
+            utils.log_metrics(
+                results=mouse_result,
+                epoch=epoch,
+                mode=1,
+                summary=summary,
                 mouse_id=mouse_id,
-                data=data,
-                model=model,
-                loss_function=loss_function,
             )
-            utils.update_dict(mouse_result, result)
-        utils.log_metrics(
-            results=mouse_result,
-            epoch=epoch,
-            mode=1,
-            summary=summary,
-            mouse_id=mouse_id,
-        )
-        results[mouse_id] = mouse_result
+            results[mouse_id] = mouse_result
     utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
     return results
 

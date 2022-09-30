@@ -240,3 +240,8 @@ def log_metrics(
                 [results[mouse_id][metric] for mouse_id in mouse_ids]
             ).mean()
             summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
+
+
+def num_steps(ds: t.Dict[int, DataLoader]):
+    """Return the number of total steps to iterate all the DataLoaders"""
+    return sum([len(ds[k]) for k in ds.keys()])
