@@ -90,7 +90,7 @@ def evaluate(
     outputs = inference(args, ds=ds, model=model)
     trial_correlations = metrics.single_trial_correlations(results=outputs)
     summary.plot_correlation(
-        "metrics/single_trial_correlation",
+        "single_trial_correlation",
         data=metrics2df(trial_correlations),
         step=epoch,
         mode=mode,
@@ -102,7 +102,7 @@ def evaluate(
     if mode == 2:  # only test set has repeated images
         image_correlations = metrics.average_image_correlation(results=outputs)
         summary.plot_correlation(
-            "metrics/average_image_correlation",
+            "correlation_to_average",
             data=metrics2df(image_correlations),
             step=epoch,
             mode=mode,
@@ -113,7 +113,7 @@ def evaluate(
         }
         feve = metrics.feve(results=outputs)
         summary.plot_correlation(
-            "metrics/FEVE",
+            "FEVE",
             data=metrics2df(feve),
             step=epoch,
             ylabel="FEVE",
