@@ -197,9 +197,9 @@ def metrics2df(results: t.Dict[str, torch.Tensor]):
 
 
 def log_metrics(
-    results: t.Union[
-        t.Dict[str, t.List[torch.Tensor]],
-        t.Dict[int, t.Dict[str, torch.Tensor]],
+    results: t.Dict[
+        t.Union[str, int],
+        t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]],
     ],
     epoch: int,
     mode: int,
@@ -209,10 +209,11 @@ def log_metrics(
     """Compute the mean of the metrics in results and log to Summary
 
     Args:
-        results: t.Union[
-                t.Dict[str, t.List[torch.Tensor]],
-                t.Dict[int, t.Dict[str, torch.Tensor]]
-            ]: a dictionary of tensors where keys are the name of the metrics
+        results: t.Dict[
+                t.Union[str, int],
+                t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]]
+            ],
+            a dictionary of tensors where keys are the name of the metrics
             that represent results from of a mouse, or a dictionary of a
             dictionary of tensors where the keys are the mouse IDs that
             represents the average results of multiple mice.
@@ -224,8 +225,9 @@ def log_metrics(
             dictionary represents results from multiple mice.
     """
     if mouse_id is not None:
-        for metric, values in results.items():
-            results[metric] = torch.stack(values).mean()
+        metrics = list(results.keys())
+        for metric in metrics:
+            results[metric] = torch.stack(results[metric]).mean()
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
                 value=results[metric],

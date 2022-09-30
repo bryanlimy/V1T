@@ -95,11 +95,13 @@ def concurrent_train(
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(True)
+    model.requires_grad_(True)
     results = {mouse_id: {"loss/loss": []} for mouse_id in ds.keys()}
     with tqdm(
         desc="Train", total=len(ds[list(ds.keys())[0]]), disable=args.verbose == 0
     ) as pbar:
         for mice_data in zip(*ds.values()):
+            optimizer.zero_grad()
             total_loss = []
             for data in mice_data:
                 mouse_id = int(data["mouse_id"][0])
@@ -109,8 +111,9 @@ def concurrent_train(
                 loss = loss_function(y_true=responses, y_pred=outputs)
                 total_loss.append(loss)
                 results[mouse_id]["loss/loss"].append(loss.detach())
-                results[mouse_id].update(
-                    compute_metrics(y_true=responses, y_pred=outputs.detach())
+                utils.update_dict(
+                    results[mouse_id],
+                    compute_metrics(y_true=responses, y_pred=outputs.detach()),
                 )
             total_loss = torch.sum(torch.stack(total_loss))
             total_loss.backward()
