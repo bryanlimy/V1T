@@ -104,7 +104,6 @@ class Checkpoint:
                 self._wait += 1
             else:
                 terminate = True
-                self.restore()
                 if self._verbose:
                     print(f"Model has not improved in {self._wait} epochs.")
         return terminate
