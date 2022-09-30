@@ -112,7 +112,7 @@ def validate(
 ):
     model.train(False)
     results = {}
-    with tqdm(desc="Val", total=utils.num_steps(ds), disbale=args.verbose == 0) as pbar:
+    with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
         for mouse_id, mouse_ds in ds.items():
             mouse_result = {}
             for data in mouse_ds:
