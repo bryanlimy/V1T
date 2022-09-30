@@ -212,12 +212,14 @@ class MiceDataset(Dataset):
                 - pupil_center: the (x, y) coordinate of the center of the pupil
                 - frame_id: the frame image ID
                 - trial_id: the trial ID
+                - mouse_id: the mouse ID
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
         self.transform(data)
         data["frame_id"] = self.frame_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
+        data["mouse_id"] = self.mouse_id
         return data
 
 

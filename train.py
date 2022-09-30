@@ -27,7 +27,7 @@ def train_step(
     model: nn.Module,
     optimizer: torch.optim,
     loss_function,
-):
+) -> t.Dict[str, torch.Tensor]:
     result = {}
     optimizer.zero_grad()
     model.core.requires_grad_(True)
@@ -55,7 +55,7 @@ def train(
     loss_function,
     epoch: int,
     summary: tensorboard.Summary,
-):
+) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(True)
     results = {}
     with tqdm(
@@ -85,12 +85,55 @@ def train(
     return results
 
 
+def concurrent_train(
+    args,
+    ds: t.Dict[int, DataLoader],
+    model: nn.Module,
+    optimizer: torch.optim,
+    loss_function,
+    epoch: int,
+    summary: tensorboard.Summary,
+) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
+    model.train(True)
+    results = {mouse_id: {"loss/loss": []} for mouse_id in ds.keys()}
+    with tqdm(
+        desc="Train", total=len(ds[list(ds.keys())[0]]), disable=args.verbose == 0
+    ) as pbar:
+        for mice_data in zip(*ds.values()):
+            total_loss = []
+            for data in mice_data:
+                mouse_id = int(data["mouse_id"][0])
+                images = data["image"].to(model.device)
+                responses = data["response"].to(model.device)
+                outputs = model(images, mouse_id=mouse_id)
+                loss = loss_function(y_true=responses, y_pred=outputs)
+                total_loss.append(loss)
+                results[mouse_id]["loss/loss"].append(loss.detach())
+                results[mouse_id].update(
+                    compute_metrics(y_true=responses, y_pred=outputs.detach())
+                )
+            total_loss = torch.sum(torch.stack(total_loss))
+            total_loss.backward()
+            optimizer.step()
+            pbar.update(1)
+    for mouse_id in results.keys():
+        utils.log_metrics(
+            results=results[mouse_id],
+            epoch=epoch,
+            mode=0,
+            summary=summary,
+            mouse_id=mouse_id,
+        )
+    utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
+    return results
+
+
 def validation_step(
     mouse_id: int,
     data: t.Dict[str, torch.Tensor],
     model: nn.Module,
     loss_function,
-):
+) -> t.Dict[str, torch.Tensor]:
     result = {}
     model.requires_grad_(False)
     images = data["image"].to(model.device)
@@ -109,7 +152,7 @@ def validate(
     loss_function,
     epoch: int,
     summary: tensorboard.Summary,
-):
+) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
     results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
@@ -174,13 +217,13 @@ def main(args):
     checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = checkpoint.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        train_results = train(
+        train_results = concurrent_train(
             args,
             ds=train_ds,
             model=model,
