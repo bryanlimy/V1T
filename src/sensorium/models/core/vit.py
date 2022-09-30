@@ -109,21 +109,19 @@ class ViTCore(Core):
     def __init__(
         self,
         args,
-        input_shape: t.Tuple[int],
+        input_shape: t.Tuple[int, int, int],
         patch_size: t.Union[int, t.Tuple[int]] = 4,
         dim: int = 128,
         depth: int = 3,
         heads: int = 3,
-        mlp_dim: int = 128,
-        pool: str = "cls",
-        channels: int = 3,
         dim_head: int = 64,
+        mlp_dim: int = 128,
         dropout: float = 0.0,
         emb_dropout: float = 0.0,
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
-        image_height, image_width = input_shape[1], input_shape[2]
+        (channels, image_height, image_width) = input_shape
         if isinstance(patch_size, int):
             patch_height, patch_width = patch_size, patch_size
         else:
@@ -135,12 +133,7 @@ class ViTCore(Core):
 
         num_patches = (image_height // patch_height) * (image_width // patch_width)
         patch_dim = channels * patch_height * patch_width
-        assert pool in (
-            "cls",
-            "mean",
-        ), "pool type must be either cls (cls token) or mean (mean pooling)"
-
-        self.to_patch_embedding = nn.Sequential(
+        self.patch_embedding = nn.Sequential(
             Rearrange(
                 "b c (h p1) (w p2) -> b (h w) (p1 p2 c)",
                 p1=patch_height,
@@ -151,7 +144,7 @@ class ViTCore(Core):
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
-        self.dropout = nn.Dropout(emb_dropout)
+        self.dropout = nn.Dropout(p=emb_dropout)
 
         self.transformer = Transformer(
             dim=dim,
@@ -162,27 +155,28 @@ class ViTCore(Core):
             dropout=dropout,
         )
 
-        self.pool = pool
-        self.to_latent = nn.Identity()
-
-        self.mlp_head = nn.Sequential(
-            nn.LayerNorm(dim),
-            nn.Linear(in_features=dim, out_features=dim),
-        )
+        # calculate output_shape
+        height = 32
+        self._latent_dim = (height, num_patches // height, dim)
+        self._output_shape = (dim, height, num_patches // height)
 
     def forward(self, inputs: torch.Tensor):
-        outputs = self.to_patch_embedding(inputs)
+        outputs = self.patch_embedding(inputs)
         b, n, _ = outputs.shape
 
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
-        outputs += self.pos_embedding[:, : (n + 1)]
+        outputs += self.pos_embedding[:, : n + 1]
         outputs = self.dropout(outputs)
 
         outputs = self.transformer(outputs)
 
-        outputs = outputs.mean(dim=1) if self.pool == "mean" else outputs[:, 0]
+        # remove cls_token
+        outputs = outputs[:, :-1, :]
 
-        outputs = self.to_latent(outputs)
-        outputs = self.mlp_head(outputs)
+        # reshape from (num patches, patch_dim) to (HWC)
+        outputs = outputs.view(*(b, *self._latent_dim))
+        # reorder outputs to (CHW)
+        outputs = torch.permute(outputs, dims=[0, 3, 1, 2])
+
         return outputs

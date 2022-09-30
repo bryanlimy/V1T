@@ -16,7 +16,7 @@ def register(name):
 
 
 class Core(nn.Module):
-    def __init__(self, args, input_shape: t.Tuple[int], name: str = "Conv"):
+    def __init__(self, args, input_shape: t.Tuple[int, int, int], name: str = "Conv"):
         super(Core, self).__init__()
         self.input_shape = input_shape
         self.name = name
