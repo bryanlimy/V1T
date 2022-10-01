@@ -253,7 +253,7 @@ def get_training_ds(
     train_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": True}
     test_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": False}
     if device.type in ["cuda", "mps"]:
-        gpu_kwargs = {"prefetch_factor": 4, "pin_memory": True}
+        gpu_kwargs = {"pin_memory": True}
         train_kwargs.update(gpu_kwargs)
         test_kwargs.update(gpu_kwargs)
 
