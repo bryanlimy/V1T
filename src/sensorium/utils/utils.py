@@ -44,6 +44,7 @@ def inference(
     """
     results = {}
     model.train(False)
+    model.requires_grad_(False)
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
@@ -59,15 +60,14 @@ def inference(
         }
         for data in mouse_ds:
             predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
-            predictions = predictions.detach().cpu()
+            predictions = predictions.cpu()
             result["predictions"].append(
                 mouse_ds.dataset.i_transform_response(predictions)
             )
             result["targets"].append(
                 mouse_ds.dataset.i_transform_response(data["response"])
             )
-            images = mouse_ds.dataset.i_transform_image(data["image"])
-            result["images"].append(images)
+            result["images"].append(mouse_ds.dataset.i_transform_image(data["image"]))
             result["frame_ids"].append(data["frame_id"])
             result["trial_ids"].append(data["trial_id"])
         results[mouse_id] = {
