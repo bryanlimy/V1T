@@ -26,22 +26,27 @@ def train_step(
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
+    reg_scale: t.Union[float, torch.Tensor] = 0,
 ) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     result = {}
     optimizer.zero_grad()
-    total_loss = []
+    all_loss = []
     for data in mice_data:
         mouse_id = int(data["mouse_id"][0])
         images = data["image"].to(model.device)
         responses = data["response"].to(model.device)
         outputs = model(images, mouse_id=mouse_id)
         loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        total_loss.append(loss)
+        reg_loss = model.regularizer()
+        total_loss = loss + reg_scale * reg_loss
+        all_loss.append(total_loss)
         result[mouse_id] = {
             "loss/loss": loss.detach(),
+            "loss/reg_loss": reg_loss.detach(),
+            "loss/total_loss": total_loss.detach(),
             **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
         }
-    total_loss = torch.sum(torch.stack(total_loss))
+    total_loss = torch.sum(torch.stack(all_loss))
     total_loss.backward()
     optimizer.step()
     return result
@@ -69,6 +74,7 @@ def train(
                 model=model,
                 optimizer=optimizer,
                 criterion=criterion,
+                reg_scale=args.reg_scale,
             )
             for mouse_id in mouse_ids:
                 utils.update_dict(results[mouse_id], step_results[mouse_id])
@@ -174,7 +180,7 @@ def main(args):
     checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = checkpoint.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -286,6 +292,12 @@ if __name__ == "__main__":
         default=1.0,
         type=float,
         help="the coefficient to scale loss for neurons in depth of 240 to 260.",
+    )
+    parser.add_argument(
+        "--reg_scale",
+        default=0,
+        type=float,
+        help="weight regularization coefficient.",
     )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(

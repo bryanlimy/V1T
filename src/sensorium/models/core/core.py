@@ -25,6 +25,10 @@ class Core(nn.Module):
     def shape(self):
         return self._output_shape
 
+    def regularizer(self):
+        """L1 regularization"""
+        return sum(p.abs().sum() for p in self.parameters())
+
 
 def get_core(args):
     if not args.core in _CORES.keys():

@@ -22,14 +22,11 @@ class Gaussian2DReadout(Readout):
         init_sigma: float = 0.1,
         gaussian_type: str = "full",
         use_grid_mean_predictor: bool = True,
-        feature_reg_weight: float = 0.0076,
         name: str = "Gaussian2DReadout",
     ):
         super(Gaussian2DReadout, self).__init__(
             input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
         )
-
-        self.feature_reg_weight = feature_reg_weight
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
             raise ValueError(
@@ -91,7 +88,7 @@ class Gaussian2DReadout(Readout):
         return l1
 
     def regularizer(self, reduction: REDUCTIONS = "sum"):
-        return self.feature_reg_weight * self.feature_l1(reduction=reduction)
+        return self.feature_l1(reduction=reduction)
 
     def init_grid_predictor(
         self,

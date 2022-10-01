@@ -43,6 +43,12 @@ class Model(nn.Module):
             ),
         )
 
+    def regularizer(self):
+        reg_loss = self.core.regularizer()
+        for mouse_id in self.readouts.keys():
+            reg_loss += self.readouts[mouse_id].regularizer()
+        return reg_loss
+
     def forward(self, inputs: torch.Tensor, mouse_id: torch.Union[int, torch.Tensor]):
         outputs = self.core(inputs)
         outputs = self.readouts(outputs, mouse_id=mouse_id)
