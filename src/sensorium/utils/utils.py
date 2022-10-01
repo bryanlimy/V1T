@@ -30,10 +30,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
 
 
 def inference(
-    args,
-    ds: t.Dict[int, DataLoader],
-    model: torch.nn.Module,
-    device: torch.device = torch.device("cpu"),
+    args, ds: t.Dict[int, DataLoader], model: torch.nn.Module
 ) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     """Inference data in DataLoader ds
     Returns:
@@ -47,9 +44,12 @@ def inference(
     """
     results = {}
     model.train(False)
-    for mouse_id, dataloader in tqdm(
+    for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
+        if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
+            # skip Mouse 1 and 2 on test set as target responses are not provided
+            continue
         result = {
             "images": [],
             "predictions": [],
@@ -57,20 +57,23 @@ def inference(
             "trial_ids": [],
             "frame_ids": [],
         }
-        for batch in dataloader:
-            images = batch["image"].to(device)
-            predictions = model(images, mouse_id)
+        for data in mouse_ds:
+            predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
+            predictions = predictions.detach().cpu()
             result["predictions"].append(
-                dataloader.dataset.i_transform_response(predictions.detach().cpu())
+                mouse_ds.dataset.i_transform_response(predictions)
             )
             result["targets"].append(
-                dataloader.dataset.i_transform_response(batch["response"])
+                mouse_ds.dataset.i_transform_response(data["response"])
             )
-            images = dataloader.dataset.i_transform_image(images.detach().cpu())
+            images = mouse_ds.dataset.i_transform_image(data["image"])
             result["images"].append(images)
-            result["frame_ids"].append(batch["frame_id"])
-            result["trial_ids"].append(batch["trial_id"])
-        results[mouse_id] = {k: torch.cat(v, dim=0) for k, v in result.items()}
+            result["frame_ids"].append(data["frame_id"])
+            result["trial_ids"].append(data["trial_id"])
+        results[mouse_id] = {
+            k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
+            for k, v in result.items()
+        }
     return results
 
 
@@ -82,11 +85,12 @@ def evaluate(
     summary: tensorboard.Summary,
     mode: int = 1,
 ):
+    """Evaluate DataLoaders ds on the 3 challenge metrics"""
     eval_result = {}
-    outputs = inference(args, ds=ds, model=model, device=args.device)
+    outputs = inference(args, ds=ds, model=model)
     trial_correlations = metrics.single_trial_correlations(results=outputs)
     summary.plot_correlation(
-        "metrics/single_trial_correlation",
+        "single_trial_correlation",
         data=metrics2df(trial_correlations),
         step=epoch,
         mode=mode,
@@ -98,7 +102,7 @@ def evaluate(
     if mode == 2:  # only test set has repeated images
         image_correlations = metrics.average_image_correlation(results=outputs)
         summary.plot_correlation(
-            "metrics/average_image_correlation",
+            "correlation_to_average",
             data=metrics2df(image_correlations),
             step=epoch,
             mode=mode,
@@ -109,7 +113,7 @@ def evaluate(
         }
         feve = metrics.feve(results=outputs)
         summary.plot_correlation(
-            "metrics/FEVE",
+            "FEVE",
             data=metrics2df(feve),
             step=epoch,
             ylabel="FEVE",
@@ -172,8 +176,8 @@ def load_args(args):
             setattr(args, key, value)
 
 
-def set_device(args):
-    """Set args.device to a torch.device"""
+def get_device(args):
+    """Get the appropriate torch.device from args.device argument"""
     device = args.device
     if not device:
         device = "cpu"
@@ -190,3 +194,56 @@ def metrics2df(results: t.Dict[str, torch.Tensor]):
         mouse_ids.extend([mouse_id] * len(v))
         values.extend(v.tolist())
     return pd.DataFrame({"mouse": mouse_ids, "results": values})
+
+
+def log_metrics(
+    results: t.Dict[
+        t.Union[str, int],
+        t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]],
+    ],
+    epoch: int,
+    mode: int,
+    summary: tensorboard.Summary,
+    mouse_id: int = None,
+):
+    """Compute the mean of the metrics in results and log to Summary
+
+    Args:
+        results: t.Dict[
+                t.Union[str, int],
+                t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]]
+            ],
+            a dictionary of tensors where keys are the name of the metrics
+            that represent results from of a mouse, or a dictionary of a
+            dictionary of tensors where the keys are the mouse IDs that
+            represents the average results of multiple mice.
+            When mouse_id is provided, it assumes the former.
+        epoch: int, the current epoch number.
+        mode: int, Summary logging mode.
+        summary: tensorboard.Summary, Summary class
+        mouse_id: int, the mouse_id of the result dictionary, None if the
+            dictionary represents results from multiple mice.
+    """
+    if mouse_id is not None:
+        metrics = list(results.keys())
+        for metric in metrics:
+            results[metric] = torch.stack(results[metric]).mean()
+            summary.scalar(
+                f"{metric}/mouse{mouse_id}",
+                value=results[metric],
+                step=epoch,
+                mode=mode,
+            )
+    else:
+        mouse_ids = list(results.keys())
+        metrics = list(results[mouse_ids[0]].keys())
+        for metric in metrics:
+            results[metric] = torch.stack(
+                [results[mouse_id][metric] for mouse_id in mouse_ids]
+            ).mean()
+            summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
+
+
+def num_steps(ds: t.Dict[int, DataLoader]):
+    """Return the number of total steps to iterate all the DataLoaders"""
+    return sum([len(ds[k]) for k in ds.keys()])

@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 
 from sensorium import losses, metrics
 from sensorium.models import get_model
-from sensorium.data import get_data_loaders
+from sensorium.data import get_training_ds
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
 
@@ -22,26 +22,28 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def train_step(
-    mouse_id: int,
-    batch: t.Dict[str, torch.Tensor],
+    mice_data: t.Tuple[t.Dict[str, torch.Tensor]],
     model: nn.Module,
     optimizer: torch.optim,
-    loss_function,
-):
+    criterion: losses.Loss,
+) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     result = {}
     optimizer.zero_grad()
-    model.core.requires_grad_(True)
-    for m in model.readouts.keys():
-        if m == mouse_id:
-            model.readouts[m].requires_grad_(True)
-        else:
-            model.readouts[m].requires_grad_(False)
-    outputs = model(batch["image"], mouse_id=mouse_id)
-    loss = loss_function(batch["response"], outputs)
-    loss.backward()
+    total_loss = []
+    for data in mice_data:
+        mouse_id = int(data["mouse_id"][0])
+        images = data["image"].to(model.device)
+        responses = data["response"].to(model.device)
+        outputs = model(images, mouse_id=mouse_id)
+        loss = criterion(y_true=responses, y_pred=outputs)
+        total_loss.append(loss)
+        result[mouse_id] = {
+            "loss/loss": loss.detach(),
+            **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+        }
+    total_loss = torch.sum(torch.stack(total_loss))
+    total_loss.backward()
     optimizer.step()
-    result["loss/loss"] = loss
-    result.update(compute_metrics(y_true=batch["response"], y_pred=outputs))
     return result
 
 
@@ -50,50 +52,52 @@ def train(
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
     optimizer: torch.optim,
-    loss_function,
+    criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
-):
+) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(True)
-    results = {}
-    disable = args.verbose == 0
-    for mouse_id, dataloader in tqdm(
-        ds.items(), desc="Train", disable=disable, position=0
-    ):
-        for batch in tqdm(
-            dataloader,
-            desc=f"Mouse {mouse_id}",
-            disable=disable,
-            position=1,
-            leave=False,
-        ):
-            batch = {k: v.to(args.device) for k, v in batch.items()}
-            result = train_step(
-                mouse_id=mouse_id,
-                batch=batch,
+    model.requires_grad_(True)
+    mouse_ids = list(ds.keys())
+    results = {mouse_id: {} for mouse_id in mouse_ids}
+    with tqdm(
+        desc="Train", total=len(ds[mouse_ids[0]]), disable=args.verbose == 0
+    ) as pbar:
+        for mice_data in zip(*ds.values()):
+            step_results = train_step(
+                mice_data=mice_data,
                 model=model,
                 optimizer=optimizer,
-                loss_function=loss_function,
+                criterion=criterion,
             )
-            utils.update_dict(results, result)
-    for k, v in results.items():
-        results[k] = torch.stack(v).mean()
-        summary.scalar(k, results[k], step=epoch, mode=0)
+            for mouse_id in mouse_ids:
+                utils.update_dict(results[mouse_id], step_results[mouse_id])
+            pbar.update(1)
+    for mouse_id in mouse_ids:
+        utils.log_metrics(
+            results=results[mouse_id],
+            epoch=epoch,
+            mode=0,
+            summary=summary,
+            mouse_id=mouse_id,
+        )
+    utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
     return results
 
 
 def validation_step(
     mouse_id: int,
-    batch: t.Dict[str, torch.Tensor],
+    data: t.Dict[str, torch.Tensor],
     model: nn.Module,
-    loss_function,
-):
+    criterion: losses.Loss,
+) -> t.Dict[str, torch.Tensor]:
     result = {}
-    model.requires_grad_(False)
-    outputs = model(batch["image"], mouse_id=mouse_id)
-    loss = loss_function(batch["response"], outputs)
+    images = data["image"].to(model.device)
+    responses = data["response"].to(model.device)
+    outputs = model(images, mouse_id=mouse_id)
+    loss = criterion(responses, outputs)
     result["loss/loss"] = loss
-    result.update(compute_metrics(y_true=batch["response"], y_pred=outputs))
+    result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
     return result
 
 
@@ -101,34 +105,34 @@ def validate(
     args,
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
-    loss_function,
+    criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
-):
+) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
+    model.requires_grad_(False)
     results = {}
-    disable = args.verbose == 0
-    for mouse_id, dataloader in tqdm(
-        ds.items(), desc="Val", disable=disable, position=0
-    ):
-        for batch in tqdm(
-            dataloader,
-            desc=f"Mouse {mouse_id}",
-            disable=disable,
-            position=1,
-            leave=False,
-        ):
-            batch = {k: v.to(args.device) for k, v in batch.items()}
-            result = validation_step(
+    with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
+        for mouse_id, mouse_ds in ds.items():
+            mouse_result = {}
+            for data in mouse_ds:
+                result = validation_step(
+                    mouse_id=mouse_id,
+                    data=data,
+                    model=model,
+                    criterion=criterion,
+                )
+                utils.update_dict(mouse_result, result)
+                pbar.update(1)
+            utils.log_metrics(
+                results=mouse_result,
+                epoch=epoch,
+                mode=1,
+                summary=summary,
                 mouse_id=mouse_id,
-                batch=batch,
-                model=model,
-                loss_function=loss_function,
             )
-            utils.update_dict(results, result)
-    for k, v in results.items():
-        results[k] = torch.stack(v).mean()
-        summary.scalar(k, results[k], step=epoch, mode=1)
+            results[mouse_id] = mouse_result
+    utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
     return results
 
 
@@ -140,9 +144,9 @@ def main(args):
 
     utils.set_random_seed(args.seed)
 
-    utils.set_device(args)
+    utils.get_device(args)
 
-    train_ds, val_ds, test_ds = get_data_loaders(
+    train_ds, val_ds, test_ds = get_training_ds(
         args,
         data_dir=args.dataset,
         mouse_ids=args.mouse_ids,
@@ -153,14 +157,14 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = get_model(args, ds=train_ds, summary=summary)
-    loss_function = losses.poisson_loss
+    criterion = losses.get_criterion(args)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
         mode="min",
-        factor=0.1,
+        factor=0.5,
         patience=10,
-        threshold_mode="abs",
+        threshold_mode="rel",
         min_lr=1e-6,
         verbose=False,
     )
@@ -181,7 +185,7 @@ def main(args):
             ds=train_ds,
             model=model,
             optimizer=optimizer,
-            loss_function=loss_function,
+            criterion=criterion,
             epoch=epoch,
             summary=summary,
         )
@@ -189,7 +193,7 @@ def main(args):
             args,
             ds=val_ds,
             model=model,
-            loss_function=loss_function,
+            criterion=criterion,
             epoch=epoch,
             summary=summary,
         )
@@ -246,17 +250,37 @@ if __name__ == "__main__":
     )
 
     # model settings
-    parser.add_argument("--core", type=str, default="linear")
-    parser.add_argument("--readout", type=str, default="linear")
+    parser.add_argument(
+        "--core", type=str, required=True, help="The core module to use."
+    )
+    parser.add_argument(
+        "--readout", type=str, required=True, help="The readout module to use."
+    )
 
     # ConvCore
     parser.add_argument("--num_filters", type=int, default=8)
     parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--activation", type=str, default="gelu")
 
+    # ViTCore
+    parser.add_argument("--patch_size", type=int, default=4)
+    parser.add_argument("--emb_dim", type=int, default=64)
+    parser.add_argument("--num_heads", type=int, default=3)
+    parser.add_argument("--mlp_dim", type=int, default=64)
+    parser.add_argument("--num_layers", type=int, default=3)
+    parser.add_argument("--dim_head", type=int, default=64)
+
     # training settings
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument(
+        "--epochs", default=200, type=int, help="maximum epochs to train the model."
+    )
     parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument(
+        "--criterion",
+        default="poisson",
+        type=str,
+        help="criterion (loss function) to use.",
+    )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(
         "--device",

@@ -137,18 +137,18 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(self, tier: str, data_dir: str, mouse_id: int):
+    def __init__(self, tier: str, data_dir: str, mouse_id: int, shuffle: bool = False):
         """Construct Dataset
 
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
         as trial IDs (the numbers in meta/trials/trial_idx.npy)
 
         Args:
-            - tier: str, train, validation or test
+            - tier: str, train, validation, test or final_test
             - data_dir: str, path to where all data are stored
             - mouse_id: int, the mouse ID
         """
-        assert tier in ("train", "validation", "test")
+        assert tier in ("train", "validation", "test", "final_test")
         self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
@@ -158,6 +158,9 @@ class MiceDataset(Dataset):
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
         self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
+        self._shuffle = shuffle
+        if self._shuffle:
+            self.shuffle()
         self.frame_ids = metadata["frame_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
         # neurons cortical coordinates
@@ -167,6 +170,14 @@ class MiceDataset(Dataset):
 
     def __len__(self):
         return len(self.indexes)
+
+    def shuffle(self):
+        """
+        Shuffle the indexes of the dataset
+        This is needed due to the memory issue in DataLoader shuffle=True
+        https://github.com/pytorch/pytorch/issues/13246#issuecomment-905703662
+        """
+        np.random.shuffle(self.indexes)
 
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Standardize image"""
@@ -210,47 +221,52 @@ class MiceDataset(Dataset):
                 - response: the corresponding response
                 - behavior: pupil size, the derivative of pupil size, and speed
                 - pupil_center: the (x, y) coordinate of the center of the pupil
-                - mouse_id: the mouse ID
-                - num_neurons: the number of neurons in responses
-                - coordinates: the anatomical coordinate (x, y, z) of each neuron
                 - frame_id: the frame image ID
-                - trial_id: the trial ID, None if the trial ID is hidden
-                - padding_mask: the mask to mask out pads in responses
+                - trial_id: the trial ID
+                - mouse_id: the mouse ID
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
         self.transform(data)
-        data["mouse_id"] = self.mouse_id
-        data["num_neurons"] = self.num_neurons
-        data["coordinates"] = self.coordinates
         data["frame_id"] = self.frame_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
-        if type(data["trial_id"]) not in (int, np.int32, np.int64):
-            data["trial_id"] = None
+        data["mouse_id"] = self.mouse_id
+        if idx == len(self) - 1 and self._shuffle:
+            self.shuffle()
         return data
 
 
-def get_data_loaders(
+def get_training_ds(
     args,
     data_dir: str,
     mouse_ids: t.List[int] = None,
     batch_size: int = 1,
     device: torch.device = torch.device("cpu"),
 ):
+    """
+    Get DataLoaders for training
+    Args:
+        args
+        data_dir: str, path to directory where the zip files are stored
+        mouse_ids: t.List[int], mouse IDs to extract
+        batch_size: int, batch size of the DataLoaders
+        device: torch.device, the device where the data is being loaded to
+    Return:
+        train_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the
+            training sets where keys are the mouse IDs.
+        val_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the
+            validation sets where keys are the mouse IDs.
+        test_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the test
+            sets where keys are the mouse IDs.
+    """
     if mouse_ids is None:
-        mouse_ids = list(range(2, 7))
-    if 0 in mouse_ids or 1 in mouse_ids:
-        raise NotImplementedError(
-            "Data loader for Mouse 1 and 2 have not been implemented."
-        )
+        mouse_ids = list(range(0, 7))
 
     # settings for DataLoader
-    train_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": True}
-    test_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": False}
+    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 1}
     if device.type in ["cuda", "mps"]:
-        cuda_kwargs = {"prefetch_factor": 2, "pin_memory": True}
-        train_kwargs.update(cuda_kwargs)
-        test_kwargs.update(cuda_kwargs)
+        gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
+        dataloader_kwargs.update(gpu_kwargs)
 
     # a dictionary of DataLoader for each train, validation and test set
     train_ds, val_ds, test_ds = {}, {}, {}
@@ -258,19 +274,61 @@ def get_data_loaders(
 
     for mouse_id in mouse_ids:
         train_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="train", data_dir=data_dir, mouse_id=mouse_id),
-            **train_kwargs,
+            MiceDataset(
+                tier="train", data_dir=data_dir, mouse_id=mouse_id, shuffle=True
+            ),
+            **dataloader_kwargs,
         )
         val_ds[mouse_id] = DataLoader(
             MiceDataset(tier="validation", data_dir=data_dir, mouse_id=mouse_id),
-            **test_kwargs,
+            **dataloader_kwargs,
         )
         test_ds[mouse_id] = DataLoader(
             MiceDataset(tier="test", data_dir=data_dir, mouse_id=mouse_id),
-            **test_kwargs,
+            **dataloader_kwargs,
         )
         args.output_shapes[mouse_id] = (train_ds[mouse_id].dataset.num_neurons,)
 
     args.input_shape = get_image_shape(data_dir=data_dir)
 
     return train_ds, val_ds, test_ds
+
+
+def get_submission_ds(
+    args, data_dir: str, batch_size: int, device: torch.device = torch.device("cpu")
+):
+    """
+    Get DataLoaders for submission to Sensorium and Sensorium+
+    Args:
+        args
+        data_dir: str, path to directory where the zip files are stored
+        batch_size: int, batch size of the DataLoaders
+        device: torch.device, the device where the data is being loaded to
+    Return:
+        test_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the
+            live test set where keys are the mouse IDs
+            i.e. 0 for Sensorium and 1 for Sensorium+.
+        final_test_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of
+            the final test set where keys are the mouse IDs.
+    """
+    # settings for DataLoader
+    test_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": False}
+    if device.type in ["cuda", "mps"]:
+        test_kwargs.update({"prefetch_factor": 2, "pin_memory": True})
+
+    # a dictionary of DataLoader for each live test and final test set
+    test_ds, final_test_ds = {}, {}
+
+    for mouse_id in list(args.output_shapes.keys()):
+        test_ds[mouse_id] = DataLoader(
+            MiceDataset(tier="test", data_dir=data_dir, mouse_id=mouse_id),
+            **test_kwargs,
+        )
+    for mouse_id in [0, 1]:
+        final_test_ds[mouse_id] = DataLoader(
+            MiceDataset(tier="final_test", data_dir=data_dir, mouse_id=mouse_id),
+            **test_kwargs,
+        )
+        args.output_shapes[mouse_id] = (test_ds[mouse_id].dataset.num_neurons,)
+
+    return test_ds, final_test_ds

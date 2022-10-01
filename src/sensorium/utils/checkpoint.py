@@ -18,9 +18,9 @@ class Checkpoint:
         self,
         args,
         model: nn.Module,
-        optimizer: torch.optim,
-        scheduler: torch.optim.lr_scheduler,
-        patience: int = 10,
+        optimizer: torch.optim = None,
+        scheduler: torch.optim.lr_scheduler = None,
+        patience: int = 20,
         min_epochs: int = 50,
     ):
         """
@@ -54,34 +54,45 @@ class Checkpoint:
     def save(self, loss: t.Union[float, np.ndarray, torch.Tensor], epoch: int):
         """Save current model as best_model.pt"""
         filename = os.path.join(self.checkpoint_dir, "best_model.pt")
-        torch.save(
-            {
-                "epoch": epoch,
-                "loss": float(loss),
-                "model_state_dict": self._model.state_dict(),
-                "optimizer_state_dict": self._optimizer.state_dict(),
-                "scheduler_state_dict": self._scheduler.state_dict(),
-            },
-            f=filename,
-        )
+        checkpoint = {
+            "epoch": epoch,
+            "loss": float(loss),
+            "model_state_dict": self._model.state_dict(),
+        }
+        if self._optimizer is not None:
+            checkpoint["optimizer_state_dict"] = self._optimizer.state_dict()
+        if self._scheduler is not None:
+            checkpoint["scheduler_state_dict"] = self._scheduler.state_dict()
+        torch.save(checkpoint, f=filename)
         if self._verbose:
             print(f"\nCheckpoint saved to {filename}.")
 
-    def restore(self) -> int:
-        """Load the best model in self.checkpoint_dir and return the epoch"""
+    def restore(self, force: bool = False) -> int:
+        """
+        Load the best model in self.checkpoint_dir and return the epoch
+        Args:
+            force: bool, raise an error if checkpoint is not found.
+        Return:
+            epoch: int, the number of epoch the model has been trained for,
+                return 0 if no checkpoint was found.
+        """
         epoch = 0
         filename = os.path.join(self.checkpoint_dir, "best_model.pt")
         if os.path.exists(filename):
             checkpoint = torch.load(filename, map_location=self._device)
             self._model.load_state_dict(checkpoint["model_state_dict"])
-            self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            self._scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            if self._optimizer is not None and "optimizer_state_dict" in checkpoint:
+                self._optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            if self._scheduler is not None and "scheduler_state_dict" in checkpoint:
+                self._scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
             epoch = checkpoint["epoch"]
             if self._verbose:
-                print(f"\nLoaded checkpoint from {filename}.\n")
+                print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")
+        elif force:
+            raise FileNotFoundError(f"Cannot find checkpoint in {self.checkpoint_dir}.")
         return epoch
 
-    def monitor(self, loss: float, epoch: int) -> bool:
+    def monitor(self, loss: t.Union[float, torch.Tensor], epoch: int) -> bool:
         terminate = False
         if loss < self.best_loss:
             self.best_loss = loss
@@ -93,7 +104,6 @@ class Checkpoint:
                 self._wait += 1
             else:
                 terminate = True
-                self.restore()
                 if self._verbose:
-                    print(f"model has not improved in {self._wait} epochs.\n")
+                    print(f"Model has not improved in {self._wait} epochs.")
         return terminate

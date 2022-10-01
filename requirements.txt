@@ -3,6 +3,7 @@ h5py
 numpy
 torch
 scipy
+einops
 pandas
 sklearn
 seaborn
