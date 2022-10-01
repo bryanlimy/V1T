@@ -8,6 +8,7 @@ from torch import nn
 import torchvision.io
 from tqdm import tqdm
 from time import time
+from PIL import Image
 from shutil import rmtree
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
@@ -35,11 +36,11 @@ class ImageNet(Dataset):
 
     def __getitem__(self, item: t.Union[int, torch.Tensor]):
         filename, label = str(self._filenames[item]), self._labels[item]
-        image = torchvision.io.read_image(filename)
+        image = Image.open(filename).convert("RGB")
+        image = transforms.ToTensor()(image)
         if image.shape[0] != 1:
             image = transforms.Grayscale()(image)
         image = transforms.Resize(size=IMAGE_SIZE[1:])(image)
-        image = F.convert_image_dtype(image, dtype=torch.float)
         image = transforms.Normalize([0.449], [0.226])(image)
         return {"image": image, "label": label.type(torch.LongTensor)}
 
