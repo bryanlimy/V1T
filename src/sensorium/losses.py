@@ -47,7 +47,7 @@ class PoissonLoss(Loss):
     Poisson distribution and target is a sample from the distribution.
 
     Args:
-        bias (float, optional): Value used to numerically stabilize
+        eps (float, optional): Value used to numerically stabilize
             evaluation of the log-likelihood. This value is effectively
             added to the output during evaluation.
             Defaults to 1e-12.
@@ -62,18 +62,18 @@ class PoissonLoss(Loss):
 
     def __init__(
         self,
-        bias: float = 1e-12,
+        eps: float = 1e-12,
         per_neuron: bool = False,
         return_average: bool = False,
     ):
         super(PoissonLoss, self).__init__()
-        self.bias = bias
+        self.eps = eps
         self._per_neuron = per_neuron
         self._return_average = return_average
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor):
         y_true = y_true.detach()
-        loss = y_pred - y_true * torch.log(y_pred + self.bias)
+        loss = y_pred - y_true * torch.log(y_pred + self.eps)
         if self._per_neuron:
             loss = loss.view(-1, loss.shape[-1])
             loss = loss.mean(dim=0) if self._return_average else loss.sum(dim=0)
