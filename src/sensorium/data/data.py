@@ -250,12 +250,12 @@ def get_training_ds(
         mouse_ids = list(range(0, 7))
 
     # settings for DataLoader
-    train_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": True}
-    test_kwargs = {"batch_size": batch_size, "num_workers": 2, "shuffle": False}
+    train_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": True}
+    test_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": False}
     if device.type in ["cuda", "mps"]:
-        cuda_kwargs = {"prefetch_factor": 2, "pin_memory": True}
-        train_kwargs.update(cuda_kwargs)
-        test_kwargs.update(cuda_kwargs)
+        gpu_kwargs = {"prefetch_factor": 4, "pin_memory": True}
+        train_kwargs.update(gpu_kwargs)
+        test_kwargs.update(gpu_kwargs)
 
     # a dictionary of DataLoader for each train, validation and test set
     train_ds, val_ds, test_ds = {}, {}, {}
@@ -299,7 +299,7 @@ def get_submission_ds(
             the final test set where keys are the mouse IDs.
     """
     # settings for DataLoader
-    test_kwargs = {"batch_size": batch_size, "num_workers": 1, "shuffle": False}
+    test_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": False}
     if device.type in ["cuda", "mps"]:
         test_kwargs.update({"prefetch_factor": 2, "pin_memory": True})
 
