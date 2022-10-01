@@ -291,9 +291,6 @@ def get_training_ds(
 
     args.input_shape = get_image_shape(data_dir=data_dir)
 
-    for data in train_ds[0]:
-        pass
-
     return train_ds, val_ds, test_ds
 
 
