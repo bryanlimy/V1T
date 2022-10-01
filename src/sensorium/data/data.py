@@ -137,7 +137,7 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(self, tier: str, data_dir: str, mouse_id: int):
+    def __init__(self, tier: str, data_dir: str, mouse_id: int, shuffle: bool = False):
         """Construct Dataset
 
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
@@ -158,6 +158,9 @@ class MiceDataset(Dataset):
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
         self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
+        self._shuffle = shuffle
+        if self._shuffle:
+            self.shuffle()
         self.frame_ids = metadata["frame_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
         # neurons cortical coordinates
@@ -167,6 +170,14 @@ class MiceDataset(Dataset):
 
     def __len__(self):
         return len(self.indexes)
+
+    def shuffle(self):
+        """
+        Shuffle the indexes of the dataset
+        This is needed due to the memory issue in DataLoader shuffle=True
+        https://github.com/pytorch/pytorch/issues/13246#issuecomment-905703662
+        """
+        np.random.shuffle(self.indexes)
 
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Standardize image"""
@@ -220,6 +231,8 @@ class MiceDataset(Dataset):
         data["frame_id"] = self.frame_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
+        if idx == len(self) - 1 and self._shuffle:
+            self.shuffle()
         return data
 
 
@@ -250,12 +263,10 @@ def get_training_ds(
         mouse_ids = list(range(0, 7))
 
     # settings for DataLoader
-    train_kwargs = {"batch_size": batch_size, "num_workers": 1, "shuffle": True}
-    test_kwargs = {"batch_size": batch_size, "num_workers": 1, "shuffle": False}
+    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 1}
     if device.type in ["cuda", "mps"]:
         gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
-        train_kwargs.update(gpu_kwargs)
-        test_kwargs.update(gpu_kwargs)
+        dataloader_kwargs.update(gpu_kwargs)
 
     # a dictionary of DataLoader for each train, validation and test set
     train_ds, val_ds, test_ds = {}, {}, {}
@@ -263,20 +274,25 @@ def get_training_ds(
 
     for mouse_id in mouse_ids:
         train_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="train", data_dir=data_dir, mouse_id=mouse_id),
-            **train_kwargs,
+            MiceDataset(
+                tier="train", data_dir=data_dir, mouse_id=mouse_id, shuffle=True
+            ),
+            **dataloader_kwargs,
         )
         val_ds[mouse_id] = DataLoader(
             MiceDataset(tier="validation", data_dir=data_dir, mouse_id=mouse_id),
-            **test_kwargs,
+            **dataloader_kwargs,
         )
         test_ds[mouse_id] = DataLoader(
             MiceDataset(tier="test", data_dir=data_dir, mouse_id=mouse_id),
-            **test_kwargs,
+            **dataloader_kwargs,
         )
         args.output_shapes[mouse_id] = (train_ds[mouse_id].dataset.num_neurons,)
 
     args.input_shape = get_image_shape(data_dir=data_dir)
+
+    for data in train_ds[0]:
+        pass
 
     return train_ds, val_ds, test_ds
 
