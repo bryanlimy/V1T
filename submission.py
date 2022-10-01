@@ -56,6 +56,7 @@ def inference(
         "trial_ids": [],
     }
     model.train(False)
+    model.requires_grad_(False)
     for data in tqdm(ds, desc=desc, disable=args.verbose == 0):
         images = data["image"].to(device)
         predictions = model(images, mouse_id=mouse_id)
@@ -129,6 +130,16 @@ def main(args):
 
     checkpoint = Checkpoint(args, model=model)
     checkpoint.restore(force=True)
+
+    # run evaluation on test set for all mouse
+    eval_results = utils.evaluate(args, ds=test_ds, model=model)
+    print(f"Single trial correlation")
+    print(
+        *[
+            f"Mouse {mouse_id}: {result:.04f}\t"
+            for mouse_id, result in eval_results["trial_correlation"].items()
+        ]
+    )
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
