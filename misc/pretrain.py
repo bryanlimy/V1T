@@ -18,6 +18,7 @@ import torchvision.transforms.functional as F
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
+from sensorium.models.utils import conv2d_output_shape
 
 from glob import glob
 from sklearn.model_selection import train_test_split
@@ -62,7 +63,7 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     val_idx, test_idx = train_test_split(val_idx, test_size=0.5, shuffle=True)
 
     # settings for DataLoader
-    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 1}
+    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 2}
     if device.type in ["cuda", "mps"]:
         gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
@@ -99,10 +100,31 @@ class Model(nn.Module):
 
         core_shape = self.core.shape
 
+        output_shape = conv2d_output_shape(
+            input_shape=core_shape, num_filters=20, kernel_size=5
+        )
+        output_shape = (output_shape[0], output_shape[1] // 2, output_shape[2] // 2)
+        output_shape = conv2d_output_shape(
+            input_shape=output_shape, num_filters=10, kernel_size=5
+        )
+
         self.readout = nn.Sequential(
+            nn.Conv2d(
+                in_channels=core_shape[0],
+                out_channels=20,
+                kernel_size=5,
+            ),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.GELU(),
+            nn.Conv2d(
+                in_channels=20,
+                out_channels=10,
+                kernel_size=5,
+            ),
+            nn.GELU(),
             nn.Flatten(),
             nn.Linear(
-                in_features=int(np.prod(core_shape)),
+                in_features=int(np.prod(output_shape)),
                 out_features=self.output_shape[-1],
             ),
             nn.GELU(),
