@@ -1,39 +1,64 @@
 import os
 import torch
 import argparse
+import torchinfo
 import typing as t
 import numpy as np
 from torch import nn
-import torchinfo
+import torchvision.io
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
-from torch.utils.data import DataLoader
 from torchvision import transforms
-from torchvision.datasets import ImageNet
+from torch.utils.data import Dataset, DataLoader
 
+import torchvision.transforms.functional as F
 
-from sensorium import losses, metrics
 from sensorium.models.core import get_core
-from sensorium.data import get_training_ds
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
 
+from glob import glob
+from sklearn.model_selection import train_test_split
 
 IMAGE_SIZE = (1, 144, 256)
 
 
+class ImageNet(Dataset):
+    def __init__(self, filenames: np.ndarray, labels: np.ndarray):
+        super(ImageNet, self).__init__()
+        self._filenames = filenames
+        self._labels = torch.from_numpy(labels)
+
+    def __len__(self):
+        return len(self._labels)
+
+    def __getitem__(self, item: t.Union[int, torch.Tensor]):
+        filename, label = str(self._filenames[item]), self._labels[item]
+        image = torchvision.io.read_image(filename)
+        if image.shape[0] != 1:
+            image = transforms.Grayscale()(image)
+        image = transforms.Resize(size=IMAGE_SIZE[1:])(image)
+        image = F.convert_image_dtype(image, dtype=torch.float)
+        image = transforms.Normalize([0.449], [0.226])(image)
+        return {"image": image, "label": label.type(torch.LongTensor)}
+
+
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
-    dataset = ImageNet(
-        root=data_dir,
-        split="train",
-        transform=nn.Sequential(
-            transforms.Grayscale(),
-            transforms.Resize(size=IMAGE_SIZE[1]),
-            transforms.RandomCrop(size=IMAGE_SIZE[1:]),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ),
-    )
+    with open(
+        os.path.join(data_dir, "ILSVRC2012_validation_ground_truth.txt"), "r"
+    ) as file:
+        labels = list(map(int, file.read().splitlines()))
+    labels = np.array(labels, dtype=np.int32) - 1
+
+    filenames = sorted(glob(os.path.join(data_dir, "*.JPEG")))
+    filenames = np.array(filenames)
+
+    size = len(labels)
+    # shuffle train, validation test set
+    indexes = np.arange(size)
+    train_idx, val_idx = train_test_split(indexes, test_size=0.3, shuffle=True)
+    val_idx, test_idx = train_test_split(val_idx, test_size=0.5, shuffle=True)
 
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": 1}
@@ -41,17 +66,29 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
         gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
 
-    train_ds = DataLoader(dataset, **dataloader_kwargs)
+    train_ds = DataLoader(
+        ImageNet(filenames=filenames[train_idx], labels=labels[train_idx]),
+        **dataloader_kwargs,
+    )
+    val_ds = DataLoader(
+        ImageNet(filenames=filenames[val_idx], labels=labels[val_idx]),
+        **dataloader_kwargs,
+    )
+    test_ds = DataLoader(
+        ImageNet(filenames=filenames[test_idx], labels=labels[test_idx]),
+        **dataloader_kwargs,
+    )
 
     args.input_shape = IMAGE_SIZE
-    args.output_shape = None
+    args.output_shape = (1000,)
 
-    return train_ds, None, None
+    return train_ds, val_ds, test_ds
 
 
 class Model(nn.Module):
     def __init__(self, args):
         super(Model, self).__init__()
+        self.device = args.device
         self.input_shape = IMAGE_SIZE
         self.output_shape = args.output_shape
 
@@ -82,7 +119,8 @@ class Model(nn.Module):
 
 
 def accuracy(y_true: torch.Tensor, y_pred: torch.Tensor):
-    return (torch.argmax(y_pred.detach(), dim=-1) == y_true.detach()).float().sum()
+    y_pred = torch.exp(y_pred.detach())
+    return (torch.argmax(y_pred, dim=-1) == y_true.detach()).float().sum()
 
 
 def train(
@@ -100,11 +138,11 @@ def train(
     for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
         optimizer.zero_grad()
         images = data["image"].to(model.device)
-        targets = data["target"].to(model.device)
+        labels = data["label"].to(model.device)
         predictions = model(images)
-        loss = criterion(predictions, targets)
+        loss = criterion(predictions, labels)
         results["loss"].append(loss.detach())
-        results["accuracy"].append(accuracy(targets, predictions))
+        results["accuracy"].append(accuracy(labels, predictions))
         loss.backward()
         optimizer.step()
     for k, v in results.items():
@@ -127,11 +165,11 @@ def validate(
     model.requires_grad_(False)
     for data in tqdm(ds, desc="Val", disable=args.verbose == 0):
         images = data["image"].to(model.device)
-        targets = data["target"].to(model.device)
+        labels = data["label"].to(model.device)
         predictions = model(images)
-        loss = criterion(predictions, targets)
+        loss = criterion(predictions, labels)
         results["loss"].append(loss.detach())
-        results["accuracy"].append(accuracy(targets, predictions))
+        results["accuracy"].append(accuracy(labels, predictions))
     for k, v in results.items():
         results[k] = torch.stack(v).mean()
         summary.scalar(k, value=results[k], step=epoch, mode=mode)
@@ -158,6 +196,7 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = Model(args)
+    model = model.to(args.device)
 
     model_info = torchinfo.summary(
         model,
@@ -256,7 +295,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="../data/imagenet",
+        default="../data/imagenet/ILSVRC2012_img_val",
         help="path to directory where the compressed dataset is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
@@ -295,6 +334,19 @@ if __name__ == "__main__":
     )
     parser.add_argument("--mixed_precision", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
+
+    # plot settings
+    parser.add_argument(
+        "--save_plots", action="store_true", help="save plots to --output_dir"
+    )
+    parser.add_argument("--dpi", type=int, default=120, help="matplotlib figure DPI")
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="svg",
+        choices=["pdf", "svg", "png"],
+        help="file format when --save_plots",
+    )
 
     # misc
     parser.add_argument(
