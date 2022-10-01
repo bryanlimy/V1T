@@ -35,7 +35,7 @@ def train_step(
         images = data["image"].to(model.device)
         responses = data["response"].to(model.device)
         outputs = model(images, mouse_id=mouse_id)
-        loss = criterion(y_true=responses, y_pred=outputs)
+        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
         total_loss.append(loss)
         result[mouse_id] = {
             "loss/loss": loss.detach(),
@@ -95,7 +95,7 @@ def validation_step(
     images = data["image"].to(model.device)
     responses = data["response"].to(model.device)
     outputs = model(images, mouse_id=mouse_id)
-    loss = criterion(responses, outputs)
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss
     result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
     return result
@@ -157,7 +157,7 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = get_model(args, ds=train_ds, summary=summary)
-    criterion = losses.get_criterion(args)
+    criterion = losses.get_criterion(args, ds=train_ds)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
@@ -280,6 +280,12 @@ if __name__ == "__main__":
         default="poisson",
         type=str,
         help="criterion (loss function) to use.",
+    )
+    parser.add_argument(
+        "--depth_scale",
+        default=1.0,
+        type=float,
+        help="the coefficient to scale loss for neurons in depth of 240 to 260.",
     )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(
