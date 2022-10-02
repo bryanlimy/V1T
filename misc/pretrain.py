@@ -9,6 +9,7 @@ from tqdm import tqdm
 from time import time
 from PIL import Image
 from shutil import rmtree
+import torch.nn.functional as F
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 
@@ -178,7 +179,6 @@ def train(
     ds: DataLoader,
     model: nn.Module,
     optimizer: torch.optim,
-    criterion: nn.NLLLoss,
     summary: tensorboard.Summary,
     epoch: int,
 ):
@@ -190,7 +190,7 @@ def train(
         images = data["image"].to(model.device)
         labels = data["label"].to(model.device)
         outputs = model(images)
-        loss = criterion(outputs, labels)
+        loss = F.nll_loss(input=outputs, target=labels)
         reg_loss = model.regularizer()
         total_loss = loss + args.reg_scale * reg_loss
         total_loss.backward()
@@ -199,9 +199,9 @@ def train(
         utils.update_dict(
             results,
             {
-                "loss": loss.detach(),
-                "reg_loss": reg_loss.detach(),
-                "total_loss": total_loss.detach(),
+                "loss/loss": loss.item(),
+                "loss/reg_loss": reg_loss.item(),
+                "loss/total_loss": total_loss.item(),
                 "accuracy": num_correct(labels, predictions),
             },
         )
@@ -219,7 +219,6 @@ def validate(
     args,
     ds: DataLoader,
     model: nn.Module,
-    criterion: nn.NLLLoss,
     summary: tensorboard.Summary,
     epoch: int,
     mode: int = 1,
@@ -231,16 +230,16 @@ def validate(
         images = data["image"].to(model.device)
         labels = data["label"].to(model.device)
         outputs = model(images)
-        loss = criterion(outputs, labels)
+        loss = F.nll_loss(input=outputs, target=labels)
         reg_loss = model.regularizer()
         total_loss = loss + args.reg_scale * reg_loss
         predictions = torch.argmax(outputs, dim=1)
         utils.update_dict(
             results,
             {
-                "loss": loss.detach(),
-                "reg_loss": reg_loss.detach(),
-                "total_loss": total_loss.detach(),
+                "loss/loss": loss.item(),
+                "loss/reg_loss": reg_loss.item(),
+                "loss/total_loss": total_loss.item(),
                 "accuracy": num_correct(labels, predictions),
             },
         )
@@ -300,7 +299,6 @@ def main(args):
     if summary is not None:
         summary.scalar("model/trainable_parameters", model_info.trainable_params)
 
-    criterion = nn.NLLLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
@@ -326,17 +324,11 @@ def main(args):
             ds=train_ds,
             model=model,
             optimizer=optimizer,
-            criterion=criterion,
             epoch=epoch,
             summary=summary,
         )
         val_results = validate(
-            args,
-            ds=val_ds,
-            model=model,
-            criterion=criterion,
-            epoch=epoch,
-            summary=summary,
+            args, ds=val_ds, model=model, epoch=epoch, summary=summary
         )
 
         elapse = time() - start
@@ -349,16 +341,16 @@ def main(args):
             mode=0,
         )
         print(
-            f'Train\t\t\tloss: {train_results["loss"]:.04f}\t'
+            f'Train\t\t\tloss: {train_results["loss/total_loss"]:.04f}\t'
             f'accuracy: {train_results["accuracy"]:.04f}\n'
-            f'Validation\t\tloss: {val_results["loss"]:.04f}\t'
+            f'Validation\t\tloss: {val_results["loss/total_loss"]:.04f}\t'
             f'accuracy: {val_results["accuracy"]:.04f}\n'
             f"Elapse: {elapse:.02f}s"
         )
 
-        scheduler.step(val_results["loss"])
+        scheduler.step(val_results["loss/total_loss"])
 
-        if checkpoint.monitor(loss=val_results["loss"], epoch=epoch):
+        if checkpoint.monitor(loss=val_results["loss/total_loss"], epoch=epoch):
             break
 
     checkpoint.restore()
@@ -367,7 +359,6 @@ def main(args):
         args,
         ds=test_ds,
         model=model,
-        criterion=criterion,
         summary=summary,
         epoch=epoch,
         mode=2,
