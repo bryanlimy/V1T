@@ -24,6 +24,7 @@ from glob import glob
 from sklearn.model_selection import train_test_split
 
 IMAGE_SIZE = (1, 144, 256)
+NUM_CLASSES = 1000
 
 
 class ImageNet(Dataset):
@@ -37,10 +38,8 @@ class ImageNet(Dataset):
 
     def __getitem__(self, item: t.Union[int, torch.Tensor]):
         filename, label = str(self._filenames[item]), self._labels[item]
-        image = Image.open(filename).convert("RGB")
+        image = Image.open(filename).convert("L")  # load image in grayscale
         image = transforms.ToTensor()(image)
-        if image.shape[0] != 1:
-            image = transforms.Grayscale()(image)
         image = transforms.Resize(size=IMAGE_SIZE[1:])(image)
         image = transforms.Normalize([0.449], [0.226])(image)
         return {"image": image, "label": label.type(torch.LongTensor)}
@@ -82,7 +81,7 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     )
 
     args.input_shape = IMAGE_SIZE
-    args.output_shape = (1000,)
+    args.output_shape = (NUM_CLASSES,)
 
     return train_ds, val_ds, test_ds
 
@@ -168,7 +167,7 @@ def train(
         total_loss += loss.detach()
         correct += num_correct(labels, predictions)
     results = {
-        "loss": total_loss / len(ds.dataset),
+        "loss": total_loss / len(ds),
         "accuracy": 100 * (correct / len(ds.dataset)),
     }
     for k, v in results.items():
@@ -196,7 +195,7 @@ def validate(
         total_loss += loss.detach()
         correct += num_correct(labels, predictions)
     results = {
-        "loss": total_loss / len(ds.dataset),
+        "loss": total_loss / len(ds),
         "accuracy": 100 * (correct / len(ds.dataset)),
     }
     for k, v in results.items():
