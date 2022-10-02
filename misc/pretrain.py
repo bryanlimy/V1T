@@ -183,7 +183,6 @@ def train(
         v = torch.stack(v)
         if k == "correct":
             results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
-            del results["correct"]
         else:
             results[k] = v.mean()
         summary.scalar(k, value=results[k], step=epoch, mode=0)
@@ -222,7 +221,6 @@ def validate(
         v = torch.stack(v)
         if k == "correct":
             results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
-            del results["correct"]
         else:
             results[k] = v.mean()
         summary.scalar(k, value=results[k], step=epoch, mode=mode)
