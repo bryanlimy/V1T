@@ -184,7 +184,6 @@ def train(
 ):
     results = {}
     model.train(True)
-    model.requires_grad_(True)
     for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
         optimizer.zero_grad()
         images = data["image"].to(model.device)
@@ -224,36 +223,36 @@ def validate(
     mode: int = 1,
 ):
     results, make_plot = {}, True
-    model.train(False)
-    model.requires_grad_(False)
-    for data in tqdm(ds, desc="Val", disable=args.verbose == 0):
-        images = data["image"].to(model.device)
-        labels = data["label"].to(model.device)
-        outputs = model(images)
-        loss = F.nll_loss(input=outputs, target=labels)
-        reg_loss = model.regularizer()
-        total_loss = loss + args.reg_scale * reg_loss
-        predictions = torch.argmax(outputs, dim=1)
-        utils.update_dict(
-            results,
-            {
-                "loss/loss": loss.detach(),
-                "loss/reg_loss": reg_loss.detach(),
-                "loss/total_loss": total_loss.detach(),
-                "accuracy": num_correct(labels, predictions),
-            },
-        )
-        if make_plot:
-            plot_image(
-                args,
-                images=ds.dataset.i_transform_image(images.cpu()),
-                predictions=predictions,
-                labels=labels.cpu(),
-                summary=summary,
-                epoch=epoch,
-                mode=mode,
+    with torch.no_grad():
+        model.train(False)
+        for data in tqdm(ds, desc="Val", disable=args.verbose == 0):
+            images = data["image"].to(model.device)
+            labels = data["label"].to(model.device)
+            outputs = model(images)
+            loss = F.nll_loss(input=outputs, target=labels)
+            reg_loss = model.regularizer()
+            total_loss = loss + args.reg_scale * reg_loss
+            predictions = torch.argmax(outputs, dim=1)
+            utils.update_dict(
+                results,
+                {
+                    "loss/loss": loss.detach(),
+                    "loss/reg_loss": reg_loss.detach(),
+                    "loss/total_loss": total_loss.detach(),
+                    "accuracy": num_correct(labels, predictions),
+                },
             )
-            make_plot = False
+            if make_plot:
+                plot_image(
+                    args,
+                    images=ds.dataset.i_transform_image(images.cpu()),
+                    predictions=predictions,
+                    labels=labels.cpu(),
+                    summary=summary,
+                    epoch=epoch,
+                    mode=mode,
+                )
+                make_plot = False
     for k, v in results.items():
         v = torch.stack(v)
         if k == "accuracy":
