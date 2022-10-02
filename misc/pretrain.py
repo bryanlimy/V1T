@@ -176,12 +176,12 @@ def train(
                 "loss": loss.detach(),
                 "reg_loss": reg_loss.detach(),
                 "total_loss": total_loss.detach(),
-                "correct": num_correct(labels, predictions),
+                "accuracy": num_correct(labels, predictions),
             },
         )
     for k, v in results.items():
         v = torch.stack(v)
-        if k == "correct":
+        if k == "accuracy":
             results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
         else:
             results[k] = v.mean()
@@ -214,12 +214,12 @@ def validate(
                 "loss": loss.detach(),
                 "reg_loss": reg_loss.detach(),
                 "total_loss": total_loss.detach(),
-                "correct": num_correct(labels, predictions),
+                "accuracy": num_correct(labels, predictions),
             },
         )
     for k, v in results.items():
         v = torch.stack(v)
-        if k == "correct":
+        if k == "accuracy":
             results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
         else:
             results[k] = v.mean()
