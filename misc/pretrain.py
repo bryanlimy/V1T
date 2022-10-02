@@ -157,7 +157,7 @@ def train(
     summary: tensorboard.Summary,
     epoch: int,
 ):
-    results = {"loss": [], "correct": []}
+    results = {}
     model.train(True)
     model.requires_grad_(True)
     for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
