@@ -5,7 +5,6 @@ import torchinfo
 import typing as t
 import numpy as np
 from torch import nn
-import torchvision.io
 from tqdm import tqdm
 from time import time
 from PIL import Image
@@ -13,12 +12,11 @@ from shutil import rmtree
 from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 
-import torchvision.transforms.functional as F
 
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
-from sensorium.models.utils import conv2d_output_shape
+from sensorium.models import utils as model_utils
 
 from glob import glob
 from sklearn.model_selection import train_test_split
@@ -26,22 +24,52 @@ from sklearn.model_selection import train_test_split
 IMAGE_SIZE = (1, 144, 256)
 NUM_CLASSES = 1000
 
+import matplotlib.pyplot as plt
+
+
+def plot_image(
+    args,
+    images: torch.Tensor,
+    predictions: torch.Tensor,
+    labels: torch.Tensor,
+    summary: tensorboard.Summary,
+    epoch: int,
+    mode: int = 1,
+    num_plots: int = 5,
+):
+    for i in range(min(num_plots, len(images))):
+        figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=args.dpi)
+        ax.imshow(images[i][0], cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
+        ax.set_title(
+            f"label: {labels[i]}   prediction: {predictions[i]}", pad=4, fontsize=10
+        )
+        summary.figure(f"images/image{i:03d}", figure=figure, step=epoch, mode=mode)
+
 
 class ImageNet(Dataset):
     def __init__(self, filenames: np.ndarray, labels: np.ndarray):
         super(ImageNet, self).__init__()
         self._filenames = filenames
         self._labels = torch.from_numpy(labels)
+        # mean and standard deviation of ImageNet train set in grayscale
+        self._mean = torch.tensor(0.44531356896770125)
+        self._std = torch.tensor(0.2692461874154524)
 
     def __len__(self):
         return len(self._labels)
+
+    def transform_image(self, image: torch.Tensor):
+        return (image - self._mean) / self._std
+
+    def i_transform_image(self, image: torch.Tensor):
+        return image * self._std + self._mean
 
     def __getitem__(self, item: t.Union[int, torch.Tensor]):
         filename, label = str(self._filenames[item]), self._labels[item]
         image = Image.open(filename).convert("L")  # load image in grayscale
         image = transforms.ToTensor()(image)
         image = transforms.Resize(size=IMAGE_SIZE[1:])(image)
-        image = transforms.Normalize([0.449], [0.226])(image)
+        image = self.transform_image(image)
         return {"image": image, "label": label.type(torch.LongTensor)}
 
 
@@ -99,12 +127,14 @@ class Model(nn.Module):
 
         core_shape = self.core.shape
 
-        output_shape = conv2d_output_shape(
-            input_shape=core_shape, num_filters=20, kernel_size=5
+        output_shape = model_utils.conv2d_shape(
+            input_shape=core_shape,
+            num_filters=20,
+            kernel_size=5,
+            stride=2,
         )
-        output_shape = (output_shape[0], output_shape[1] // 2, output_shape[2] // 2)
-        output_shape = conv2d_output_shape(
-            input_shape=output_shape, num_filters=10, kernel_size=5
+        output_shape = model_utils.pool2d_shape(
+            input_shape=output_shape, kernel_size=2, stride=2
         )
 
         self.readout = nn.Sequential(
@@ -112,14 +142,9 @@ class Model(nn.Module):
                 in_channels=core_shape[0],
                 out_channels=20,
                 kernel_size=5,
+                stride=2,
             ),
             nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.GELU(),
-            nn.Conv2d(
-                in_channels=20,
-                out_channels=10,
-                kernel_size=5,
-            ),
             nn.GELU(),
             nn.Flatten(),
             nn.Linear(
@@ -145,7 +170,7 @@ class Model(nn.Module):
 
 
 def num_correct(y_true: torch.Tensor, y_pred: torch.Tensor):
-    return (torch.argmax(y_pred.detach(), dim=1) == y_true.detach()).float().sum()
+    return (y_pred == y_true).float().sum()
 
 
 def train(
@@ -164,12 +189,13 @@ def train(
         optimizer.zero_grad()
         images = data["image"].to(model.device)
         labels = data["label"].to(model.device)
-        predictions = model(images)
-        loss = criterion(predictions, labels)
+        outputs = model(images)
+        loss = criterion(outputs, labels)
         reg_loss = model.regularizer()
         total_loss = loss + args.reg_scale * reg_loss
         total_loss.backward()
         optimizer.step()
+        predictions = torch.argmax(outputs, dim=1)
         utils.update_dict(
             results,
             {
@@ -198,16 +224,18 @@ def validate(
     epoch: int,
     mode: int = 1,
 ):
-    results = {}
+    results, make_plot = {}, True
     model.train(False)
     model.requires_grad_(False)
     for data in tqdm(ds, desc="Val", disable=args.verbose == 0):
         images = data["image"].to(model.device)
         labels = data["label"].to(model.device)
-        predictions = model(images)
-        loss = criterion(predictions, labels)
+        outputs = model(images)
+
+        loss = criterion(outputs, labels)
         reg_loss = model.regularizer()
         total_loss = loss + args.reg_scale * reg_loss
+        predictions = torch.argmax(outputs, dim=1)
         utils.update_dict(
             results,
             {
@@ -217,6 +245,17 @@ def validate(
                 "accuracy": num_correct(labels, predictions),
             },
         )
+        if make_plot:
+            plot_image(
+                args,
+                images=ds.dataset.i_transform_image(images.cpu()),
+                predictions=predictions,
+                labels=labels.cpu(),
+                summary=summary,
+                epoch=epoch,
+                mode=mode,
+            )
+            make_plot = False
     for k, v in results.items():
         v = torch.stack(v)
         if k == "accuracy":

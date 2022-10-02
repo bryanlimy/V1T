@@ -31,7 +31,7 @@ class ConvCore(Core):
             nn.GELU(),
             nn.Dropout2d(p=args.dropout),
         )
-        output_shape = utils.conv2d_output_shape(
+        output_shape = utils.conv2d_shape(
             output_shape,
             num_filters=args.num_filters,
             kernel_size=kernel_size,
@@ -50,7 +50,7 @@ class ConvCore(Core):
             nn.GELU(),
             nn.Dropout2d(p=args.dropout),
         )
-        output_shape = utils.conv2d_output_shape(
+        output_shape = utils.conv2d_shape(
             output_shape,
             num_filters=args.num_filters * 2,
             kernel_size=kernel_size,
@@ -68,7 +68,7 @@ class ConvCore(Core):
             nn.GELU(),
             nn.Dropout2d(p=args.dropout),
         )
-        output_shape = utils.conv2d_output_shape(
+        output_shape = utils.conv2d_shape(
             output_shape,
             num_filters=args.num_filters * 3,
             kernel_size=kernel_size,
