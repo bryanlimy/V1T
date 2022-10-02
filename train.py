@@ -17,8 +17,9 @@ from sensorium.utils.checkpoint import Checkpoint
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    trial_correlation = metrics.correlation(y1=y_true, y2=y_pred, dim=0)
-    return {"metrics/trial_correlation": torch.mean(trial_correlation)}
+    y_true, y_pred = y_true.detach().cpu(), y_pred.detach().cpu()
+    trial_corr = metrics.correlation(y1=y_true, y2=y_pred, axis=None)
+    return {"metrics/trial_correlation": torch.tensor(trial_corr)}
 
 
 def train_step(
@@ -44,7 +45,7 @@ def train_step(
             "loss/loss": loss.detach(),
             "loss/reg_loss": reg_loss.detach(),
             "loss/total_loss": total_loss.detach(),
-            **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+            **compute_metrics(y_true=responses, y_pred=outputs),
         }
     total_loss = torch.sum(torch.stack(all_loss))
     total_loss.backward()
@@ -103,7 +104,7 @@ def validation_step(
     outputs = model(images, mouse_id=mouse_id)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss
-    result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
+    result.update(compute_metrics(y_true=responses, y_pred=outputs))
     return result
 
 
@@ -116,28 +117,28 @@ def validate(
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
-    model.requires_grad_(False)
     results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
-        for mouse_id, mouse_ds in ds.items():
-            mouse_result = {}
-            for data in mouse_ds:
-                result = validation_step(
+        with torch.no_grad():
+            for mouse_id, mouse_ds in ds.items():
+                mouse_result = {}
+                for data in mouse_ds:
+                    result = validation_step(
+                        mouse_id=mouse_id,
+                        data=data,
+                        model=model,
+                        criterion=criterion,
+                    )
+                    utils.update_dict(mouse_result, result)
+                    pbar.update(1)
+                utils.log_metrics(
+                    results=mouse_result,
+                    epoch=epoch,
+                    mode=1,
+                    summary=summary,
                     mouse_id=mouse_id,
-                    data=data,
-                    model=model,
-                    criterion=criterion,
                 )
-                utils.update_dict(mouse_result, result)
-                pbar.update(1)
-            utils.log_metrics(
-                results=mouse_result,
-                epoch=epoch,
-                mode=1,
-                summary=summary,
-                mouse_id=mouse_id,
-            )
-            results[mouse_id] = mouse_result
+                results[mouse_id] = mouse_result
     utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
     return results
 

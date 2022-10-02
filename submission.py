@@ -47,13 +47,13 @@ def inference(
     Return:
         results: t.Dict[str, t.List[t.List[float, int or str]]
             - predictions: t.List[t.List[float]], predictions given images
-            - frame_ids: t.List[t.List[int]], frame (image) ID of the responses
+            - image_ids: t.List[t.List[int]], frame (image) ID of the responses
             - trial_ids: t.List[t.List[str]], trial ID of the responses
             - neuron_ids: t.List[t.List[int]], neuron IDs of the responses
     """
     results = {
         "predictions": [],
-        "frame_ids": [],
+        "image_ids": [],
         "trial_ids": [],
     }
     model.train(False)
@@ -62,7 +62,7 @@ def inference(
         images = data["image"].to(device)
         predictions = model(images, mouse_id=mouse_id)
         results["predictions"].extend(predictions.detach().cpu().numpy().tolist())
-        results["frame_ids"].extend(data["frame_id"].numpy().tolist())
+        results["image_ids"].extend(data["image_id"].numpy().tolist())
         results["trial_ids"].extend(data["trial_id"])
     # create neuron IDs for each prediction
     results["neuron_ids"] = np.repeat(
@@ -135,14 +135,7 @@ def main(args):
     checkpoint.restore(force=True)
 
     # run evaluation on test set for all mouse
-    # eval_results = utils.evaluate(args, ds=test_ds, model=model)
-    # print(f"Single trial correlation")
-    # print(
-    #     *[
-    #         f"Mouse {mouse_id}: {result:.04f}\t"
-    #         for mouse_id, result in eval_results["trial_correlation"].items()
-    #     ]
-    # )
+    utils.evaluate(args, ds=test_ds, model=model, print_result=True)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
