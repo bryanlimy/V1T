@@ -290,7 +290,7 @@ def main(args):
             f"Elapse: {elapse:.02f}s"
         )
 
-        scheduler.step(val_results["loss/loss"])
+        scheduler.step(val_results["loss"])
 
         if checkpoint.monitor(loss=val_results["loss"], epoch=epoch):
             break
