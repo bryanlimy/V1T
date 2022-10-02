@@ -19,7 +19,7 @@ class SpatialTransformerCore(Core):
     def __init__(
         self,
         args,
-        input_shape: t.Tuple[int],
+        input_shape: t.Tuple[int, int, int],
         name: str = "SpatialTransformerCore",
     ):
         super(SpatialTransformerCore, self).__init__(

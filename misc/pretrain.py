@@ -134,6 +134,10 @@ class Model(nn.Module):
             nn.LogSoftmax(dim=1),
         )
 
+    def regularizer(self):
+        """L1 regularization"""
+        return sum(p.abs().sum() for p in self.parameters())
+
     def forward(self, inputs: torch.Tensor):
         outputs = self.core(inputs)
         outputs = self.readout(outputs)
@@ -153,7 +157,7 @@ def train(
     summary: tensorboard.Summary,
     epoch: int,
 ):
-    total_loss, correct = 0, 0
+    results = {"loss": [], "correct": []}
     model.train(True)
     model.requires_grad_(True)
     for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
@@ -162,15 +166,25 @@ def train(
         labels = data["label"].to(model.device)
         predictions = model(images)
         loss = criterion(predictions, labels)
-        loss.backward()
+        reg_loss = model.regularizer()
+        total_loss = loss + args.reg_scale * reg_loss
+        total_loss.backward()
         optimizer.step()
-        total_loss += loss.detach()
-        correct += num_correct(labels, predictions)
-    results = {
-        "loss": total_loss / len(ds),
-        "accuracy": 100 * (correct / len(ds.dataset)),
-    }
+        utils.update_dict(
+            results,
+            {
+                "loss": loss.detach(),
+                "reg_loss": reg_loss.detach(),
+                "total_loss": total_loss.detach(),
+                "correct": num_correct(labels, predictions),
+            },
+        )
     for k, v in results.items():
+        v = torch.stack(v)
+        if k == "correct":
+            results[k] = 100 * (v.sum() / len(ds.dataset))
+        else:
+            results[k] = v.mean()
         summary.scalar(k, value=results[k], step=epoch, mode=0)
     return results
 
@@ -184,7 +198,7 @@ def validate(
     epoch: int,
     mode: int = 1,
 ):
-    total_loss, correct = 0, 0
+    results = {}
     model.train(False)
     model.requires_grad_(False)
     for data in tqdm(ds, desc="Val", disable=args.verbose == 0):
@@ -192,13 +206,23 @@ def validate(
         labels = data["label"].to(model.device)
         predictions = model(images)
         loss = criterion(predictions, labels)
-        total_loss += loss.detach()
-        correct += num_correct(labels, predictions)
-    results = {
-        "loss": total_loss / len(ds),
-        "accuracy": 100 * (correct / len(ds.dataset)),
-    }
+        reg_loss = model.regularizer()
+        total_loss = loss + args.reg_scale * reg_loss
+        utils.update_dict(
+            results,
+            {
+                "loss": loss.detach(),
+                "reg_loss": reg_loss.detach(),
+                "total_loss": total_loss.detach(),
+                "correct": num_correct(labels, predictions),
+            },
+        )
     for k, v in results.items():
+        v = torch.stack(v)
+        if k == "correct":
+            results[k] = 100 * (v.sum() / len(ds.dataset))
+        else:
+            results[k] = v.mean()
         summary.scalar(k, value=results[k], step=epoch, mode=mode)
     return results
 
@@ -350,6 +374,12 @@ if __name__ == "__main__":
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
     parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument(
+        "--reg_scale",
+        default=0,
+        type=float,
+        help="weight regularization coefficient.",
+    )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(
         "--device",
