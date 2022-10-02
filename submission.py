@@ -21,7 +21,7 @@ def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
         {
             "trial_indices": results["trial_ids"],
             "image_ids": results["frame_ids"],
-            "responses": results["predictions"],
+            "prediction": results["predictions"],
             "neuron_ids": results["neuron_ids"],
         }
     )
