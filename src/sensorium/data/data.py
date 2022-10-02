@@ -90,6 +90,7 @@ def load_mouse_metadata(mouse_dir: str):
     metadata = {
         "mouse_dir": mouse_dir,
         "num_neurons": len(load_neuron("unit_ids.npy")),
+        "neuron_ids": load_neuron("unit_ids.npy").astype(np.int32),
         "coordinates": load_neuron("cell_motor_coordinates.npy").astype(np.int32),
         "frame_id": load_trial("frame_image_id.npy").astype(np.int32),
         "tiers": load_trial("tiers.npy"),
@@ -153,7 +154,7 @@ class MiceDataset(Dataset):
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
         self.mouse_dir = metadata["mouse_dir"]
-        self.num_neurons = metadata["num_neurons"]
+        self.neuron_ids = metadata["neuron_ids"]
         self.coordinates = metadata["coordinates"]
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
@@ -170,6 +171,10 @@ class MiceDataset(Dataset):
 
     def __len__(self):
         return len(self.indexes)
+
+    @property
+    def num_neurons(self):
+        return len(self.neuron_ids)
 
     def shuffle(self):
         """

@@ -2,6 +2,7 @@ import os
 import torch
 import argparse
 import typing as t
+import numpy as np
 import pandas as pd
 from torch import nn
 from tqdm import tqdm
@@ -64,9 +65,11 @@ def inference(
         results["frame_ids"].extend(data["frame_id"].numpy().tolist())
         results["trial_ids"].extend(data["trial_id"])
     # create neuron IDs for each prediction
-    results["neuron_ids"] = [list(range(1, ds.dataset.num_neurons + 1))] * len(
-        results["predictions"]
-    )
+    results["neuron_ids"] = np.repeat(
+        np.expand_dims(ds.dataset.neuron_ids, axis=0),
+        repeats=len(results["predictions"]),
+        axis=0,
+    ).tolist()
     return results
 
 
@@ -132,14 +135,14 @@ def main(args):
     checkpoint.restore(force=True)
 
     # run evaluation on test set for all mouse
-    eval_results = utils.evaluate(args, ds=test_ds, model=model)
-    print(f"Single trial correlation")
-    print(
-        *[
-            f"Mouse {mouse_id}: {result:.04f}\t"
-            for mouse_id, result in eval_results["trial_correlation"].items()
-        ]
-    )
+    # eval_results = utils.evaluate(args, ds=test_ds, model=model)
+    # print(f"Single trial correlation")
+    # print(
+    #     *[
+    #         f"Mouse {mouse_id}: {result:.04f}\t"
+    #         for mouse_id, result in eval_results["trial_correlation"].items()
+    #     ]
+    # )
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
