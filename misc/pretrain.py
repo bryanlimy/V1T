@@ -141,9 +141,8 @@ class Model(nn.Module):
         return outputs
 
 
-def accuracy(y_true: torch.Tensor, y_pred: torch.Tensor):
-    correct = torch.argmax(y_pred.detach(), dim=-1) == y_true.detach()
-    return torch.mean(correct.float()) * 100
+def num_correct(y_true: torch.Tensor, y_pred: torch.Tensor):
+    return (torch.argmax(y_pred.detach(), dim=1) == y_true.detach()).float().sum()
 
 
 def train(
@@ -155,7 +154,7 @@ def train(
     summary: tensorboard.Summary,
     epoch: int,
 ):
-    results = {"loss": [], "accuracy": []}
+    total_loss, correct = 0, 0
     model.train(True)
     model.requires_grad_(True)
     for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
@@ -164,12 +163,15 @@ def train(
         labels = data["label"].to(model.device)
         predictions = model(images)
         loss = criterion(predictions, labels)
-        results["loss"].append(loss.detach())
-        results["accuracy"].append(accuracy(labels, predictions))
         loss.backward()
         optimizer.step()
+        total_loss += loss.detach()
+        correct += num_correct(labels, predictions)
+    results = {
+        "loss": total_loss / len(ds.dataset),
+        "accuracy": 100 * (correct / len(ds.dataset)),
+    }
     for k, v in results.items():
-        results[k] = torch.stack(v).mean()
         summary.scalar(k, value=results[k], step=epoch, mode=0)
     return results
 
@@ -183,7 +185,7 @@ def validate(
     epoch: int,
     mode: int = 1,
 ):
-    results = {"loss": [], "accuracy": []}
+    total_loss, correct = 0, 0
     model.train(False)
     model.requires_grad_(False)
     for data in tqdm(ds, desc="Val", disable=args.verbose == 0):
@@ -191,10 +193,13 @@ def validate(
         labels = data["label"].to(model.device)
         predictions = model(images)
         loss = criterion(predictions, labels)
-        results["loss"].append(loss.detach())
-        results["accuracy"].append(accuracy(labels, predictions))
+        total_loss += loss.detach()
+        correct += num_correct(labels, predictions)
+    results = {
+        "loss": total_loss / len(ds.dataset),
+        "accuracy": 100 * (correct / len(ds.dataset)),
+    }
     for k, v in results.items():
-        results[k] = torch.stack(v).mean()
         summary.scalar(k, value=results[k], step=epoch, mode=mode)
     return results
 
