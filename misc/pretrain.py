@@ -84,8 +84,6 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     filenames = sorted(glob(os.path.join(data_dir, "*.JPEG")))
     filenames = np.array(filenames)
 
-    filenames, labels = filenames[:500], labels[:500]
-
     size = len(labels)
     # shuffle train, validation test set
     indexes = np.arange(size)
