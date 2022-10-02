@@ -142,8 +142,8 @@ class Model(nn.Module):
 
 
 def accuracy(y_true: torch.Tensor, y_pred: torch.Tensor):
-    y_pred = torch.exp(y_pred.detach())
-    return (torch.argmax(y_pred, dim=-1) == y_true.detach()).float().sum()
+    correct = torch.argmax(y_pred.detach(), dim=-1) == y_true.detach()
+    return torch.mean(correct.float()) * 100
 
 
 def train(
@@ -286,7 +286,7 @@ def main(args):
             f'Train\t\t\tloss: {train_results["loss"]:.04f}\t'
             f'accuracy: {train_results["accuracy"]:.04f}\n'
             f'Validation\t\tloss: {val_results["loss"]:.04f}\t'
-            f'correlation: {val_results["accuracy"]:.04f}\n'
+            f'accuracy: {val_results["accuracy"]:.04f}\n'
             f"Elapse: {elapse:.02f}s"
         )
 
