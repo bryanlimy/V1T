@@ -231,7 +231,6 @@ def validate(
         images = data["image"].to(model.device)
         labels = data["label"].to(model.device)
         outputs = model(images)
-
         loss = criterion(outputs, labels)
         reg_loss = model.regularizer()
         total_loss = loss + args.reg_scale * reg_loss
