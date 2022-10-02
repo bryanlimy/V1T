@@ -63,9 +63,9 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     val_idx, test_idx = train_test_split(val_idx, test_size=0.5, shuffle=True)
 
     # settings for DataLoader
-    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 2}
+    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 4}
     if device.type in ["cuda", "mps"]:
-        gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
+        gpu_kwargs = {"prefetch_factor": 4, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
 
     train_ds = DataLoader(
