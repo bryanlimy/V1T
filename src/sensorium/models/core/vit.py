@@ -45,12 +45,15 @@ class Attention(nn.Module):
         self.scale = dim_head**-0.5
 
         self.attend = nn.Softmax(dim=-1)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(p=dropout)
 
         self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
         self.to_out = (
-            nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout))
+            nn.Sequential(
+                nn.Linear(in_features=inner_dim, out_features=dim),
+                nn.Dropout(p=dropout),
+            )
             if project_out
             else nn.Identity()
         )

@@ -46,36 +46,52 @@ def plot_image(
 
 
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
-    image_ds = ImageFolder(
-        root=data_dir,
-        transform=transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Grayscale(),
-                transforms.Resize(size=(IMAGE_SIZE[1:])),
-                transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
-            ]
-        ),
+    train_transforms = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Grayscale(),
+            transforms.RandomCrop(size=(IMAGE_SIZE[1:]), pad_if_needed=True),
+            transforms.RandomHorizontalFlip(p=0.25),
+            transforms.RandomAdjustSharpness(sharpness_factor=0.6, p=0.25),
+            transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
+        ]
+    )
+    test_transforms = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Grayscale(),
+            transforms.RandomCrop(size=(IMAGE_SIZE[1:]), pad_if_needed=True),
+            transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
+        ]
     )
 
-    size = len(image_ds)
+    train_data = ImageFolder(root=data_dir, transform=train_transforms)
+    val_data = ImageFolder(root=data_dir, transform=test_transforms)
+    test_data = ImageFolder(root=data_dir, transform=test_transforms)
 
-    # split images into train-val-test with ratio of 70%-15%-15%
-    train_ds, val_ds, test_ds = data.random_split(
-        image_ds,
-        lengths=[int(size * 0.7), int(size * 0.15), int(size * 0.15)],
-        generator=torch.Generator().manual_seed(args.seed),
-    )
+    size = len(train_data)
+    indexes = np.arange(size)
+    np.random.shuffle(indexes)
+
+    train_idx = indexes[: int(size * 0.7)]
+    val_idx = indexes[int(size * 0.7) : int(size * 0.85)]
+    test_idx = indexes[int(size * 0.85) :]
 
     # settings for DataLoader
-    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 4}
+    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 2}
     if device.type in ["cuda", "mps"]:
         gpu_kwargs = {"prefetch_factor": 4, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
 
-    train_ds = data.DataLoader(train_ds, shuffle=True, **dataloader_kwargs)
-    val_ds = data.DataLoader(val_ds, **dataloader_kwargs)
-    test_ds = data.DataLoader(test_ds, **dataloader_kwargs)
+    train_ds = data.DataLoader(
+        train_data, sampler=data.SubsetRandomSampler(train_idx), **dataloader_kwargs
+    )
+    val_ds = data.DataLoader(
+        val_data, sampler=data.SubsetRandomSampler(val_idx), **dataloader_kwargs
+    )
+    test_ds = data.DataLoader(
+        test_data, sampler=data.SubsetRandomSampler(test_idx), **dataloader_kwargs
+    )
 
     args.input_shape = IMAGE_SIZE
     args.output_shape = (NUM_CLASSES,)
