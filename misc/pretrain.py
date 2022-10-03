@@ -12,14 +12,12 @@ from torch.utils import data
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from torchvision import transforms
-from torchvision.datasets import ImageFolder
-
 from einops.layers.torch import Reduce
+from torchvision.datasets import ImageFolder
 
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
-from sensorium.models import utils as model_utils
 
 
 IMAGE_SIZE = (1, 144, 256)
@@ -245,7 +243,7 @@ def main(args):
         optimizer=optimizer,
         mode="min",
         factor=0.5,
-        patience=10,
+        patience=5,
         threshold_mode="rel",
         min_lr=1e-6,
         verbose=False,

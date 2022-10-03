@@ -29,9 +29,9 @@ def FeedForward(
     return nn.Sequential(
         layer(dim, inner_dim),
         nn.GELU(),
-        nn.Dropout(dropout),
+        nn.Dropout(p=dropout),
         layer(inner_dim, dim),
-        nn.Dropout(dropout),
+        nn.Dropout(p=dropout),
     )
 
 
