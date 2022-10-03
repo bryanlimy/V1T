@@ -15,17 +15,17 @@ def correlation(
     """
     Compute the correlation between two NumPy arrays along the specified dimension(s).
     """
-    if isinstance(y1, torch.Tensor):
-        y1 = y1.numpy()
-    if isinstance(y2, torch.Tensor):
-        y2 = y2.numpy()
+    is_tensor = isinstance(y1, torch.Tensor)
+    if is_tensor:
+        y1, y2 = y1.numpy(), y2.numpy()
     y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (
         y1.std(axis=axis, keepdims=True, ddof=0) + eps
     )
     y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (
         y2.std(axis=axis, keepdims=True, ddof=0) + eps
     )
-    return (y1 * y2).mean(axis=axis, **kwargs)
+    corr = (y1 * y2).mean(axis=axis, **kwargs)
+    return torch.from_numpy(corr) if is_tensor else corr
 
 
 class Metrics:
