@@ -1,7 +1,7 @@
 from .core import register, Core
 
 import torch
-import numpy as np
+import typing as t
 from torch import nn
 
 from sensorium.models import utils
@@ -12,7 +12,7 @@ class ConvCore(Core):
     def __init__(
         self,
         args,
-        input_shape: tuple,
+        input_shape: t.Tuple[int, int, int],
         kernel_size: int = 3,
         stride: int = 2,
         name: str = "ConvCore",
