@@ -40,9 +40,8 @@ class Metrics:
         self.image_ids = results["image_ids"].numpy()
         self.neuron_ids = deepcopy(ds.dataset.neuron_ids)
         self.trial_ids = results["trial_ids"]
-        if isinstance(self.trial_ids, torch.Tensor):
-            self.trial_ids = self.trial_ids.numpy()
         if not self.hashed:
+            self.trial_ids = self.trial_ids.numpy()
             self.order()
 
     def order(self):
@@ -63,7 +62,6 @@ class Metrics:
         Split the responses (or predictions) array based on image ids.
         Each element of the list contains the responses to repeated
         presentations of a single image.
-
         Returns:
             targets: t.List[np.ndarray]: a list of array where each tensor
                 is the target responses from repeated images.
@@ -80,7 +78,6 @@ class Metrics:
     def single_trial_correlation(self, per_neuron: bool = False):
         """
         Compute single-trial correlation.
-
         Returns:
             corr: t.Union[float, np.ndarray], single trial correlation
         """
@@ -90,7 +87,6 @@ class Metrics:
     def correlation_to_average(self, per_neuron: bool = False):
         """
         Compute correlation to average response across repeats.
-
         Returns:
             np.array or float: Correlation (average across repeats) between responses and predictions
         """
@@ -113,7 +109,6 @@ class Metrics:
     ):
         """
         Compute the fraction of explainable variance explained per neuron
-
         Args:
             targets (array-like): Neuronal neuron responses (ground truth) to image repeats. Dimensions:
                 [num_images] np.array(num_repeats, num_neurons)
@@ -142,7 +137,6 @@ class Metrics:
     def feve(self, per_neuron: bool = False, fev_threshold: float = 0.15):
         """
         Compute fraction of explainable variance explained
-
         Returns:
             fevl_val: t.Union[float, np.ndarray], FEVE value
         """
@@ -154,8 +148,6 @@ class Metrics:
             predictions=repeat_predictions,
             return_exp_var=True,
         )
-
         # ignore neurons below FEV threshold
         feve_val = feve_val[fev_val >= fev_threshold]
-
         return feve_val if per_neuron else feve_val.mean()

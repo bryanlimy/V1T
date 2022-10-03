@@ -8,7 +8,6 @@ import typing as t
 import pandas as pd
 from torch import nn
 from tqdm import tqdm
-from glob import glob
 from torch.utils.data import DataLoader
 
 from sensorium.metrics import Metrics
@@ -92,9 +91,11 @@ def evaluate(
                 mode=mode,
             )
         metrics = Metrics(ds=mouse_ds, results=mouse_result)
+
         trial_corr = metrics.single_trial_correlation(per_neuron=True)
         results["trial_correlation"][mouse_id] = trial_corr.mean()
         trial_corrs[mouse_id] = trial_corr
+
         if metrics.repeat_image and not metrics.hashed:
             image_corr = metrics.correlation_to_average(per_neuron=True)
             results["image_correlation"][mouse_id] = image_corr.mean()
@@ -145,14 +146,14 @@ def evaluate(
     if print_result:
         statement = "Single trial correlation\n"
         for mouse_id, value in results["trial_correlation"].items():
-            statement += f"Mouse {mouse_id}: {value:.04f}\t"
+            statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
         if results["image_correlation"]:
             statement += "\nAverage to correlation\n"
             for mouse_id, value in results["image_correlation"].items():
-                statement += f"Mouse {mouse_id}: {value:.04f}\t"
+                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
             statement += "\nFEVE\n"
             for mouse_id, value in results["feve"].items():
-                statement += f"Mouse {mouse_id}: {value:.04f}\t"
+                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
         print(statement)
     return results
 

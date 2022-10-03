@@ -12,14 +12,14 @@ from sensorium import losses, metrics
 from sensorium.models import get_model
 from sensorium.data import get_training_ds
 from sensorium.utils import utils, tensorboard, checkpoint
-from sensorium.utils.checkpoint import Checkpoint
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     y_true, y_pred = y_true.detach().cpu(), y_pred.detach().cpu()
-    trial_corr = metrics.correlation(y1=y_true, y2=y_pred, axis=None)
-    return {"metrics/trial_correlation": torch.tensor(trial_corr)}
+    return {
+        "metrics/trial_correlation": metrics.correlation(y1=y_true, y2=y_pred, dim=None)
+    }
 
 
 def train_step(
@@ -197,7 +197,9 @@ def main(args):
 
     utils.save_args(args)
 
-    ckpt = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
+    ckpt = checkpoint.Checkpoint(
+        args, model=model, optimizer=optimizer, scheduler=scheduler
+    )
     epoch = ckpt.restore()
 
     utils.evaluate(
