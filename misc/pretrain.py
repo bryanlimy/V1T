@@ -135,6 +135,7 @@ class Model(nn.Module):
         weights = ResNet18_Weights.DEFAULT
         self.resnet = resnet18(weights=weights, num_classes=NUM_CLASSES)
         self.conv = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=1, stride=1)
+        self.log_softmax = nn.LogSoftmax(dim=-1)
 
     def regularizer(self):
         """L1 regularization"""
@@ -142,7 +143,8 @@ class Model(nn.Module):
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.conv(inputs)
-        return self.resnet(outputs)
+        outputs = self.resnet(outputs)
+        return self.log_softmax(outputs)
 
 
 def num_correct(y_true: torch.Tensor, y_pred: torch.Tensor):
