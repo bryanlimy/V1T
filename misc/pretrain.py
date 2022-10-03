@@ -78,7 +78,7 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     test_idx = indexes[int(size * 0.85) :]
 
     # settings for DataLoader
-    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 4}
+    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 2}
     if device.type in ["cuda", "mps"]:
         gpu_kwargs = {"prefetch_factor": 4, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
@@ -99,33 +99,50 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     return train_ds, val_ds, test_ds
 
 
+# class Model(nn.Module):
+#     def __init__(self, args):
+#         super(Model, self).__init__()
+#         self.device = args.device
+#         self.input_shape = IMAGE_SIZE
+#         self.output_shape = args.output_shape
+#
+#         self.add_module(
+#             name="core", module=get_core(args)(args, input_shape=self.input_shape)
+#         )
+#
+#         core_shape = self.core.shape
+#
+#         self.readout = nn.Sequential(
+#             Reduce("b c h w -> b c", "mean"),
+#             nn.Linear(in_features=core_shape[0], out_features=NUM_CLASSES),
+#             nn.LogSoftmax(dim=1),
+#         )
+#
+#     def regularizer(self):
+#         """L1 regularization"""
+#         return sum(p.abs().sum() for p in self.parameters())
+#
+#     def forward(self, inputs: torch.Tensor):
+#         outputs = self.core(inputs)
+#         outputs = self.readout(outputs)
+#         return outputs
+
+
 class Model(nn.Module):
     def __init__(self, args):
         super(Model, self).__init__()
         self.device = args.device
-        self.input_shape = IMAGE_SIZE
-        self.output_shape = args.output_shape
-
-        self.add_module(
-            name="core", module=get_core(args)(args, input_shape=self.input_shape)
-        )
-
-        core_shape = self.core.shape
-
-        self.readout = nn.Sequential(
-            Reduce("b c h w -> b c", "mean"),
-            nn.Linear(in_features=core_shape[0], out_features=NUM_CLASSES),
-            nn.LogSoftmax(dim=1),
-        )
+        weights = ResNet18_Weights.DEFAULT
+        self.resnet = resnet18(weights=weights, num_classes=NUM_CLASSES)
+        self.conv = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=1, stride=1)
 
     def regularizer(self):
         """L1 regularization"""
         return sum(p.abs().sum() for p in self.parameters())
 
     def forward(self, inputs: torch.Tensor):
-        outputs = self.core(inputs)
-        outputs = self.readout(outputs)
-        return outputs
+        outputs = self.conv(inputs)
+        return self.resnet(outputs)
 
 
 def num_correct(y_true: torch.Tensor, y_pred: torch.Tensor):
@@ -217,6 +234,9 @@ def validate(
             results[k] = v.mean()
         summary.scalar(k, value=results[k], step=epoch, mode=mode)
     return results
+
+
+from torchvision.models import resnet18, ResNet18_Weights
 
 
 def main(args):
