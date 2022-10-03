@@ -1,89 +1,153 @@
 import torch
 import typing as t
+import numpy as np
+from torch.utils.data import DataLoader
+from copy import deepcopy
 
 
 def correlation(
-    y1: torch.Tensor,
-    y2: torch.Tensor,
-    dim: t.Union[None, int, t.Tuple[int]],
-    eps: float = 1e-8,
+    y1: t.Union[torch.Tensor, np.ndarray],
+    y2: t.Union[torch.Tensor, np.ndarray],
+    axis: t.Union[None, int, t.Tuple[int]] = -1,
+    eps: int = 1e-8,
+    **kwargs
 ):
-    """Compute the correlation between y1 and y2 along dimensions dim."""
-    y1 = (y1 - torch.mean(y1, dim=dim, keepdim=True)) / (
-        torch.std(y1, dim=dim, keepdim=True) + eps
+    """
+    Compute the correlation between two NumPy arrays along the specified dimension(s).
+    """
+    is_tensor = isinstance(y1, torch.Tensor)
+    if is_tensor:
+        y1, y2 = y1.numpy(), y2.numpy()
+    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (
+        y1.std(axis=axis, keepdims=True, ddof=0) + eps
     )
-    y2 = (y2 - torch.mean(y2, dim=dim, keepdim=True)) / (
-        torch.std(y2, dim=dim, keepdim=True) + eps
+    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (
+        y2.std(axis=axis, keepdims=True, ddof=0) + eps
     )
-    return torch.mean(y1 * y2, dim=dim)
+    corr = (y1 * y2).mean(axis=axis, **kwargs)
+    return torch.tensor(corr, dtype=torch.float32) if is_tensor else corr
 
 
-def single_trial_correlations(results: t.Dict[int, t.Dict[str, torch.Tensor]]):
-    """Compute signal trial correlation"""
-    correlations = {}
-    for mouse_id, mouse_result in results.items():
-        correlations[mouse_id] = correlation(
-            y1=mouse_result["targets"],
-            y2=mouse_result["predictions"],
-            dim=0,
-        )
-    return correlations
+class Metrics:
+    def __init__(self, ds: DataLoader, results: t.Dict[str, torch.Tensor]):
+        """
+        Computes performance metrics of neural response predictions.
+        """
+        self.repeat_image = ds.dataset.tier == "test"
+        self.hashed = ds.dataset.hashed
+        self.targets = results["targets"].numpy()
+        self.predictions = results["predictions"].numpy()
+        self.image_ids = results["image_ids"].numpy()
+        self.neuron_ids = deepcopy(ds.dataset.neuron_ids)
+        self.trial_ids = results["trial_ids"]
+        if not self.hashed:
+            self.trial_ids = self.trial_ids.numpy()
+            self.order()
 
+    def order(self):
+        """Re-order the responses based on trial IDs and neuron IDs."""
+        trial_ids = np.argsort(self.trial_ids)
+        neuron_ids = np.argsort(self.neuron_ids)
 
-def average_image_correlation(results: t.Dict[int, t.Dict[str, torch.Tensor]]):
-    """Compute correlation between average responses and predictions"""
-    correlations = {}
-    for mouse_id, mouse_result in results.items():
+        self.targets = self.targets[trial_ids, :][:, neuron_ids]
+        self.predictions = self.predictions[trial_ids, :][:, neuron_ids]
+        self.image_ids = self.image_ids[trial_ids]
+        self.neuron_ids = self.neuron_ids[neuron_ids]
+        self.trial_ids = trial_ids
+
+    def split_responses(
+        self,
+    ) -> t.Tuple[t.List[np.ndarray], t.List[np.ndarray]]:
+        """
+        Split the responses (or predictions) array based on image ids.
+        Each element of the list contains the responses to repeated
+        presentations of a single image.
+        Returns:
+            targets: t.List[np.ndarray]: a list of array where each tensor
+                is the target responses from repeated images.
+            predictions: t.List[np.ndarray]: a list of array where each tensor
+                is the predicted responses from repeated images.
+        """
+        repeat_targets, repeat_predictions = [], []
+        for image_id in np.unique(self.image_ids):
+            indexes = self.image_ids == image_id
+            repeat_targets.append(self.targets[indexes])
+            repeat_predictions.append(self.predictions[indexes])
+        return repeat_targets, repeat_predictions
+
+    def single_trial_correlation(self, per_neuron: bool = False):
+        """
+        Compute single-trial correlation.
+        Returns:
+            corr: t.Union[float, np.ndarray], single trial correlation
+        """
+        corr = correlation(y1=self.predictions, y2=self.targets, axis=0)
+        return corr if per_neuron else corr.mean()
+
+    def correlation_to_average(self, per_neuron: bool = False):
+        """
+        Compute correlation to average response across repeats.
+        Returns:
+            np.array or float: Correlation (average across repeats) between responses and predictions
+        """
+        if not self.repeat_image or self.hashed:
+            return None
         mean_responses, mean_predictions = [], []
-        # calculate mean responses and predictions with the same frame ID
-        for frame_id in torch.unique(mouse_result["frame_ids"]):
-            indexes = torch.where(mouse_result["frame_ids"] == frame_id)[0]
-            responses = mouse_result["targets"][indexes]
-            predictions = mouse_result["predictions"][indexes]
-            mean_responses.append(torch.mean(responses, dim=0, keepdim=True))
-            mean_predictions.append(torch.mean(predictions, dim=0, keepdim=True))
-        mean_responses = torch.vstack(mean_predictions)
-        mean_predictions = torch.vstack(mean_predictions)
-        correlations[mouse_id] = correlation(
-            y1=mean_responses, y2=mean_predictions, dim=0
+        for repeat_responses, repeat_predictions in zip(*self.split_responses()):
+            mean_responses.append(repeat_responses.mean(axis=0, keepdims=True))
+            mean_predictions.append(repeat_predictions.mean(axis=0, keepdims=True))
+        mean_responses = np.vstack(mean_responses)
+        mean_predictions = np.vstack(mean_predictions)
+        corr = correlation(y1=mean_responses, y2=mean_predictions, axis=0)
+        return corr if per_neuron else corr.mean()
+
+    def _fev(
+        self,
+        targets: t.List[np.ndarray],
+        predictions: t.List[np.ndarray],
+        return_exp_var: bool = False,
+    ):
+        """
+        Compute the fraction of explainable variance explained per neuron
+        Args:
+            targets (array-like): Neuronal neuron responses (ground truth) to image repeats. Dimensions:
+                [num_images] np.array(num_repeats, num_neurons)
+            outputs (array-like): Model predictions to the repeated images, with an identical shape as the targets
+            return_exp_var (bool): returns the fraction of explainable variance per neuron if set to True
+        Returns:
+            FEVe (np.array): the fraction of explainable variance explained per neuron
+            --- optional: FEV (np.array): the fraction
+        """
+        img_var = []
+        pred_var = []
+        for target, prediction in zip(targets, predictions):
+            pred_var.append((target - prediction) ** 2)
+            img_var.append(np.var(target, axis=0, ddof=1))
+        pred_var = np.vstack(pred_var)
+        img_var = np.vstack(img_var)
+
+        total_var = np.var(np.vstack(targets), axis=0, ddof=1)
+        noise_var = np.mean(img_var, axis=0)
+        fev = (total_var - noise_var) / total_var
+
+        pred_var = np.mean(pred_var, axis=0)
+        fev_e = 1 - (pred_var - noise_var) / (total_var - noise_var)
+        return [fev, fev_e] if return_exp_var else fev_e
+
+    def feve(self, per_neuron: bool = False, fev_threshold: float = 0.15):
+        """
+        Compute fraction of explainable variance explained
+        Returns:
+            fevl_val: t.Union[float, np.ndarray], FEVE value
+        """
+        if not self.repeat_image or self.hashed:
+            return None
+        repeat_targets, repeat_predictions = self.split_responses()
+        fev_val, feve_val = self._fev(
+            targets=repeat_targets,
+            predictions=repeat_predictions,
+            return_exp_var=True,
         )
-    return correlations
-
-
-def _feve(
-    targets: t.List[torch.Tensor],
-    predictions: t.List[torch.Tensor],
-    threshold: float = 0.15,
-):
-    """Compute the fraction of explainable variance explained per neuron"""
-    image_var, prediction_var = [], []
-    for target, prediction in zip(targets, predictions):
-        image_var.append(torch.var(target, dim=0))
-        prediction_var.append((target - prediction) ** 2)
-    image_var = torch.vstack(image_var)
-    prediction_var = torch.vstack(prediction_var)
-
-    total_var = torch.var(torch.vstack(targets), dim=0)
-    noise_var = torch.mean(image_var, dim=0)
-    fev = (total_var - noise_var) / total_var
-
-    pred_var = torch.mean(prediction_var, dim=0)
-    fev_e = 1 - (pred_var - noise_var) / (total_var - noise_var)
-
-    # ignore neurons below FEV threshold
-    fev_e = fev_e[fev >= threshold]
-    return fev_e
-
-
-def feve(results: t.Dict[int, t.Dict[str, torch.Tensor]]):
-    """Compute the fraction of explainable variance explained per neuron."""
-    fev_e = {}
-    for mouse_id, mouse_result in results.items():
-        responses, predictions = [], []
-        # calculate mean responses and predictions with the same frame ID
-        for frame_id in torch.unique(mouse_result["frame_ids"]):
-            indexes = torch.where(mouse_result["frame_ids"] == frame_id)[0]
-            responses.append(mouse_result["targets"][indexes])
-            predictions.append(mouse_result["predictions"][indexes])
-        fev_e[mouse_id] = _feve(targets=responses, predictions=predictions)
-    return fev_e
+        # ignore neurons below FEV threshold
+        feve_val = feve_val[fev_val >= fev_threshold]
+        return feve_val if per_neuron else feve_val.mean()

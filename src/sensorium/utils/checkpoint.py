@@ -3,6 +3,27 @@ import torch
 import typing as t
 import numpy as np
 from torch import nn
+from sensorium.models.model import Model
+
+
+def load_pretrain_core(args, model: Model):
+    filename = os.path.join(args.pretrain_core, "ckpt", "best_model.pt")
+    assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
+    model_dict = model.state_dict()
+    checkpoint = torch.load(filename, map_location=model.device)
+    pretrain_dict = checkpoint["model_state_dict"]
+    # load core parameters in pretrain_dict which should be the same as model_dict
+    core_dict = {}
+    try:
+        for name, parameter in model_dict.items():
+            if name.startswith("core"):
+                core_dict[name] = pretrain_dict[name]
+    except KeyError as e:
+        raise KeyError(f"Pretrained core module contains different parameters: {e}")
+    model_dict.update(core_dict)
+    model.load_state_dict(model_dict)
+    if args.verbose:
+        print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
 class Checkpoint:
@@ -20,7 +41,7 @@ class Checkpoint:
         model: nn.Module,
         optimizer: torch.optim = None,
         scheduler: torch.optim.lr_scheduler = None,
-        patience: int = 20,
+        patience: int = 10,
         min_epochs: int = 50,
     ):
         """

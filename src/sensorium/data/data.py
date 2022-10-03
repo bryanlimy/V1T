@@ -61,7 +61,7 @@ def load_mouse_metadata(mouse_dir: str):
         - path to the mouse data directory
     coordinates: np.ndarray
         - (x, y, z) coordinates of each neuron in the cortex
-    frame_id: int,
+    image_id: int,
         - the unique ID for each image being shown
     tiers: str
         - 'train' and 'validation': data with labels
@@ -90,8 +90,9 @@ def load_mouse_metadata(mouse_dir: str):
     metadata = {
         "mouse_dir": mouse_dir,
         "num_neurons": len(load_neuron("unit_ids.npy")),
+        "neuron_ids": load_neuron("unit_ids.npy").astype(np.int32),
         "coordinates": load_neuron("cell_motor_coordinates.npy").astype(np.int32),
-        "frame_id": load_trial("frame_image_id.npy").astype(np.int32),
+        "image_id": load_trial("frame_image_id.npy").astype(np.int32),
         "tiers": load_trial("tiers.npy"),
         "trial_id": load_trial("trial_idx.npy"),
         "stats": {
@@ -153,7 +154,7 @@ class MiceDataset(Dataset):
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
         self.mouse_dir = metadata["mouse_dir"]
-        self.num_neurons = metadata["num_neurons"]
+        self.neuron_ids = metadata["neuron_ids"]
         self.coordinates = metadata["coordinates"]
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
@@ -161,15 +162,21 @@ class MiceDataset(Dataset):
         self._shuffle = shuffle
         if self._shuffle:
             self.shuffle()
-        self.frame_ids = metadata["frame_id"][self.indexes]
+        self.image_ids = metadata["image_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
         # neurons cortical coordinates
         self.neurons_coordinate = metadata["coordinates"]
         # standardizer for responses
         self._response_precision = self.compute_response_precision()
+        # indicate if trial IDs and targets are hashed
+        self.hashed = mouse_id in (0, 1)
 
     def __len__(self):
         return len(self.indexes)
+
+    @property
+    def num_neurons(self):
+        return len(self.neuron_ids)
 
     def shuffle(self):
         """
@@ -221,14 +228,14 @@ class MiceDataset(Dataset):
                 - response: the corresponding response
                 - behavior: pupil size, the derivative of pupil size, and speed
                 - pupil_center: the (x, y) coordinate of the center of the pupil
-                - frame_id: the frame image ID
+                - image_id: the frame image ID
                 - trial_id: the trial ID
                 - mouse_id: the mouse ID
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
         self.transform(data)
-        data["frame_id"] = self.frame_ids[idx]
+        data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
         if idx == len(self) - 1 and self._shuffle:

@@ -19,7 +19,7 @@ class SpatialTransformerCore(Core):
     def __init__(
         self,
         args,
-        input_shape: t.Tuple[int],
+        input_shape: t.Tuple[int, int, int],
         name: str = "SpatialTransformerCore",
     ):
         super(SpatialTransformerCore, self).__init__(
@@ -37,14 +37,10 @@ class SpatialTransformerCore(Core):
         )
 
         # calculate localization network output shape
-        stn_shape = utils.conv2d_output_shape(
-            input_shape=input_shape, num_filters=8, kernel_size=7
-        )
-        stn_shape = (stn_shape[0], stn_shape[1] // 2, stn_shape[2] // 2)
-        stn_shape = utils.conv2d_output_shape(
-            input_shape=stn_shape, num_filters=10, kernel_size=5
-        )
-        stn_shape = (stn_shape[0], stn_shape[1] // 2, stn_shape[2] // 2)
+        stn_shape = utils.conv2d_shape(input_shape, num_filters=8, kernel_size=7)
+        stn_shape = utils.pool2d_shape(stn_shape, kernel_size=2, stride=2)
+        stn_shape = utils.conv2d_shape(stn_shape, num_filters=10, kernel_size=5)
+        stn_shape = utils.pool2d_shape(stn_shape, kernel_size=2, stride=2)
 
         # Regressor for the 3 * 2 affine matrix
         self.regressor = nn.Sequential(
@@ -80,14 +76,14 @@ class SpatialTransformerCore(Core):
         )
 
         # calculate feedforward network output shape
-        output_shape = utils.conv2d_output_shape(
-            input_shape=input_shape, num_filters=args.num_filters, kernel_size=5
+        output_shape = utils.conv2d_shape(
+            input_shape, num_filters=args.num_filters, kernel_size=5
         )
-        output_shape = (output_shape[0], output_shape[1] // 2, output_shape[2] // 2)
-        output_shape = utils.conv2d_output_shape(
-            input_shape=output_shape, num_filters=args.num_filters * 2, kernel_size=5
+        output_shape = utils.pool2d_shape(output_shape, kernel_size=2)
+        output_shape = utils.conv2d_shape(
+            output_shape, num_filters=args.num_filters * 2, kernel_size=5
         )
-        output_shape = (output_shape[0], output_shape[1] // 2, output_shape[2] // 2)
+        output_shape = utils.pool2d_shape(output_shape, kernel_size=2)
         self._output_shape = output_shape
 
     def stn(self, inputs: torch.Tensor, align_corners: bool = True):

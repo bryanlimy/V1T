@@ -1,8 +1,11 @@
 import torch
+import typing as t
 from torch import nn
 from torch.nn.modules.loss import _Loss
+from torch.utils.data import DataLoader
 
 _CRITERION = dict()
+import numpy as np
 
 
 def register(name):
@@ -19,6 +22,8 @@ class Loss(_Loss):
 
     def __init__(
         self,
+        args,
+        ds: t.Dict[int, DataLoader],
         size_average: bool = None,
         reduce: bool = None,
         reduction: str = "mean",
@@ -26,14 +31,35 @@ class Loss(_Loss):
         super(Loss, self).__init__(
             size_average=size_average, reduce=reduce, reduction=reduction
         )
+        self._device = args.device
+        self._depth_scale = args.depth_scale
+        self._compute_depth_masks(ds)
+
+    def _compute_depth_masks(self, ds: t.Dict[int, DataLoader]):
+        """Extract the weighted loss mask based on the depth (z-axis) of neurons
+
+        Neurons between the depth of 240 to 260 are masked by self._depth_scale,
+        otherwise 1.
+        """
+        self._depth_masks = {}
+        for mouse_id, mouse_ds in ds.items():
+            depth = torch.from_numpy(mouse_ds.dataset.coordinates[:, -1])
+            mask = torch.where((depth >= 240) & (depth <= 260), self._depth_scale, 1)
+            self._depth_masks[mouse_id] = mask.to(self._device)
+
+    def scale_loss(self, loss: torch.Tensor, mouse_id: int):
+        return loss * self._depth_masks[mouse_id]
 
 
 @register("rmsse")
 class RMSSE(Loss):
     """Root-mean-sum-squared-error"""
 
-    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        return torch.sqrt(torch.mean(torch.sum(torch.square(y_true - y_pred), dim=-1)))
+    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
+        loss = torch.square(y_true - y_pred)
+        loss = self.scale_loss(loss, mouse_id=mouse_id)
+        loss = torch.sqrt(torch.mean(torch.sum(loss, dim=-1)))
+        return loss
 
 
 @register("poisson")
@@ -60,28 +86,17 @@ class PoissonLoss(Loss):
             Defaults to False.
     """
 
-    def __init__(
-        self,
-        eps: float = 1e-12,
-        per_neuron: bool = False,
-        return_average: bool = False,
-    ):
-        super(PoissonLoss, self).__init__()
+    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-8):
+        super(PoissonLoss, self).__init__(args, ds=ds)
         self.eps = eps
-        self._per_neuron = per_neuron
-        self._return_average = return_average
 
-    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        y_true = y_true.detach()
+    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         loss = y_pred - y_true * torch.log(y_pred + self.eps)
-        if self._per_neuron:
-            loss = loss.view(-1, loss.shape[-1])
-            loss = loss.mean(dim=0) if self._return_average else loss.sum(dim=0)
-        else:
-            loss = loss.mean() if self._return_average else loss.sum()
+        loss = self.scale_loss(loss, mouse_id=mouse_id)
+        loss = torch.mean(torch.sum(loss, dim=-1))
         return loss
 
 
-def get_criterion(args):
+def get_criterion(args, ds: t.Dict[int, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
-    return _CRITERION[args.criterion]()
+    return _CRITERION[args.criterion](args, ds=ds)

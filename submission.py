@@ -2,6 +2,7 @@ import os
 import torch
 import argparse
 import typing as t
+import numpy as np
 import pandas as pd
 from torch import nn
 from tqdm import tqdm
@@ -20,8 +21,8 @@ def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
     df = pd.DataFrame(
         {
             "trial_indices": results["trial_ids"],
-            "image_ids": results["frame_ids"],
-            "responses": results["predictions"],
+            "image_ids": results["image_ids"],
+            "prediction": results["predictions"],
             "neuron_ids": results["neuron_ids"],
         }
     )
@@ -46,26 +47,29 @@ def inference(
     Return:
         results: t.Dict[str, t.List[t.List[float, int or str]]
             - predictions: t.List[t.List[float]], predictions given images
-            - frame_ids: t.List[t.List[int]], frame (image) ID of the responses
+            - image_ids: t.List[t.List[int]], frame (image) ID of the responses
             - trial_ids: t.List[t.List[str]], trial ID of the responses
             - neuron_ids: t.List[t.List[int]], neuron IDs of the responses
     """
     results = {
         "predictions": [],
-        "frame_ids": [],
+        "image_ids": [],
         "trial_ids": [],
     }
     model.train(False)
+    model.requires_grad_(False)
     for data in tqdm(ds, desc=desc, disable=args.verbose == 0):
         images = data["image"].to(device)
         predictions = model(images, mouse_id=mouse_id)
         results["predictions"].extend(predictions.detach().cpu().numpy().tolist())
-        results["frame_ids"].extend(data["frame_id"].numpy().tolist())
+        results["image_ids"].extend(data["image_id"].numpy().tolist())
         results["trial_ids"].extend(data["trial_id"])
     # create neuron IDs for each prediction
-    results["neuron_ids"] = [list(range(1, ds.dataset.num_neurons + 1))] * len(
-        results["predictions"]
-    )
+    results["neuron_ids"] = np.repeat(
+        np.expand_dims(ds.dataset.neuron_ids, axis=0),
+        repeats=len(results["predictions"]),
+        axis=0,
+    ).tolist()
     return results
 
 
@@ -129,6 +133,9 @@ def main(args):
 
     checkpoint = Checkpoint(args, model=model)
     checkpoint.restore(force=True)
+
+    # run evaluation on test set for all mouse
+    utils.evaluate(args, ds=test_ds, model=model, print_result=True)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"

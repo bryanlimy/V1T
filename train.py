@@ -11,14 +11,17 @@ from torch.utils.data import DataLoader
 from sensorium import losses, metrics
 from sensorium.models import get_model
 from sensorium.data import get_training_ds
-from sensorium.utils import utils, tensorboard
-from sensorium.utils.checkpoint import Checkpoint
+from sensorium.utils import utils, tensorboard, checkpoint
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    trial_correlation = metrics.correlation(y1=y_true, y2=y_pred, dim=0)
-    return {"metrics/trial_correlation": torch.mean(trial_correlation)}
+    y_true, y_pred = y_true.detach().cpu(), y_pred.detach().cpu()
+    return {
+        "metrics/trial_correlation": metrics.correlation(
+            y1=y_true, y2=y_pred, axis=None
+        )
+    }
 
 
 def train_step(
@@ -26,22 +29,27 @@ def train_step(
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
+    reg_scale: t.Union[float, torch.Tensor] = 0,
 ) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     result = {}
     optimizer.zero_grad()
-    total_loss = []
+    all_loss = []
     for data in mice_data:
         mouse_id = int(data["mouse_id"][0])
         images = data["image"].to(model.device)
         responses = data["response"].to(model.device)
         outputs = model(images, mouse_id=mouse_id)
-        loss = criterion(y_true=responses, y_pred=outputs)
-        total_loss.append(loss)
+        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+        reg_loss = model.regularizer()
+        total_loss = loss + reg_scale * reg_loss
+        all_loss.append(total_loss)
         result[mouse_id] = {
             "loss/loss": loss.detach(),
-            **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+            "loss/reg_loss": reg_loss.detach(),
+            "loss/total_loss": total_loss.detach(),
+            **compute_metrics(y_true=responses, y_pred=outputs),
         }
-    total_loss = torch.sum(torch.stack(total_loss))
+    total_loss = torch.sum(torch.stack(all_loss))
     total_loss.backward()
     optimizer.step()
     return result
@@ -69,6 +77,7 @@ def train(
                 model=model,
                 optimizer=optimizer,
                 criterion=criterion,
+                reg_scale=args.reg_scale,
             )
             for mouse_id in mouse_ids:
                 utils.update_dict(results[mouse_id], step_results[mouse_id])
@@ -95,9 +104,9 @@ def validation_step(
     images = data["image"].to(model.device)
     responses = data["response"].to(model.device)
     outputs = model(images, mouse_id=mouse_id)
-    loss = criterion(responses, outputs)
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss
-    result.update(compute_metrics(y_true=responses, y_pred=outputs.detach()))
+    result.update(compute_metrics(y_true=responses, y_pred=outputs))
     return result
 
 
@@ -110,28 +119,28 @@ def validate(
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
-    model.requires_grad_(False)
     results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
-        for mouse_id, mouse_ds in ds.items():
-            mouse_result = {}
-            for data in mouse_ds:
-                result = validation_step(
+        with torch.no_grad():
+            for mouse_id, mouse_ds in ds.items():
+                mouse_result = {}
+                for data in mouse_ds:
+                    result = validation_step(
+                        mouse_id=mouse_id,
+                        data=data,
+                        model=model,
+                        criterion=criterion,
+                    )
+                    utils.update_dict(mouse_result, result)
+                    pbar.update(1)
+                utils.log_metrics(
+                    results=mouse_result,
+                    epoch=epoch,
+                    mode=1,
+                    summary=summary,
                     mouse_id=mouse_id,
-                    data=data,
-                    model=model,
-                    criterion=criterion,
                 )
-                utils.update_dict(mouse_result, result)
-                pbar.update(1)
-            utils.log_metrics(
-                results=mouse_result,
-                epoch=epoch,
-                mode=1,
-                summary=summary,
-                mouse_id=mouse_id,
-            )
-            results[mouse_id] = mouse_result
+                results[mouse_id] = mouse_result
     utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
     return results
 
@@ -157,24 +166,53 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = get_model(args, ds=train_ds, summary=summary)
-    criterion = losses.get_criterion(args)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    if args.pretrain_core:
+        checkpoint.load_pretrain_core(args, model=model)
+
+    # separate learning rates for core and readout modules
+    optimizer = torch.optim.Adam(
+        params=[
+            {
+                "params": model.core.parameters(),
+                "lr": args.core_lr_scale * args.lr,
+                "name": "core",
+            },
+            {
+                "params": model.readouts.parameters(),
+                "name": "readouts",
+            },
+        ],
+        lr=args.lr,
+    )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
         mode="min",
         factor=0.5,
-        patience=10,
+        patience=5,
         threshold_mode="rel",
         min_lr=1e-6,
         verbose=False,
     )
 
+    criterion = losses.get_criterion(args, ds=train_ds)
+
     utils.save_args(args)
 
-    checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
-    epoch = checkpoint.restore()
+    ckpt = checkpoint.Checkpoint(
+        args, model=model, optimizer=optimizer, scheduler=scheduler
+    )
+    epoch = ckpt.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    utils.evaluate(
+        args,
+        ds=val_ds,
+        model=model,
+        epoch=epoch,
+        summary=summary,
+        mode=1,
+        print_result=True,
+    )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -202,15 +240,21 @@ def main(args):
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
         summary.scalar(
-            "model/learning_rate",
+            "model/learning_rate/core",
             value=optimizer.param_groups[0]["lr"],
             step=epoch,
             mode=0,
         )
+        summary.scalar(
+            "model/learning_rate/readouts",
+            value=optimizer.param_groups[1]["lr"],
+            step=epoch,
+            mode=0,
+        )
         print(
-            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t'
+            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t\t'
             f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
-            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t'
+            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t\t'
             f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
             f"Elapse: {elapse:.02f}s"
         )
@@ -219,10 +263,10 @@ def main(args):
 
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
-        if checkpoint.monitor(loss=val_results["loss/loss"], epoch=epoch):
+        if ckpt.monitor(loss=val_results["loss/loss"], epoch=epoch):
             break
 
-    checkpoint.restore()
+    ckpt.restore()
 
     utils.evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
 
@@ -257,6 +301,20 @@ if __name__ == "__main__":
         "--readout", type=str, required=True, help="The readout module to use."
     )
 
+    # pre-trained Core
+    parser.add_argument(
+        "--pretrain_core",
+        type=str,
+        default="",
+        help="path to directory where pre-trained core model is stored.",
+    )
+    parser.add_argument(
+        "--core_lr_scale",
+        type=float,
+        default=1,
+        help="scale learning rate for core as it might already be trained.",
+    )
+
     # ConvCore
     parser.add_argument("--num_filters", type=int, default=8)
     parser.add_argument("--dropout", type=float, default=0.2)
@@ -280,6 +338,18 @@ if __name__ == "__main__":
         default="poisson",
         type=str,
         help="criterion (loss function) to use.",
+    )
+    parser.add_argument(
+        "--depth_scale",
+        default=1.0,
+        type=float,
+        help="the coefficient to scale loss for neurons in depth of 240 to 260.",
+    )
+    parser.add_argument(
+        "--reg_scale",
+        default=0,
+        type=float,
+        help="weight regularization coefficient.",
     )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(

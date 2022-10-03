@@ -8,10 +8,9 @@ import typing as t
 import pandas as pd
 from torch import nn
 from tqdm import tqdm
-from glob import glob
 from torch.utils.data import DataLoader
 
-from sensorium import metrics
+from sensorium.metrics import Metrics
 from sensorium.utils import yaml, tensorboard
 
 
@@ -29,9 +28,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
 
 
-def inference(
-    args, ds: t.Dict[int, DataLoader], model: torch.nn.Module
-) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
+def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tensor]:
     """Inference data in DataLoader ds
     Returns:
         results: t.Dict[int, t.Dict[str, torch.Tensor]]
@@ -40,40 +37,31 @@ def inference(
                 - targets: torch.Tensor, the ground-truth responses
                 - images: torch.Tensor, the natural images
                 - trial_ids: torch.Tensor, trial ID of the responses
-                - frame_ids: torch.Tensor, frame ID of the responses
+                - image_ids: torch.Tensor, image ID of the responses
     """
-    results = {}
+    results = {
+        "images": [],
+        "predictions": [],
+        "targets": [],
+        "trial_ids": [],
+        "image_ids": [],
+    }
     model.train(False)
-    for mouse_id, mouse_ds in tqdm(
-        ds.items(), desc="Evaluation", disable=args.verbose == 0
-    ):
-        if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
-            # skip Mouse 1 and 2 on test set as target responses are not provided
-            continue
-        result = {
-            "images": [],
-            "predictions": [],
-            "targets": [],
-            "trial_ids": [],
-            "frame_ids": [],
-        }
-        for data in mouse_ds:
-            predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
-            predictions = predictions.detach().cpu()
-            result["predictions"].append(
-                mouse_ds.dataset.i_transform_response(predictions)
+    with torch.no_grad():
+        for data in ds:
+            predictions = model(
+                data["image"].to(model.device),
+                mouse_id=ds.dataset.mouse_id,
             )
-            result["targets"].append(
-                mouse_ds.dataset.i_transform_response(data["response"])
-            )
-            images = mouse_ds.dataset.i_transform_image(data["image"])
-            result["images"].append(images)
-            result["frame_ids"].append(data["frame_id"])
-            result["trial_ids"].append(data["trial_id"])
-        results[mouse_id] = {
-            k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
-            for k, v in result.items()
-        }
+            results["predictions"].append(predictions.cpu())
+            results["targets"].append(data["response"])
+            results["images"].append(ds.dataset.i_transform_image(data["image"]))
+            results["image_ids"].append(data["image_id"])
+            results["trial_ids"].append(data["trial_id"])
+    results = {
+        k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
+        for k, v in results.items()
+    }
     return results
 
 
@@ -81,67 +69,93 @@ def evaluate(
     args,
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
-    epoch: int,
-    summary: tensorboard.Summary,
+    epoch: int = 0,
+    summary: tensorboard.Summary = None,
     mode: int = 1,
+    print_result: bool = False,
 ):
     """Evaluate DataLoaders ds on the 3 challenge metrics"""
-    eval_result = {}
-    outputs = inference(args, ds=ds, model=model)
-    trial_correlations = metrics.single_trial_correlations(results=outputs)
-    summary.plot_correlation(
-        "single_trial_correlation",
-        data=metrics2df(trial_correlations),
-        step=epoch,
-        mode=mode,
-    )
-    eval_result["trial_correlation"] = {
-        mouse_id: torch.mean(correlation)
-        for mouse_id, correlation in trial_correlations.items()
-    }
-    if mode == 2:  # only test set has repeated images
-        image_correlations = metrics.average_image_correlation(results=outputs)
-        summary.plot_correlation(
-            "correlation_to_average",
-            data=metrics2df(image_correlations),
-            step=epoch,
-            mode=mode,
-        )
-        eval_result["image_correlation"] = {
-            mouse_id: torch.mean(correlation)
-            for mouse_id, correlation in image_correlations.items()
-        }
-        feve = metrics.feve(results=outputs)
-        summary.plot_correlation(
-            "FEVE",
-            data=metrics2df(feve),
-            step=epoch,
-            ylabel="FEVE",
-            mode=mode,
-        )
-        eval_result["feve"] = {
-            mouse_id: torch.mean(f_eve) for mouse_id, f_eve in feve.items()
-        }
-    # write individual and average results to TensorBoard
-    for metric, results in eval_result.items():
-        for mouse_id, result in results.items():
-            summary.scalar(
-                tag=f"{metric}/mouse{mouse_id}",
-                value=result,
+    results = {"trial_correlation": {}, "image_correlation": {}, "feve": {}}
+    trial_corrs, image_corrs, feves = {}, {}, {}
+    for mouse_id, mouse_ds in tqdm(
+        ds.items(), desc="Evaluation", disable=args.verbose == 0
+    ):
+        if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
+            continue
+        mouse_result = inference(ds=mouse_ds, model=model)
+        if summary is not None:
+            summary.plot_image_response(
+                tag=f"image_response/mouse{mouse_id}",
+                results=mouse_result,
                 step=epoch,
                 mode=mode,
             )
-        summary.scalar(
-            tag=f"{metric}/average",
-            value=np.mean(list(results.values())),
+        metrics = Metrics(ds=mouse_ds, results=mouse_result)
+
+        trial_corr = metrics.single_trial_correlation(per_neuron=True)
+        results["trial_correlation"][mouse_id] = trial_corr.mean()
+        trial_corrs[mouse_id] = trial_corr
+
+        if metrics.repeat_image and not metrics.hashed:
+            image_corr = metrics.correlation_to_average(per_neuron=True)
+            results["image_correlation"][mouse_id] = image_corr.mean()
+            image_corrs[mouse_id] = image_corr
+            feve = metrics.feve(per_neuron=True)
+            results["feve"][mouse_id] = feve.mean()
+            feves[mouse_id] = feve
+
+    # write individual and average results to TensorBoard
+    if summary is not None:
+        summary.plot_correlation(
+            "single_trial_correlation",
+            data=metrics2df(trial_corrs),
             step=epoch,
             mode=mode,
         )
-    # plot image and response pairs
-    summary.plot_image_response(
-        tag=f"image_response", results=outputs, step=epoch, mode=mode
-    )
-    return eval_result
+        if image_corrs:
+            summary.plot_correlation(
+                "correlation_to_average",
+                data=metrics2df(image_corrs),
+                step=epoch,
+                mode=mode,
+            )
+        if feves:
+            summary.plot_correlation(
+                "FEVE",
+                data=metrics2df(feves),
+                step=epoch,
+                ylabel="FEVE",
+                mode=mode,
+            )
+        for metric, result in results.items():
+            for mouse_id, value in result.items():
+                summary.scalar(
+                    tag=f"{metric}/mouse{mouse_id}",
+                    value=value,
+                    step=epoch,
+                    mode=mode,
+                )
+            values = list(result.values())
+            if values:
+                summary.scalar(
+                    tag=f"{metric}/average",
+                    value=np.mean(values),
+                    step=epoch,
+                    mode=mode,
+                )
+    if print_result:
+        statement = "Single trial correlation\n"
+        for mouse_id, value in results["trial_correlation"].items():
+            statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
+        if results["image_correlation"]:
+            statement += "\nAverage to correlation\n"
+            for mouse_id, value in results["image_correlation"].items():
+                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
+            statement += "\nFEVE\n"
+            for mouse_id, value in results["feve"].items():
+                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
+        print(statement)
+    return results
 
 
 def update_dict(target: dict, source: dict, replace: bool = False):
@@ -188,7 +202,7 @@ def get_device(args):
     args.device = torch.device(device)
 
 
-def metrics2df(results: t.Dict[str, torch.Tensor]):
+def metrics2df(results: t.Dict[int, torch.Tensor]):
     mouse_ids, values = [], []
     for mouse_id, v in results.items():
         mouse_ids.extend([mouse_id] * len(v))
