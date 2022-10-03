@@ -25,7 +25,7 @@ def correlation(
         y2.std(axis=axis, keepdims=True, ddof=0) + eps
     )
     corr = (y1 * y2).mean(axis=axis, **kwargs)
-    return torch.from_numpy(corr) if is_tensor else corr
+    return torch.tensor(corr, dtype=torch.float32) if is_tensor else corr
 
 
 class Metrics:
