@@ -40,7 +40,7 @@ def plot_image(
         figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=args.dpi)
         ax.imshow(images[i][0], cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
         ax.set_title(
-            f"label: {labels[i]}   prediction: {predictions[i]}", pad=4, fontsize=10
+            f"label: {labels[i]}   prediction: {predictions[i]}", pad=3, fontsize=10
         )
         summary.figure(f"images/image{i:03d}", figure=figure, step=epoch, mode=mode)
 
@@ -116,12 +116,12 @@ class Model(nn.Module):
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.GELU(),
             nn.Flatten(),
+            nn.Dropout1d(p=args.dropout),
             nn.Linear(
                 in_features=int(np.prod(output_shape)),
                 out_features=self.output_shape[-1],
             ),
             nn.GELU(),
-            nn.Dropout1d(p=args.dropout),
             nn.Linear(
                 in_features=self.output_shape[-1], out_features=self.output_shape[-1]
             ),
@@ -154,8 +154,7 @@ def train(
     model.train(True)
     for images, labels in tqdm(ds, desc="Train", disable=args.verbose == 0):
         optimizer.zero_grad()
-        images = images.to(model.device)
-        labels = labels.to(model.device)
+        images, labels = images.to(model.device), labels.to(model.device)
         outputs = model(images)
         loss = F.nll_loss(input=outputs, target=labels)
         reg_loss = model.regularizer()
@@ -194,8 +193,7 @@ def validate(
     with torch.no_grad():
         model.train(False)
         for images, labels in tqdm(ds, desc="Val", disable=args.verbose == 0):
-            images = images.to(model.device)
-            labels = labels.to(model.device)
+            images, labels = images.to(model.device), labels.to(model.device)
             outputs = model(images)
             loss = F.nll_loss(input=outputs, target=labels)
             reg_loss = model.regularizer()
