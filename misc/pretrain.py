@@ -14,6 +14,8 @@ import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
+from torch.cuda.amp import autocast, GradScaler
+
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint

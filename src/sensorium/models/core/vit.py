@@ -22,11 +22,11 @@ class FeedForward(nn.Module):
     def __init__(self, dim: int, hidden_dim: int, dropout: float = 0.0):
         super(FeedForward, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(dim, hidden_dim),
+            nn.Linear(in_features=dim, out_features=hidden_dim),
             nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_dim, dim),
-            nn.Dropout(dropout),
+            nn.Dropout(p=dropout),
+            nn.Linear(in_features=hidden_dim, out_features=dim),
+            nn.Dropout(p=dropout),
         )
 
     def forward(self, inputs: torch.Tensor):
@@ -73,7 +73,7 @@ class Transformer(nn.Module):
     def __init__(
         self,
         dim: int,
-        depth: int,
+        num_layers: int,
         heads: int,
         dim_head: int,
         mlp_dim: int,
@@ -81,17 +81,17 @@ class Transformer(nn.Module):
     ):
         super().__init__()
         self.layers = nn.ModuleList([])
-        for _ in range(depth):
+        for _ in range(num_layers):
             self.layers.append(
                 nn.ModuleList(
                     [
                         PreNorm(
-                            dim,
-                            Attention(
+                            dim=dim,
+                            fn=Attention(
                                 dim, heads=heads, dim_head=dim_head, dropout=dropout
                             ),
                         ),
-                        PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout)),
+                        PreNorm(dim=dim, fn=FeedForward(dim, mlp_dim, dropout=dropout)),
                     ]
                 )
             )
@@ -120,7 +120,7 @@ class ViTCore(Core):
         dim = args.emb_dim
         heads = args.num_heads
         mlp_dim = args.mlp_dim
-        depth = args.num_layers
+        num_layers = args.num_layers
         dim_head = args.dim_head
         dropout = args.dropout
         emb_dropout = args.dropout
@@ -147,11 +147,11 @@ class ViTCore(Core):
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
-        self.dropout = nn.Dropout(p=emb_dropout)
+        self.emb_dropout = nn.Dropout(p=emb_dropout)
 
         self.transformer = Transformer(
             dim=dim,
-            depth=depth,
+            num_layers=num_layers,
             heads=heads,
             dim_head=dim_head,
             mlp_dim=mlp_dim,
@@ -170,7 +170,7 @@ class ViTCore(Core):
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
         outputs += self.pos_embedding[:, : n + 1]
-        outputs = self.dropout(outputs)
+        outputs = self.emb_dropout(outputs)
 
         outputs = self.transformer(outputs)
 
