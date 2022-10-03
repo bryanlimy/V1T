@@ -4,26 +4,25 @@ import argparse
 import torchinfo
 import typing as t
 import numpy as np
+import torchvision.datasets
 from torch import nn
 from tqdm import tqdm
 from time import time
-from PIL import Image
 from shutil import rmtree
 import torch.nn.functional as F
 from torchvision import transforms
-from torch.utils.data import Dataset, DataLoader
-
+from torch.utils import data
 
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
 from sensorium.models import utils as model_utils
 
-from glob import glob
-from sklearn.model_selection import train_test_split
 
 IMAGE_SIZE = (1, 144, 256)
 NUM_CLASSES = 1000
+IMAGE_MEAN = 0.44531356896770125
+IMAGE_STD = 0.2692461874154524
 
 import matplotlib.pyplot as plt
 
@@ -47,48 +46,24 @@ def plot_image(
         summary.figure(f"images/image{i:03d}", figure=figure, step=epoch, mode=mode)
 
 
-class ImageNet(Dataset):
-    def __init__(self, filenames: np.ndarray, labels: np.ndarray):
-        super(ImageNet, self).__init__()
-        self._filenames = filenames
-        self._labels = torch.from_numpy(labels)
-        # mean and standard deviation of ImageNet train set in grayscale
-        self._mean = torch.tensor(0.44531356896770125)
-        self._std = torch.tensor(0.2692461874154524)
-
-    def __len__(self):
-        return len(self._labels)
-
-    def transform_image(self, image: torch.Tensor):
-        return (image - self._mean) / self._std
-
-    def i_transform_image(self, image: torch.Tensor):
-        return image * self._std + self._mean
-
-    def __getitem__(self, item: t.Union[int, torch.Tensor]):
-        filename, label = str(self._filenames[item]), self._labels[item]
-        image = Image.open(filename).convert("L")  # load image in grayscale
-        image = transforms.ToTensor()(image)
-        image = transforms.Resize(size=IMAGE_SIZE[1:])(image)
-        image = self.transform_image(image)
-        return {"image": image, "label": label.type(torch.LongTensor)}
-
-
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
-    with open(
-        os.path.join(data_dir, "ILSVRC2012_validation_ground_truth.txt"), "r"
-    ) as file:
-        labels = list(map(int, file.read().splitlines()))
-    labels = np.array(labels, dtype=np.int32) - 1
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Grayscale(),
+            transforms.Resize(size=(IMAGE_SIZE[1:])),
+            transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
+        ]
+    )
+    image_ds = torchvision.datasets.ImageFolder(root=data_dir, transform=transform)
 
-    filenames = sorted(glob(os.path.join(data_dir, "*.JPEG")))
-    filenames = np.array(filenames)
+    size = len(image_ds)
 
-    size = len(labels)
-    # shuffle train, validation test set
-    indexes = np.arange(size)
-    train_idx, val_idx = train_test_split(indexes, test_size=0.3, shuffle=True)
-    val_idx, test_idx = train_test_split(val_idx, test_size=0.5, shuffle=True)
+    train_ds, val_ds, test_ds = data.random_split(
+        image_ds,
+        lengths=[int(size * 0.7), int(size * 0.15), int(size * 0.15)],
+        generator=torch.Generator().manual_seed(args.seed),
+    )
 
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": 4}
@@ -96,18 +71,9 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
         gpu_kwargs = {"prefetch_factor": 4, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
 
-    train_ds = DataLoader(
-        ImageNet(filenames=filenames[train_idx], labels=labels[train_idx]),
-        **dataloader_kwargs,
-    )
-    val_ds = DataLoader(
-        ImageNet(filenames=filenames[val_idx], labels=labels[val_idx]),
-        **dataloader_kwargs,
-    )
-    test_ds = DataLoader(
-        ImageNet(filenames=filenames[test_idx], labels=labels[test_idx]),
-        **dataloader_kwargs,
-    )
+    train_ds = data.DataLoader(train_ds, shuffle=True, **dataloader_kwargs)
+    val_ds = data.DataLoader(val_ds, **dataloader_kwargs)
+    test_ds = data.DataLoader(test_ds, **dataloader_kwargs)
 
     args.input_shape = IMAGE_SIZE
     args.output_shape = (NUM_CLASSES,)
@@ -176,7 +142,7 @@ def num_correct(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 def train(
     args,
-    ds: DataLoader,
+    ds: data.DataLoader,
     model: nn.Module,
     optimizer: torch.optim,
     summary: tensorboard.Summary,
@@ -184,10 +150,10 @@ def train(
 ):
     results = {}
     model.train(True)
-    for data in tqdm(ds, desc="Train", disable=args.verbose == 0):
+    for images, labels in tqdm(ds, desc="Train", disable=args.verbose == 0):
         optimizer.zero_grad()
-        images = data["image"].to(model.device)
-        labels = data["label"].to(model.device)
+        images = images.to(model.device)
+        labels = labels.to(model.device)
         outputs = model(images)
         loss = F.nll_loss(input=outputs, target=labels)
         reg_loss = model.regularizer()
@@ -216,7 +182,7 @@ def train(
 
 def validate(
     args,
-    ds: DataLoader,
+    ds: data.DataLoader,
     model: nn.Module,
     summary: tensorboard.Summary,
     epoch: int,
@@ -225,9 +191,9 @@ def validate(
     results, make_plot = {}, True
     with torch.no_grad():
         model.train(False)
-        for data in tqdm(ds, desc="Val", disable=args.verbose == 0):
-            images = data["image"].to(model.device)
-            labels = data["label"].to(model.device)
+        for images, labels in tqdm(ds, desc="Val", disable=args.verbose == 0):
+            images = images.to(model.device)
+            labels = labels.to(model.device)
             outputs = model(images)
             loss = F.nll_loss(input=outputs, target=labels)
             reg_loss = model.regularizer()
@@ -245,7 +211,7 @@ def validate(
             if make_plot:
                 plot_image(
                     args,
-                    images=ds.dataset.i_transform_image(images.cpu()),
+                    images=images.cpu * IMAGE_STD + IMAGE_MEAN,
                     predictions=predictions,
                     labels=labels.cpu(),
                     summary=summary,
@@ -374,8 +340,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="../data/imagenet/ILSVRC2012_img_val",
-        help="path to directory where the compressed dataset is stored.",
+        default="../data/imagenet/",
+        help="path to directory where ImageNet validation set is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
 
