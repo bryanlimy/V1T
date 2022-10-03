@@ -212,7 +212,7 @@ def validate(
                 plot_image(
                     args,
                     images=images.cpu() * IMAGE_STD + IMAGE_MEAN,
-                    predictions=predictions,
+                    predictions=predictions.cpu(),
                     labels=labels.cpu(),
                     summary=summary,
                     epoch=epoch,
