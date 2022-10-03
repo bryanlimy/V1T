@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from sensorium import losses, metrics
 from sensorium.models import get_model
 from sensorium.data import get_training_ds
-from sensorium.utils import utils, tensorboard
+from sensorium.utils import utils, tensorboard, checkpoint
 from sensorium.utils.checkpoint import Checkpoint
 
 
@@ -164,8 +164,18 @@ def main(args):
     summary = tensorboard.Summary(args)
 
     model = get_model(args, ds=train_ds, summary=summary)
-    criterion = losses.get_criterion(args, ds=train_ds)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    if os.path.isdir(args.pretrain_core):
+        checkpoint.load_pretrain_core(args, model=model)
+
+    # separate learning rates for core and readout modules
+    optimizer = torch.optim.Adam(
+        params=[
+            {"params": model.core.parameters(), "lr": args.core_lr_scale * args.lr},
+            {"params": model.readouts.parameters()},
+        ],
+        lr=args.lr,
+    )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
         mode="min",
@@ -176,10 +186,12 @@ def main(args):
         verbose=False,
     )
 
+    criterion = losses.get_criterion(args, ds=train_ds)
+
     utils.save_args(args)
 
-    checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
-    epoch = checkpoint.restore()
+    ckpt = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
+    epoch = ckpt.restore()
 
     utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
@@ -226,10 +238,10 @@ def main(args):
 
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
-        if checkpoint.monitor(loss=val_results["loss/loss"], epoch=epoch):
+        if ckpt.monitor(loss=val_results["loss/loss"], epoch=epoch):
             break
 
-    checkpoint.restore()
+    ckpt.restore()
 
     utils.evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
 
@@ -262,6 +274,20 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--readout", type=str, required=True, help="The readout module to use."
+    )
+
+    # pre-trained Core
+    parser.add_argument(
+        "--pretrain_core",
+        type=str,
+        default="",
+        help="path to directory where pre-trained core model is stored.",
+    )
+    parser.add_argument(
+        "--core_lr_scale",
+        type=float,
+        default=1,
+        help="scale learning rate for core as it might already be trained.",
     )
 
     # ConvCore
