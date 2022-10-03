@@ -14,7 +14,7 @@ import torch.nn.functional as F
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
-from torch.cuda.amp import autocast, GradScaler
+from einops.layers.torch import Reduce
 
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
@@ -98,35 +98,9 @@ class Model(nn.Module):
 
         core_shape = self.core.shape
 
-        output_shape = model_utils.conv2d_shape(
-            input_shape=core_shape,
-            num_filters=20,
-            kernel_size=5,
-            stride=2,
-        )
-        output_shape = model_utils.pool2d_shape(
-            input_shape=output_shape, kernel_size=2, stride=2
-        )
-
         self.readout = nn.Sequential(
-            nn.Conv2d(
-                in_channels=core_shape[0],
-                out_channels=20,
-                kernel_size=5,
-                stride=2,
-            ),
-            nn.MaxPool2d(kernel_size=2, stride=2),
-            nn.GELU(),
-            nn.Flatten(),
-            nn.Dropout1d(p=args.dropout),
-            nn.Linear(
-                in_features=int(np.prod(output_shape)),
-                out_features=self.output_shape[-1],
-            ),
-            nn.GELU(),
-            nn.Linear(
-                in_features=self.output_shape[-1], out_features=self.output_shape[-1]
-            ),
+            Reduce("b c h w -> b c", "mean"),
+            nn.Linear(in_features=core_shape[0], out_features=NUM_CLASSES),
             nn.LogSoftmax(dim=1),
         )
 

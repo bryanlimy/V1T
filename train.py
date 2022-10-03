@@ -215,9 +215,9 @@ def main(args):
             mode=0,
         )
         print(
-            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t'
+            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t\t'
             f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
-            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t'
+            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t\t'
             f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
             f"Elapse: {elapse:.02f}s"
         )
