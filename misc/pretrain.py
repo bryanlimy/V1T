@@ -4,14 +4,15 @@ import argparse
 import torchinfo
 import typing as t
 import numpy as np
-import torchvision.datasets
 from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
+from torch.utils import data
+import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from torchvision import transforms
-from torch.utils import data
+from torchvision.datasets import ImageFolder
 
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
@@ -21,10 +22,8 @@ from sensorium.models import utils as model_utils
 
 IMAGE_SIZE = (1, 144, 256)
 NUM_CLASSES = 1000
-IMAGE_MEAN = 0.44531356896770125
-IMAGE_STD = 0.2692461874154524
-
-import matplotlib.pyplot as plt
+IMAGE_MEAN = torch.tensor(0.44531356896770125)
+IMAGE_STD = torch.tensor(0.2692461874154524)
 
 
 def plot_image(
@@ -47,18 +46,21 @@ def plot_image(
 
 
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Grayscale(),
-            transforms.Resize(size=(IMAGE_SIZE[1:])),
-            transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
-        ]
+    image_ds = ImageFolder(
+        root=data_dir,
+        transform=transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Grayscale(),
+                transforms.Resize(size=(IMAGE_SIZE[1:])),
+                transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
+            ]
+        ),
     )
-    image_ds = torchvision.datasets.ImageFolder(root=data_dir, transform=transform)
 
     size = len(image_ds)
 
+    # split images into train-val-test with ratio of 70%-15%-15%
     train_ds, val_ds, test_ds = data.random_split(
         image_ds,
         lengths=[int(size * 0.7), int(size * 0.15), int(size * 0.15)],
@@ -211,7 +213,7 @@ def validate(
             if make_plot:
                 plot_image(
                     args,
-                    images=images.cpu * IMAGE_STD + IMAGE_MEAN,
+                    images=images.cpu() * IMAGE_STD + IMAGE_MEAN,
                     predictions=predictions,
                     labels=labels.cpu(),
                     summary=summary,
