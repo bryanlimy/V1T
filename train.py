@@ -165,14 +165,21 @@ def main(args):
 
     model = get_model(args, ds=train_ds, summary=summary)
 
-    if os.path.isdir(args.pretrain_core):
+    if args.pretrain_core:
         checkpoint.load_pretrain_core(args, model=model)
 
     # separate learning rates for core and readout modules
     optimizer = torch.optim.Adam(
         params=[
-            {"params": model.core.parameters(), "lr": args.core_lr_scale * args.lr},
-            {"params": model.readouts.parameters()},
+            {
+                "params": model.core.parameters(),
+                "lr": args.core_lr_scale * args.lr,
+                "name": "core",
+            },
+            {
+                "params": model.readouts.parameters(),
+                "name": "readouts",
+            },
         ],
         lr=args.lr,
     )
@@ -193,7 +200,15 @@ def main(args):
     ckpt = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = ckpt.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    utils.evaluate(
+        args,
+        ds=val_ds,
+        model=model,
+        epoch=epoch,
+        summary=summary,
+        mode=1,
+        print_result=True,
+    )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -221,8 +236,14 @@ def main(args):
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
         summary.scalar(
-            "model/learning_rate",
+            "model/learning_rate/core",
             value=optimizer.param_groups[0]["lr"],
+            step=epoch,
+            mode=0,
+        )
+        summary.scalar(
+            "model/learning_rate/readouts",
+            value=optimizer.param_groups[1]["lr"],
             step=epoch,
             mode=0,
         )

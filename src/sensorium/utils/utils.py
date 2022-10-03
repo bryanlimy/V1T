@@ -146,7 +146,7 @@ def evaluate(
         statement = "Single trial correlation\n"
         for mouse_id, value in results["trial_correlation"].items():
             statement += f"Mouse {mouse_id}: {value:.04f}\t"
-        if results["image_corr"]:
+        if results["image_correlation"]:
             statement += "\nAverage to correlation\n"
             for mouse_id, value in results["image_correlation"].items():
                 statement += f"Mouse {mouse_id}: {value:.04f}\t"
