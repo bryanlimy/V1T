@@ -55,6 +55,7 @@ def train(
                 "loss/total_loss": total_loss.detach(),
             },
         )
+        del loss, reg_loss, total_loss, outputs
     for k, v in results.items():
         results[k] = torch.stack(v).mean()
         summary.scalar(k, value=results[k], step=epoch, mode=0)
@@ -95,6 +96,7 @@ def validate(
                     epoch=epoch,
                     mode=mode,
                 )
+            del loss, reg_loss, total_loss, outputs
     for k, v in results.items():
         results[k] = torch.stack(v).mean()
         summary.scalar(k, value=results[k], step=epoch, mode=0)
