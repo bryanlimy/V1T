@@ -199,8 +199,8 @@ def validate(
             if make_plot:
                 plot_image(
                     args,
-                    images=data.reverse(images),
-                    outputs=data.reverse(outputs),
+                    images=data.reverse(images.cpu()),
+                    outputs=data.reverse(outputs.cpu()),
                     summary=summary,
                     epoch=epoch,
                     mode=mode,

@@ -14,7 +14,7 @@ IMAGE_STD = torch.tensor(0.2692461874154524)
 
 def reverse(image: torch.Tensor):
     """reverse image standardization"""
-    return image.cpu() * IMAGE_STD + IMAGE_MEAN
+    return image * IMAGE_STD + IMAGE_MEAN
 
 
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):

@@ -99,7 +99,7 @@ def validate(
             if make_plot:
                 plot_image(
                     args,
-                    images=data.reverse(images),
+                    images=data.reverse(images.cpu()),
                     predictions=predictions.cpu(),
                     labels=labels.cpu(),
                     summary=summary,
