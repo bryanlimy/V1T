@@ -208,13 +208,18 @@ def main(args):
             step=epoch,
             mode=0,
         )
-        print(
-            f'Train\t\t\tloss: {train_results["loss/total_loss"]:.04f}\t'
-            f'accuracy: {train_results["accuracy"]:.04f}\n'
-            f'Validation\t\tloss: {val_results["loss/total_loss"]:.04f}\t'
-            f'accuracy: {val_results["accuracy"]:.04f}\n'
-            f"Elapse: {elapse:.02f}s"
-        )
+        statement = f'Train\t\t\tloss: {train_results["loss/total_loss"]:.04f}\t'
+        if "accuracy" in train_results:
+            statement += f'accuracy: {train_results["accuracy"]:.04f}\n'
+        else:
+            statement += "\n"
+        statement += f'Validation\t\tloss: {val_results["loss/total_loss"]:.04f}\t'
+        if "accuracy" in val_results:
+            statement += f'accuracy: {val_results["accuracy"]:.04f}\n'
+        else:
+            statement += "\n"
+        statement += f"Elapse: {elapse:.02f}s"
+        print(statement)
 
         scheduler.step(val_results["loss/total_loss"])
 
