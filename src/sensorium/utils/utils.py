@@ -238,15 +238,9 @@ def log_metrics(
     """Compute the mean of the metrics in results and log to Summary
 
     Args:
-        results: t.Dict[
-                t.Union[str, int],
-                t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]]
-            ],
+        results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
             a dictionary of tensors where keys are the name of the metrics
-            that represent results from of a mouse, or a dictionary of a
-            dictionary of tensors where the keys are the mouse IDs that
-            represents the average results of multiple mice.
-            When mouse_id is provided, it assumes the former.
+            that represent results from of a mouse.
         epoch: int, the current epoch number.
         mode: int, Summary logging mode.
         summary: tensorboard.Summary, Summary class
@@ -266,7 +260,7 @@ def log_metrics(
             )
     for metric in metrics:
         results[metric] = np.mean([results[mouse_id][metric] for mouse_id in keys])
-        summary.scalar("metric", value=results[metric], step=epoch, mode=mode)
+        summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
 
 
 def num_steps(ds: t.Dict[int, DataLoader]):

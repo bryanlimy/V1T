@@ -68,7 +68,6 @@ def train(
     with tqdm(
         desc="Train", total=len(ds[mouse_ids[0]]), disable=args.verbose == 0
     ) as pbar:
-        count = 0
         for mice_data in zip(*ds.values()):
             step_results = train_step(
                 mice_data=mice_data,
@@ -80,9 +79,6 @@ def train(
             for mouse_id in mouse_ids:
                 utils.update_dict(results[mouse_id], step_results[mouse_id])
             pbar.update(1)
-            if count >= 20:
-                break
-            count += 1
     utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
     return results
 
@@ -98,7 +94,7 @@ def validation_step(
     responses = data["response"].to(model.device)
     outputs = model(images, mouse_id=mouse_id)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-    result["loss/loss"] = loss
+    result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
     return result
 
@@ -190,21 +186,21 @@ def main(args):
     )
     epoch = ckpt.restore()
 
-    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        # train_results = train(
-        #     args,
-        #     ds=train_ds,
-        #     model=model,
-        #     optimizer=optimizer,
-        #     criterion=criterion,
-        #     epoch=epoch,
-        #     summary=summary,
-        # )
+        train_results = train(
+            args,
+            ds=train_ds,
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            epoch=epoch,
+            summary=summary,
+        )
         val_results = validate(
             args,
             ds=val_ds,
