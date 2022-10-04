@@ -78,15 +78,9 @@ def validate(
             images = images.to(model.device)
             outputs = model(images)
             loss = F.mse_loss(input=outputs, target=images)
-            reg_loss = model.regularizer()
-            total_loss = loss + args.reg_scale * reg_loss
             utils.update_dict(
                 results,
-                {
-                    "loss/loss": loss.item(),
-                    "loss/reg_loss": reg_loss.item(),
-                    "loss/total_loss": total_loss.item(),
-                },
+                {"loss/loss": loss.item()},
             )
             if make_plot:
                 plot_image(
@@ -98,7 +92,7 @@ def validate(
                     mode=mode,
                 )
                 make_plot = False
-            del loss, reg_loss, total_loss, outputs
+            del loss, outputs
     for k, v in results.items():
         results[k] = np.mean(v)
         summary.scalar(k, value=results[k], step=epoch, mode=mode)

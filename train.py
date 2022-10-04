@@ -40,7 +40,7 @@ def train_step(
         loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
         reg_loss = model.regularizer()
         total_loss = loss + reg_scale * reg_loss
-        total_loss.backward()  # calculate and accumlate gradients
+        total_loss.backward()  # calculate and accumulate gradients
         result[mouse_id] = {
             "loss/loss": loss.item(),
             "loss/reg_loss": reg_loss.item(),

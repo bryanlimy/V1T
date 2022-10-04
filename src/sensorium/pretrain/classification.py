@@ -3,9 +3,9 @@ import numpy as np
 import typing as t
 from torch import nn
 from tqdm import tqdm
-from torch.utils.data import DataLoader
-import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 from sensorium.pretrain import data
 from sensorium.utils import utils, tensorboard
@@ -88,15 +88,11 @@ def validate(
             images, labels = images.to(model.device), labels.to(model.device)
             outputs = model(images)
             loss = F.nll_loss(input=outputs, target=labels)
-            reg_loss = model.regularizer()
-            total_loss = loss + args.reg_scale * reg_loss
             predictions = torch.argmax(outputs, dim=1)
             utils.update_dict(
                 results,
                 {
                     "loss/loss": loss.item(),
-                    "loss/reg_loss": reg_loss.item(),
-                    "loss/total_loss": total_loss.item(),
                     "accuracy": num_correct(labels, predictions),
                 },
             )
@@ -111,7 +107,7 @@ def validate(
                     mode=mode,
                 )
                 make_plot = False
-            del loss, reg_loss, total_loss, outputs, predictions
+            del loss, outputs, predictions
     for k, v in results.items():
         if k == "accuracy":
             results["accuracy"] = 100 * (np.sum(v) / len(ds.dataset))
