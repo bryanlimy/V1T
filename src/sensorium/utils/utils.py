@@ -230,14 +230,10 @@ def metrics2df(results: t.Dict[int, torch.Tensor]):
 
 
 def log_metrics(
-    results: t.Dict[
-        t.Union[str, int],
-        t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]],
-    ],
+    results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
     epoch: int,
     mode: int,
     summary: tensorboard.Summary,
-    mouse_id: int = None,
 ):
     """Compute the mean of the metrics in results and log to Summary
 
@@ -257,24 +253,20 @@ def log_metrics(
         mouse_id: int, the mouse_id of the result dictionary, None if the
             dictionary represents results from multiple mice.
     """
-    if mouse_id is not None:
-        metrics = list(results.keys())
+    keys = list(results.keys())
+    metrics = list(results[keys[0]].keys())
+    for mouse_id in keys:
         for metric in metrics:
-            results[metric] = torch.stack(results[metric]).mean()
+            results[mouse_id][metric] = np.mean(results[mouse_id][metric])
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
-                value=results[metric],
+                value=results[mouse_id][metric],
                 step=epoch,
                 mode=mode,
             )
-    else:
-        mouse_ids = list(results.keys())
-        metrics = list(results[mouse_ids[0]].keys())
-        for metric in metrics:
-            results[metric] = torch.stack(
-                [results[mouse_id][metric] for mouse_id in mouse_ids]
-            ).mean()
-            summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
+    for metric in metrics:
+        results[metric] = np.mean([results[mouse_id][metric] for mouse_id in keys])
+        summary.scalar("metric", value=results[metric], step=epoch, mode=mode)
 
 
 def num_steps(ds: t.Dict[int, DataLoader]):

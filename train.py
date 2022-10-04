@@ -20,7 +20,7 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     return {
         "metrics/trial_correlation": metrics.correlation(
             y1=y_true, y2=y_pred, axis=None
-        )
+        ).item()
     }
 
 
@@ -32,8 +32,6 @@ def train_step(
     reg_scale: t.Union[float, torch.Tensor] = 0,
 ) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     result = {}
-    optimizer.zero_grad()
-    all_loss = []
     for data in mice_data:
         mouse_id = int(data["mouse_id"][0])
         images = data["image"].to(model.device)
@@ -42,16 +40,15 @@ def train_step(
         loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
         reg_loss = model.regularizer()
         total_loss = loss + reg_scale * reg_loss
-        all_loss.append(total_loss)
+        total_loss.backward()  # calculate and accumlate gradients
         result[mouse_id] = {
-            "loss/loss": loss.detach(),
-            "loss/reg_loss": reg_loss.detach(),
-            "loss/total_loss": total_loss.detach(),
+            "loss/loss": loss.item(),
+            "loss/reg_loss": reg_loss.item(),
+            "loss/total_loss": total_loss.item(),
             **compute_metrics(y_true=responses, y_pred=outputs),
         }
-    total_loss = torch.sum(torch.stack(all_loss))
-    total_loss.backward()
     optimizer.step()
+    optimizer.zero_grad()
     return result
 
 
@@ -71,6 +68,7 @@ def train(
     with tqdm(
         desc="Train", total=len(ds[mouse_ids[0]]), disable=args.verbose == 0
     ) as pbar:
+        count = 0
         for mice_data in zip(*ds.values()):
             step_results = train_step(
                 mice_data=mice_data,
@@ -82,14 +80,9 @@ def train(
             for mouse_id in mouse_ids:
                 utils.update_dict(results[mouse_id], step_results[mouse_id])
             pbar.update(1)
-    for mouse_id in mouse_ids:
-        utils.log_metrics(
-            results=results[mouse_id],
-            epoch=epoch,
-            mode=0,
-            summary=summary,
-            mouse_id=mouse_id,
-        )
+            if count >= 20:
+                break
+            count += 1
     utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
     return results
 
@@ -133,13 +126,6 @@ def validate(
                     )
                     utils.update_dict(mouse_result, result)
                     pbar.update(1)
-                utils.log_metrics(
-                    results=mouse_result,
-                    epoch=epoch,
-                    mode=1,
-                    summary=summary,
-                    mouse_id=mouse_id,
-                )
                 results[mouse_id] = mouse_result
     utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
     return results
@@ -204,21 +190,21 @@ def main(args):
     )
     epoch = ckpt.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        train_results = train(
-            args,
-            ds=train_ds,
-            model=model,
-            optimizer=optimizer,
-            criterion=criterion,
-            epoch=epoch,
-            summary=summary,
-        )
+        # train_results = train(
+        #     args,
+        #     ds=train_ds,
+        #     model=model,
+        #     optimizer=optimizer,
+        #     criterion=criterion,
+        #     epoch=epoch,
+        #     summary=summary,
+        # )
         val_results = validate(
             args,
             ds=val_ds,
@@ -292,6 +278,9 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="Mouse to use for training, use Mouse 2-7 if None.",
+    )
+    parser.add_argument(
+        "--num_workers", default=2, type=int, help="number of works for DataLoader."
     )
 
     # model settings

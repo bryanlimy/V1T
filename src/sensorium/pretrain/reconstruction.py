@@ -21,7 +21,7 @@ def plot_image(
     num_plots: int = 5,
 ):
     for i in range(min(num_plots, len(images))):
-        figure, axes = plt.subplots(nrows=1, ncols=2, figsize=(6, 3), dpi=args.dpi)
+        figure, axes = plt.subplots(nrows=1, ncols=2, figsize=(8, 3), dpi=args.dpi)
         image, output = images[i][0], outputs[i][0]
         axes[0].imshow(image, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
         axes[1].imshow(output, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
@@ -79,7 +79,7 @@ def validate(
     results, make_plot = {}, True
     model.train(False)
     with torch.no_grad():
-        for images, _ in tqdm(ds, desc="Train", disable=args.verbose == 0):
+        for images, _ in tqdm(ds, desc="Val", disable=args.verbose == 0):
             images = images.to(model.device)
             outputs = model(images)
             loss = F.mse_loss(input=outputs, target=images)
@@ -102,6 +102,7 @@ def validate(
                     epoch=epoch,
                     mode=mode,
                 )
+                make_plot = False
             del loss, reg_loss, total_loss, outputs
     for k, v in results.items():
         results[k] = np.mean(v)

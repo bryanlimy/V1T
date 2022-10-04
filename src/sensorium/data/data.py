@@ -270,7 +270,7 @@ def get_training_ds(
         mouse_ids = list(range(0, 7))
 
     # settings for DataLoader
-    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 1}
+    dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}
     if device.type in ["cuda", "mps"]:
         gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
