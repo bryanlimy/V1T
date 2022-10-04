@@ -63,11 +63,6 @@ def train(
     return results
 
 
-def transform(image: torch.Tensor):
-    """reverse image standardization"""
-    return image.cpu() * data.IMAGE_STD + data.IMAGE_MEAN
-
-
 def validate(
     args,
     ds: DataLoader,
@@ -106,5 +101,5 @@ def validate(
             del loss, reg_loss, total_loss, outputs
     for k, v in results.items():
         results[k] = np.mean(v)
-        summary.scalar(k, value=results[k], step=epoch, mode=0)
+        summary.scalar(k, value=results[k], step=epoch, mode=mode)
     return results
