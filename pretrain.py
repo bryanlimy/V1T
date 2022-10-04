@@ -221,9 +221,9 @@ def main(args):
         statement += f"Elapse: {elapse:.02f}s"
         print(statement)
 
-        scheduler.step(val_results["loss/total_loss"])
+        scheduler.step(val_results["loss/loss"])
 
-        if checkpoint.monitor(loss=val_results["loss/total_loss"], epoch=epoch):
+        if checkpoint.monitor(loss=val_results["loss/loss"], epoch=epoch):
             break
 
     checkpoint.restore()
