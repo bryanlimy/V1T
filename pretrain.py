@@ -208,12 +208,12 @@ def main(args):
             step=epoch,
             mode=0,
         )
-        statement = f'Train\t\t\tloss: {train_results["loss/total_loss"]:.04f}\t'
+        statement = f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t'
         if "accuracy" in train_results:
             statement += f'accuracy: {train_results["accuracy"]:.04f}\n'
         else:
             statement += "\n"
-        statement += f'Validation\t\tloss: {val_results["loss/total_loss"]:.04f}\t'
+        statement += f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t'
         if "accuracy" in val_results:
             statement += f'accuracy: {val_results["accuracy"]:.04f}\n'
         else:
