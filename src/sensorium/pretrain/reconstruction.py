@@ -25,7 +25,7 @@ def plot_image(
         image, output = images[i][0], outputs[i][0]
         axes[0].imshow(image, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
         axes[1].imshow(output, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
-        figure.subtitle(f"MSE: {((image - output)**2).mean():.04f}", fontsize=10)
+        figure.suptitle(f"MSE: {((image - output)**2).mean():.04f}", fontsize=10)
         summary.figure(f"images/image{i:03d}", figure=figure, step=epoch, mode=mode)
 
 
