@@ -47,6 +47,7 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         "image_ids": [],
     }
     model.train(False)
+    count = 0
     with torch.no_grad():
         for data in ds:
             predictions = model(
@@ -58,6 +59,9 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
             results["images"].append(ds.dataset.i_transform_image(data["image"]))
             results["image_ids"].append(data["image_id"])
             results["trial_ids"].append(data["trial_id"])
+            if count >= 5:
+                break
+            count += 1
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
@@ -89,75 +93,77 @@ def evaluate(
         save_result: str, path where the result is saved if provided.
     """
     results = {"trial_correlation": {}, "image_correlation": {}, "feve": {}}
-    trial_corrs, image_corrs, feves = {}, {}, {}
+    outputs = {}
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
-        mouse_result = inference(ds=mouse_ds, model=model)
-        if summary is not None:
-            summary.plot_image_response(
-                tag=f"image_response/mouse{mouse_id}",
-                results=mouse_result,
-                step=epoch,
-                mode=mode,
-            )
-        metrics = Metrics(ds=mouse_ds, results=mouse_result)
+        outputs[mouse_id] = inference(ds=mouse_ds, model=model)
 
-        trial_corr = metrics.single_trial_correlation(per_neuron=True)
-        results["trial_correlation"][mouse_id] = trial_corr.mean()
-        trial_corrs[mouse_id] = trial_corr
+        metrics = Metrics(ds=mouse_ds, results=outputs[mouse_id])
 
+        results["trial_correlation"][mouse_id] = metrics.single_trial_correlation(
+            per_neuron=True
+        )
         if metrics.repeat_image and not metrics.hashed:
-            image_corr = metrics.correlation_to_average(per_neuron=True)
-            results["image_correlation"][mouse_id] = image_corr.mean()
-            image_corrs[mouse_id] = image_corr
-            feve = metrics.feve(per_neuron=True)
-            results["feve"][mouse_id] = feve.mean()
-            feves[mouse_id] = feve
+            results["image_correlation"][mouse_id] = metrics.correlation_to_average(
+                per_neuron=True
+            )
+            results["feve"][mouse_id] = metrics.feve(per_neuron=True)
 
     # write individual and average results to TensorBoard
     if summary is not None:
-        summary.plot_correlation(
+        summary.box_plot(
             "single_trial_correlation",
-            data=metrics2df(trial_corrs),
+            data=metrics2df(results["trial_correlation"]),
             step=epoch,
             mode=mode,
         )
-        if image_corrs:
-            summary.plot_correlation(
+        if results["image_correlation"]:
+            summary.box_plot(
                 "correlation_to_average",
-                data=metrics2df(image_corrs),
+                data=metrics2df(results["image_correlation"]),
                 step=epoch,
                 mode=mode,
             )
-        if feves:
-            summary.plot_correlation(
+        if results["feve"]:
+            summary.box_plot(
                 "FEVE",
-                data=metrics2df(feves),
+                data=metrics2df(results["feve"]),
                 step=epoch,
                 ylabel="FEVE",
                 mode=mode,
             )
-        for metric, result in results.items():
-            for mouse_id, value in result.items():
+        for mouse_id in outputs.keys():
+            summary.plot_image_response(
+                tag=f"image_response/mouse{mouse_id}",
+                results=outputs[mouse_id],
+                step=epoch,
+                mode=mode,
+            )
+        # compute mean for each metric and log to TensorBoard
+        for metric in results.keys():
+            values = []
+            for mouse_id in results[metric].keys():
+                results[metric][mouse_id] = results[metric][mouse_id].mean()
                 summary.scalar(
-                    tag=f"{metric}/mouse{mouse_id}",
-                    value=value,
+                    f"{metric}/mouse{mouse_id}",
+                    value=results[metric][mouse_id],
                     step=epoch,
                     mode=mode,
                 )
-            values = list(result.values())
+                values.append(results[metric][mouse_id])
+            # log overall mean for that metric
             if values:
                 summary.scalar(
-                    tag=f"{metric}/average",
+                    f"{metric}/average",
                     value=np.mean(values),
                     step=epoch,
                     mode=mode,
                 )
     if print_result:
-        _print = lambda d: [f"Mouse {k}: {v:.04f}\t\t" for k, v in d.items()]
+        _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
         statement = "Single trial correlation\n"
         statement += "".join(_print(results["trial_correlation"]))
         if results["image_correlation"]:
@@ -167,7 +173,7 @@ def evaluate(
             statement += "".join(_print(results["feve"]))
         print(statement)
     if save_result is not None:
-        yaml.save(os.path.join(save_result, "results.yaml"), data=results)
+        yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
     return results
 
 

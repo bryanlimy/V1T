@@ -187,7 +187,7 @@ class Summary(object):
         if close:
             plt.close(figure)
 
-    def plot_correlation(
+    def box_plot(
         self,
         tag: str,
         data: pd.DataFrame,
@@ -209,21 +209,21 @@ class Summary(object):
         results: t.Dict[str, torch.Tensor],
         step: int = 0,
         mode: int = 1,
+        num_samples: int = 3,
     ):
         """Plot 3 image-prediction-response for each mouse"""
-        n_samples = 3
         label_fontsize, tick_fontsize = 12, 10
         figure, axes = plt.subplots(
-            nrows=n_samples,
+            nrows=num_samples,
             ncols=3,
-            gridspec_kw={"wspace": 0.1, "hspace": 0.2},
-            figsize=(10, 2 * n_samples),
+            gridspec_kw={"wspace": 0.2, "hspace": 0.2},
+            figsize=(10, 2 * num_samples),
             dpi=self.dpi,
         )
 
         x_axis = np.arange(results["predictions"].shape[1])
 
-        for i in range(n_samples):
+        for i in range(num_samples):
             axes[i, 0].scatter(
                 x=x_axis, y=results["targets"][i], s=2, alpha=0.8, color="orangered"
             )
