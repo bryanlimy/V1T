@@ -25,6 +25,9 @@ class Core(nn.Module):
     def shape(self):
         return self._output_shape
 
+    def initialize(self):
+        pass
+
     def regularizer(self):
         """L1 regularization"""
         return sum(p.abs().sum() for p in self.parameters())
