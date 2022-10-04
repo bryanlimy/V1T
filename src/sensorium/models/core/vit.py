@@ -163,12 +163,6 @@ class ViTCore(Core):
 
         # calculate latent height and width based on num_patches
         height = 32
-        self.to_output = nn.Sequential(
-            Rearrange("b (h w) c -> b c h w", h=height, w=num_patches // height)
-        )
-
-        # calculate output_shape
-        height = 32
         self._latent_dim = (height, num_patches // height, emb_dim)
         self._output_shape = (emb_dim, height, num_patches // height)
 
@@ -186,11 +180,9 @@ class ViTCore(Core):
         # remove cls_token
         outputs = outputs[:, :-1, :]
 
-        outputs = self.to_output(outputs)
-
-        # # reshape from (num patches, patch_dim) to (HWC)
-        # outputs = outputs.view(*(b, *self._latent_dim))
-        # # reorder outputs to (CHW)
-        # outputs = torch.permute(outputs, dims=[0, 3, 1, 2])
+        # reshape from (num patches, patch_dim) to (HWC)
+        outputs = outputs.view(*(b, *self._latent_dim))
+        # reorder outputs to (CHW)
+        outputs = torch.permute(outputs, dims=[0, 3, 1, 2])
 
         return outputs
