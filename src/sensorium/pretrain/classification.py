@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import typing as t
 from torch import nn
 from tqdm import tqdm
@@ -30,7 +31,7 @@ def plot_image(
 
 
 def num_correct(y_true: torch.Tensor, y_pred: torch.Tensor):
-    return (y_pred == y_true).float().sum()
+    return (y_pred == y_true).float().sum().item()
 
 
 def train(
@@ -56,18 +57,18 @@ def train(
         utils.update_dict(
             results,
             {
-                "loss/loss": loss.detach(),
-                "loss/reg_loss": reg_loss.detach(),
-                "loss/total_loss": total_loss.detach(),
+                "loss/loss": loss.item(),
+                "loss/reg_loss": reg_loss.item(),
+                "loss/total_loss": total_loss.item(),
                 "accuracy": num_correct(labels, predictions),
             },
         )
+        del loss, reg_loss, total_loss, outputs, predictions
     for k, v in results.items():
-        v = torch.stack(v)
         if k == "accuracy":
-            results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
+            results["accuracy"] = 100 * (np.sum(v) / len(ds.dataset))
         else:
-            results[k] = v.mean()
+            results[k] = np.mean(v)
         summary.scalar(k, value=results[k], step=epoch, mode=0)
     return results
 
@@ -93,16 +94,16 @@ def validate(
             utils.update_dict(
                 results,
                 {
-                    "loss/loss": loss.detach(),
-                    "loss/reg_loss": reg_loss.detach(),
-                    "loss/total_loss": total_loss.detach(),
+                    "loss/loss": loss.item(),
+                    "loss/reg_loss": reg_loss.item(),
+                    "loss/total_loss": total_loss.item(),
                     "accuracy": num_correct(labels, predictions),
                 },
             )
             if make_plot:
                 plot_image(
                     args,
-                    images=images.cpu() * data.IMAGE_STD + data.IMAGE_MEAN,
+                    images=data.reverse(images),
                     predictions=predictions.cpu(),
                     labels=labels.cpu(),
                     summary=summary,
@@ -110,11 +111,11 @@ def validate(
                     mode=mode,
                 )
                 make_plot = False
+            del loss, reg_loss, total_loss, outputs, predictions
     for k, v in results.items():
-        v = torch.stack(v)
         if k == "accuracy":
-            results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
+            results["accuracy"] = 100 * (np.sum(v) / len(ds.dataset))
         else:
-            results[k] = v.mean()
+            results[k] = np.mean(v)
         summary.scalar(k, value=results[k], step=epoch, mode=mode)
     return results

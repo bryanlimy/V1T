@@ -23,8 +23,8 @@ def plot_image(
     for i in range(min(num_plots, len(images))):
         figure, axes = plt.subplots(nrows=1, ncols=2, figsize=(6, 3), dpi=args.dpi)
         image, output = images[i][0], outputs[i][0]
-        axes[0].imshow(images, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
-        axes[1].imshow(outputs, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
+        axes[0].imshow(image, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
+        axes[1].imshow(output, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
         axes.set_title(f"MSE: {((image - output)**2).mean():.04f}", pad=3, fontsize=10)
         summary.figure(f"images/image{i:03d}", figure=figure, step=epoch, mode=mode)
 
@@ -63,6 +63,11 @@ def train(
     return results
 
 
+def transform(image: torch.Tensor):
+    """reverse image standardization"""
+    return image.cpu() * data.IMAGE_STD + data.IMAGE_MEAN
+
+
 def validate(
     args,
     ds: DataLoader,
@@ -91,8 +96,8 @@ def validate(
             if make_plot:
                 plot_image(
                     args,
-                    images=images.cpu() * data.IMAGE_STD + data.IMAGE_MEAN,
-                    outputs=outputs.cpu() * data.IMAGE_STD + data.IMAGE_MEAN,
+                    images=data.reverse(images),
+                    outputs=data.reverse(outputs),
                     summary=summary,
                     epoch=epoch,
                     mode=mode,
