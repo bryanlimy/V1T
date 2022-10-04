@@ -134,12 +134,14 @@ def main(args):
     checkpoint = Checkpoint(args, model=model)
     checkpoint.restore(force=True)
 
-    # run evaluation on test set for all mouse
-    utils.evaluate(args, ds=test_ds, model=model, print_result=True)
-
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
     csv_dir = os.path.join(args.output_dir, "submissions", timestamp)
+
+    # run evaluation on test set for all mouse
+    utils.evaluate(
+        args, ds=test_ds, model=model, print_result=True, save_result=csv_dir
+    )
 
     # Sensorium challenge
     generate_submission(

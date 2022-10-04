@@ -38,6 +38,9 @@ def save(filename: str, data: t.Dict):
     """Save data dictionary to yaml file"""
     assert type(data) == dict
     array2py(data)
+    dirname = os.path.dirname(filename)
+    if not os.path.isdir(dirname):
+        os.makedirs(dirname)
     with open(filename, "w") as file:
         yaml.dump(data, file)
 

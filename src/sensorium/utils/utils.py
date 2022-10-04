@@ -73,8 +73,21 @@ def evaluate(
     summary: tensorboard.Summary = None,
     mode: int = 1,
     print_result: bool = False,
+    save_result: str = None,
 ):
-    """Evaluate DataLoaders ds on the 3 challenge metrics"""
+    """
+    Evaluate DataLoaders ds on the 3 challenge metrics
+
+    Args:
+        args
+        ds: t.Dict[int, DataLoader], dictionary of DataLoader, one for each mouse.
+        model: nn.Module, the model.
+        epoch: int, the current epoch number.
+        summary: tensorboard.Summary (optional), log result to TensorBoard.
+        mode: int (optional), Summary mode.
+        print_result: bool, print result if True.
+        save_result: str, path where the result is saved if provided.
+    """
     results = {"trial_correlation": {}, "image_correlation": {}, "feve": {}}
     trial_corrs, image_corrs, feves = {}, {}, {}
     for mouse_id, mouse_ds in tqdm(
@@ -144,17 +157,17 @@ def evaluate(
                     mode=mode,
                 )
     if print_result:
+        _print = lambda d: [f"Mouse {k}: {v:.04f}\t\t" for k, v in d.items()]
         statement = "Single trial correlation\n"
-        for mouse_id, value in results["trial_correlation"].items():
-            statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
+        statement += "".join(_print(results["trial_correlation"]))
         if results["image_correlation"]:
-            statement += "\nAverage to correlation\n"
-            for mouse_id, value in results["image_correlation"].items():
-                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
+            statement += "\nCorrelation to average\n"
+            statement += "".join(_print(results["image_correlation"]))
             statement += "\nFEVE\n"
-            for mouse_id, value in results["feve"].items():
-                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
+            statement += "".join(_print(results["feve"]))
         print(statement)
+    if save_result is not None:
+        yaml.save(os.path.join(save_result, "results.yaml"), data=results)
     return results
 
 

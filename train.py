@@ -268,7 +268,16 @@ def main(args):
 
     ckpt.restore()
 
-    utils.evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
+    utils.evaluate(
+        args,
+        ds=test_ds,
+        model=model,
+        epoch=epoch,
+        summary=summary,
+        mode=2,
+        print_result=True,
+        save_result=args.output_dir,
+    )
 
     summary.close()
 
