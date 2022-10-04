@@ -46,3 +46,29 @@ def pool2d_shape(
         (input_shape[2] + 2 * padding - dilation * (kernel_size - 1) - 1) / stride
     ) + 1
     return (input_shape[0], floor(new_h), floor(new_w))
+
+
+def transpose_conv2d_shape(
+    input_shape: t.Tuple[int, int, int],
+    num_filters: int,
+    kernel_size: int = 1,
+    stride: int = 1,
+    padding: int = 0,
+    output_padding: int = 0,
+    dilation: int = 1,
+):
+    new_h = (
+        (input_shape[1] - 1) * stride
+        - 2 * padding
+        + dilation * (kernel_size - 1)
+        + output_padding
+        + 1
+    )
+    new_w = (
+        (input_shape[2] - 1) * stride
+        - 2 * padding
+        + dilation * (kernel_size - 1)
+        + output_padding
+        + 1
+    )
+    return (num_filters, floor(new_h), floor(new_w))

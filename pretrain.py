@@ -8,237 +8,121 @@ from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
-from torch.utils import data
-import matplotlib.pyplot as plt
-import torch.nn.functional as F
-from torchvision import transforms
-from einops.layers.torch import Reduce
-from torchvision.datasets import ImageFolder
+from einops.layers.torch import Reduce, Rearrange
 
 from sensorium.models.core import get_core
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.checkpoint import Checkpoint
 
+from sensorium import pretrain
 
-IMAGE_SIZE = (1, 144, 256)
-NUM_CLASSES = 1000
-IMAGE_MEAN = torch.tensor(0.44531356896770125)
-IMAGE_STD = torch.tensor(0.2692461874154524)
-
-
-def plot_image(
-    args,
-    images: torch.Tensor,
-    predictions: torch.Tensor,
-    labels: torch.Tensor,
-    summary: tensorboard.Summary,
-    epoch: int,
-    mode: int = 1,
-    num_plots: int = 5,
-):
-    for i in range(min(num_plots, len(images))):
-        figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=args.dpi)
-        ax.imshow(images[i][0], cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
-        ax.set_title(
-            f"label: {labels[i]}   prediction: {predictions[i]}", pad=3, fontsize=10
-        )
-        summary.figure(f"images/image{i:03d}", figure=figure, step=epoch, mode=mode)
-
-
-def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
-    train_transforms = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Grayscale(),
-            transforms.RandomCrop(size=(IMAGE_SIZE[1:]), pad_if_needed=True),
-            transforms.RandomHorizontalFlip(p=0.25),
-            transforms.RandomAdjustSharpness(sharpness_factor=0.6, p=0.25),
-            transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
-        ]
-    )
-    test_transforms = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Grayscale(),
-            transforms.RandomCrop(size=(IMAGE_SIZE[1:]), pad_if_needed=True),
-            transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
-        ]
-    )
-
-    train_data = ImageFolder(root=data_dir, transform=train_transforms)
-    val_data = ImageFolder(root=data_dir, transform=test_transforms)
-    test_data = ImageFolder(root=data_dir, transform=test_transforms)
-
-    size = len(train_data)
-    indexes = np.arange(size)
-    np.random.shuffle(indexes)
-
-    train_idx = indexes[: int(size * 0.7)]
-    val_idx = indexes[int(size * 0.7) : int(size * 0.85)]
-    test_idx = indexes[int(size * 0.85) :]
-
-    # settings for DataLoader
-    dataloader_kwargs = {"batch_size": batch_size, "num_workers": 4}
-    if device.type in ["cuda", "mps"]:
-        gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
-        dataloader_kwargs.update(gpu_kwargs)
-
-    train_ds = data.DataLoader(
-        train_data, sampler=data.SubsetRandomSampler(train_idx), **dataloader_kwargs
-    )
-    val_ds = data.DataLoader(
-        val_data, sampler=data.SubsetRandomSampler(val_idx), **dataloader_kwargs
-    )
-    test_ds = data.DataLoader(
-        test_data, sampler=data.SubsetRandomSampler(test_idx), **dataloader_kwargs
-    )
-
-    args.input_shape = IMAGE_SIZE
-    args.output_shape = (NUM_CLASSES,)
-
-    return train_ds, val_ds, test_ds
-
-
-# class Model(nn.Module):
-#     def __init__(self, args):
-#         super(Model, self).__init__()
-#         self.device = args.device
-#         self.input_shape = IMAGE_SIZE
-#         self.output_shape = args.output_shape
-#
-#         self.add_module(
-#             name="core", module=get_core(args)(args, input_shape=self.input_shape)
-#         )
-#
-#         core_shape = self.core.shape
-#
-#         self.readout = nn.Sequential(
-#             Reduce("b c h w -> b c", "mean"),
-#             nn.Linear(in_features=core_shape[0], out_features=NUM_CLASSES),
-#             nn.LogSoftmax(dim=1),
-#         )
-#
-#     def regularizer(self):
-#         """L1 regularization"""
-#         return sum(p.abs().sum() for p in self.parameters())
-#
-#     def forward(self, inputs: torch.Tensor):
-#         outputs = self.core(inputs)
-#         outputs = self.readout(outputs)
-#         return outputs
+import sensorium.models.utils as model_utils
 
 
 class Model(nn.Module):
     def __init__(self, args):
         super(Model, self).__init__()
         self.device = args.device
-        weights = ResNet18_Weights.DEFAULT
-        self.resnet = resnet18(weights=weights, num_classes=NUM_CLASSES)
-        self.conv = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=1, stride=1)
-        self.log_softmax = nn.LogSoftmax(dim=-1)
+        self.input_shape = args.input_shape
+        self.output_shape = args.output_shape
+
+        self.add_module(
+            name="core", module=get_core(args)(args, input_shape=self.input_shape)
+        )
+
+        core_shape = self.core.shape
+
+        if args.mode == 0:
+            self.readout = nn.Sequential(
+                Reduce("b c h w -> b c", "mean"),
+                nn.Linear(
+                    in_features=core_shape[0],
+                    out_features=args.output_shape[0],
+                ),
+                nn.LogSoftmax(dim=1),
+            )
+        else:
+            latent_shape = model_utils.conv2d_shape(
+                input_shape=core_shape,
+                num_filters=core_shape[0],
+                kernel_size=5,
+                stride=2,
+            )
+            latent_dim = int(np.prod(latent_shape))
+            # the target shape and dimension of the bottleneck layer
+            target_shape = (latent_shape[0], 18, 32)
+            target_dim = int(np.prod(target_shape))
+            output_shape = model_utils.transpose_conv2d_shape(
+                input_shape=target_shape,
+                num_filters=target_shape[0],
+                kernel_size=4,
+                stride=2,
+                padding=1,
+            )
+            output_shape = model_utils.transpose_conv2d_shape(
+                input_shape=output_shape,
+                num_filters=target_shape[0],
+                kernel_size=4,
+                stride=2,
+                padding=1,
+            )
+            self._output_shape = model_utils.transpose_conv2d_shape(
+                input_shape=output_shape,
+                num_filters=target_shape[0],
+                kernel_size=4,
+                stride=2,
+                padding=1,
+            )
+            self.readout = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=core_shape[0],
+                    out_channels=core_shape[0],
+                    kernel_size=5,
+                    stride=2,
+                ),
+                nn.BatchNorm2d(core_shape[0]),
+                nn.GELU(),
+                nn.Flatten(),  # bottleneck
+                nn.Linear(in_features=latent_dim, out_features=target_dim),
+                nn.GELU(),
+                nn.Linear(in_features=target_dim, out_features=target_dim),
+                Rearrange("b (c h w) -> b c h w", h=target_shape[1], w=target_shape[2]),
+                nn.ConvTranspose2d(
+                    in_channels=target_shape[0],
+                    out_channels=target_shape[0],
+                    kernel_size=4,
+                    stride=2,
+                    padding=1,
+                ),
+                nn.BatchNorm2d(num_features=target_shape[0]),
+                nn.GELU(),
+                nn.ConvTranspose2d(
+                    in_channels=target_shape[0],
+                    out_channels=target_shape[0],
+                    kernel_size=4,
+                    stride=2,
+                    padding=1,
+                ),
+                nn.BatchNorm2d(num_features=target_shape[0]),
+                nn.GELU(),
+                nn.ConvTranspose2d(
+                    in_channels=target_shape[0],
+                    out_channels=target_shape[0],
+                    kernel_size=4,
+                    stride=2,
+                    padding=1,
+                ),
+                nn.Conv2d(in_channels=target_shape[0], out_channels=1, kernel_size=1),
+            )
 
     def regularizer(self):
         """L1 regularization"""
         return sum(p.abs().sum() for p in self.parameters())
 
     def forward(self, inputs: torch.Tensor):
-        outputs = self.conv(inputs)
-        outputs = self.resnet(outputs)
-        return self.log_softmax(outputs)
-
-
-def num_correct(y_true: torch.Tensor, y_pred: torch.Tensor):
-    return (y_pred == y_true).float().sum()
-
-
-def train(
-    args,
-    ds: data.DataLoader,
-    model: nn.Module,
-    optimizer: torch.optim,
-    summary: tensorboard.Summary,
-    epoch: int,
-):
-    results = {}
-    model.train(True)
-    for images, labels in tqdm(ds, desc="Train", disable=args.verbose == 0):
-        optimizer.zero_grad()
-        images, labels = images.to(model.device), labels.to(model.device)
-        outputs = model(images)
-        loss = F.nll_loss(input=outputs, target=labels)
-        reg_loss = model.regularizer()
-        total_loss = loss + args.reg_scale * reg_loss
-        total_loss.backward()
-        optimizer.step()
-        predictions = torch.argmax(outputs, dim=1)
-        utils.update_dict(
-            results,
-            {
-                "loss/loss": loss.detach(),
-                "loss/reg_loss": reg_loss.detach(),
-                "loss/total_loss": total_loss.detach(),
-                "accuracy": num_correct(labels, predictions),
-            },
-        )
-    for k, v in results.items():
-        v = torch.stack(v)
-        if k == "accuracy":
-            results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
-        else:
-            results[k] = v.mean()
-        summary.scalar(k, value=results[k], step=epoch, mode=0)
-    return results
-
-
-def validate(
-    args,
-    ds: data.DataLoader,
-    model: nn.Module,
-    summary: tensorboard.Summary,
-    epoch: int,
-    mode: int = 1,
-):
-    results, make_plot = {}, True
-    with torch.no_grad():
-        model.train(False)
-        for images, labels in tqdm(ds, desc="Val", disable=args.verbose == 0):
-            images, labels = images.to(model.device), labels.to(model.device)
-            outputs = model(images)
-            loss = F.nll_loss(input=outputs, target=labels)
-            reg_loss = model.regularizer()
-            total_loss = loss + args.reg_scale * reg_loss
-            predictions = torch.argmax(outputs, dim=1)
-            utils.update_dict(
-                results,
-                {
-                    "loss/loss": loss.detach(),
-                    "loss/reg_loss": reg_loss.detach(),
-                    "loss/total_loss": total_loss.detach(),
-                    "accuracy": num_correct(labels, predictions),
-                },
-            )
-            if make_plot:
-                plot_image(
-                    args,
-                    images=images.cpu() * IMAGE_STD + IMAGE_MEAN,
-                    predictions=predictions.cpu(),
-                    labels=labels.cpu(),
-                    summary=summary,
-                    epoch=epoch,
-                    mode=mode,
-                )
-                make_plot = False
-    for k, v in results.items():
-        v = torch.stack(v)
-        if k == "accuracy":
-            results["accuracy"] = 100 * (v.sum() / len(ds.dataset))
-        else:
-            results[k] = v.mean()
-        summary.scalar(k, value=results[k], step=epoch, mode=mode)
-    return results
-
-
-from torchvision.models import resnet18, ResNet18_Weights
+        outputs = self.core(inputs)
+        outputs = self.readout(outputs)
+        return outputs
 
 
 def main(args):
@@ -251,7 +135,7 @@ def main(args):
 
     utils.get_device(args)
 
-    train_ds, val_ds, test_ds = get_ds(
+    train_ds, val_ds, test_ds = pretrain.data.get_ds(
         args,
         data_dir=args.dataset,
         batch_size=args.batch_size,
@@ -291,6 +175,13 @@ def main(args):
 
     checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
     epoch = checkpoint.restore()
+
+    if args.mode == 0:
+        train = pretrain.classification.train
+        validate = pretrain.classification.validate
+    else:
+        train = pretrain.reconstruction.train
+        validate = pretrain.reconstruction.validate
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -352,7 +243,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="data/imagenet/",
+        default="data/imagenet",
         help="path to directory where ImageNet validation set is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
@@ -376,6 +267,15 @@ if __name__ == "__main__":
     parser.add_argument("--dim_head", type=int, default=64)
 
     # training settings
+    parser.add_argument(
+        "--mode",
+        type=int,
+        required=True,
+        choices=[0, 1],
+        help="pretrain core module by classification or reconstruction:"
+        "  0: classification"
+        "  1: reconstruction",
+    )
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )

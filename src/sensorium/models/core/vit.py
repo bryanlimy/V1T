@@ -120,7 +120,7 @@ class ViTCore(Core):
         (channels, image_height, image_width) = input_shape
 
         patch_size = args.patch_size
-        dim = args.emb_dim
+        emb_dim = args.emb_dim
         heads = args.num_heads
         mlp_dim = args.mlp_dim
         num_layers = args.num_layers
@@ -145,15 +145,15 @@ class ViTCore(Core):
                 p1=patch_height,
                 p2=patch_width,
             ),
-            nn.Linear(in_features=patch_dim, out_features=dim),
+            nn.Linear(in_features=patch_dim, out_features=emb_dim),
         )
 
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
-        self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         self.emb_dropout = nn.Dropout(p=emb_dropout)
 
         self.transformer = Transformer(
-            dim=dim,
+            dim=emb_dim,
             num_layers=num_layers,
             heads=heads,
             dim_head=dim_head,
@@ -161,10 +161,16 @@ class ViTCore(Core):
             dropout=dropout,
         )
 
+        # calculate latent height and width based on num_patches
+        height = 32
+        self.to_output = nn.Sequential(
+            Rearrange("b (h w) c -> b c h w", h=height, w=num_patches // height)
+        )
+
         # calculate output_shape
         height = 32
-        self._latent_dim = (height, num_patches // height, dim)
-        self._output_shape = (dim, height, num_patches // height)
+        self._latent_dim = (height, num_patches // height, emb_dim)
+        self._output_shape = (emb_dim, height, num_patches // height)
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)
@@ -180,9 +186,11 @@ class ViTCore(Core):
         # remove cls_token
         outputs = outputs[:, :-1, :]
 
-        # reshape from (num patches, patch_dim) to (HWC)
-        outputs = outputs.view(*(b, *self._latent_dim))
-        # reorder outputs to (CHW)
-        outputs = torch.permute(outputs, dims=[0, 3, 1, 2])
+        outputs = self.to_output(outputs)
+
+        # # reshape from (num patches, patch_dim) to (HWC)
+        # outputs = outputs.view(*(b, *self._latent_dim))
+        # # reorder outputs to (CHW)
+        # outputs = torch.permute(outputs, dims=[0, 3, 1, 2])
 
         return outputs
