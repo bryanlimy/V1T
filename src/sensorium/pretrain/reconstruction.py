@@ -45,9 +45,9 @@ def train(
         loss = F.mse_loss(input=outputs, target=images)
         reg_loss = model.regularizer()
         total_loss = loss + args.reg_scale * reg_loss
-        optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
+        optimizer.zero_grad()
         utils.update_dict(
             results,
             {

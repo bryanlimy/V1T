@@ -50,9 +50,9 @@ def train(
         loss = F.nll_loss(input=outputs, target=labels)
         reg_loss = model.regularizer()
         total_loss = loss + args.reg_scale * reg_loss
-        optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
+        optimizer.zero_grad()
         predictions = torch.argmax(outputs, dim=1)
         utils.update_dict(
             results,
