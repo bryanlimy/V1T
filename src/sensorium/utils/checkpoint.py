@@ -85,8 +85,7 @@ class Checkpoint:
         if self._scheduler is not None:
             checkpoint["scheduler_state_dict"] = self._scheduler.state_dict()
         torch.save(checkpoint, f=filename)
-        if self._verbose:
-            print(f"\nCheckpoint saved to {filename}.")
+        print(f"\nCheckpoint saved to {filename}.")
 
     def restore(self, force: bool = False) -> int:
         """
@@ -125,6 +124,5 @@ class Checkpoint:
                 self._wait += 1
             else:
                 terminate = True
-                if self._verbose:
-                    print(f"Model has not improved in {self._wait} epochs.")
+                print(f"Model has not improved in {self._wait} epochs.")
         return terminate
