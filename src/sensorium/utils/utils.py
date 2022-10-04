@@ -111,7 +111,6 @@ def evaluate(
                 per_neuron=True
             )
             results["feve"][mouse_id] = metrics.feve(per_neuron=True)
-
     # write individual and average results to TensorBoard
     if summary is not None:
         summary.box_plot(
@@ -162,6 +161,11 @@ def evaluate(
                     step=epoch,
                     mode=mode,
                 )
+    else:
+        # compute mean for each metric
+        for metric in results.keys():
+            for mouse_id in results[metric].keys():
+                results[metric][mouse_id] = results[metric][mouse_id].mean()
     if print_result:
         _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
         statement = "Single trial correlation\n"

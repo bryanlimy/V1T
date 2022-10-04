@@ -171,7 +171,7 @@ def main(args):
         optimizer=optimizer,
         mode="min",
         factor=0.5,
-        patience=5,
+        patience=10,
         threshold_mode="rel",
         min_lr=1e-6,
         verbose=False,

@@ -41,7 +41,7 @@ class Checkpoint:
         model: nn.Module,
         optimizer: torch.optim = None,
         scheduler: torch.optim.lr_scheduler = None,
-        patience: int = 10,
+        patience: int = 20,
         min_epochs: int = 50,
     ):
         """
