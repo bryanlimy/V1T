@@ -247,6 +247,9 @@ if __name__ == "__main__":
         help="path to directory where ImageNet validation set is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument(
+        "--num_workers", default=4, type=int, help="number of works for DataLoader."
+    )
 
     # model settings
     parser.add_argument(

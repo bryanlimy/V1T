@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 import typing as t
 from torch import nn
 from tqdm import tqdm
@@ -50,14 +51,14 @@ def train(
         utils.update_dict(
             results,
             {
-                "loss/loss": loss.detach(),
-                "loss/reg_loss": reg_loss.detach(),
-                "loss/total_loss": total_loss.detach(),
+                "loss/loss": loss.item(),
+                "loss/reg_loss": reg_loss.item(),
+                "loss/total_loss": total_loss.item(),
             },
         )
         del loss, reg_loss, total_loss, outputs
     for k, v in results.items():
-        results[k] = torch.stack(v).mean()
+        results[k] = np.mean(v)
         summary.scalar(k, value=results[k], step=epoch, mode=0)
     return results
 
@@ -82,9 +83,9 @@ def validate(
             utils.update_dict(
                 results,
                 {
-                    "loss/loss": loss.detach(),
-                    "loss/reg_loss": reg_loss.detach(),
-                    "loss/total_loss": total_loss.detach(),
+                    "loss/loss": loss.item(),
+                    "loss/reg_loss": reg_loss.item(),
+                    "loss/total_loss": total_loss.item(),
                 },
             )
             if make_plot:
@@ -98,6 +99,6 @@ def validate(
                 )
             del loss, reg_loss, total_loss, outputs
     for k, v in results.items():
-        results[k] = torch.stack(v).mean()
+        results[k] = np.mean(v)
         summary.scalar(k, value=results[k], step=epoch, mode=0)
     return results
