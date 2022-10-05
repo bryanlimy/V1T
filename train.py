@@ -292,20 +292,6 @@ if __name__ == "__main__":
         "--readout", type=str, required=True, help="The readout module to use."
     )
 
-    # pre-trained Core
-    parser.add_argument(
-        "--pretrain_core",
-        type=str,
-        default="",
-        help="path to directory where pre-trained core model is stored.",
-    )
-    parser.add_argument(
-        "--core_lr_scale",
-        type=float,
-        default=1,
-        help="scale learning rate for core as it might already be trained.",
-    )
-
     # ConvCore
     parser.add_argument("--num_filters", type=int, default=8)
     parser.add_argument("--dropout", type=float, default=0.2)
@@ -330,6 +316,7 @@ if __name__ == "__main__":
         type=str,
         help="criterion (loss function) to use.",
     )
+    parser.add_argument("--lr", default=1e-3, type=float, help="initial learning rate")
     parser.add_argument(
         "--depth_scale",
         default=1.0,
@@ -347,7 +334,6 @@ if __name__ == "__main__":
         action="store_true",
         help="scale loss by the size of the dataset",
     )
-    parser.add_argument("--lr", default=1e-3, type=float, help="initial learning rate")
     parser.add_argument(
         "--device",
         type=str,
@@ -358,6 +344,20 @@ if __name__ == "__main__":
     )
     parser.add_argument("--mixed_precision", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
+
+    # pre-trained Core
+    parser.add_argument(
+        "--pretrain_core",
+        type=str,
+        default="",
+        help="path to directory where pre-trained core model is stored.",
+    )
+    parser.add_argument(
+        "--core_lr_scale",
+        type=float,
+        default=1,
+        help="scale learning rate for core as it might already be trained.",
+    )
 
     # plot settings
     parser.add_argument(
