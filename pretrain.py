@@ -176,10 +176,9 @@ def main(args):
     checkpoint = Checkpoint(
         args,
         mode="min",
-        model=model.core,
+        model=model.core,  # only save core module
         optimizer=optimizer,
         scheduler=scheduler,
-        module="core",
     )
 
     if args.mode == 0:
