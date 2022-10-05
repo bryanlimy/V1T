@@ -10,13 +10,14 @@ from torch.utils.data import DataLoader
 class LinearReadout(Readout):
     def __init__(
         self,
+        args,
         input_shape: tuple,
         output_shape: tuple,
         ds: DataLoader,
         name: str = "LinearReadout",
     ):
         super(LinearReadout, self).__init__(
-            input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
+            args, input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
         )
 
         self.linear = nn.Sequential(

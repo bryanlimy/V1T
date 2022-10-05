@@ -36,6 +36,7 @@ class Model(nn.Module):
         self.add_module(
             name="readouts",
             module=Readouts(
+                args,
                 model=args.readout,
                 input_shape=self.core.shape,
                 output_shapes=self.output_shapes,
@@ -43,10 +44,8 @@ class Model(nn.Module):
             ),
         )
 
-    def regularizer(self):
-        reg_loss = self.core.regularizer()
-        for mouse_id in self.readouts.keys():
-            reg_loss += self.readouts[mouse_id].regularizer()
+    def regularizer(self, mouse_id: int):
+        reg_loss = self.core.regularizer() + self.readouts.regularizer(mouse_id)
         return reg_loss
 
     def forward(self, inputs: torch.Tensor, mouse_id: torch.Union[int, torch.Tensor]):

@@ -9,7 +9,7 @@ from shutil import rmtree
 from torch.utils.data import DataLoader
 
 from sensorium import losses, metrics
-from sensorium.models import get_model
+from sensorium.models import get_model, Model
 from sensorium.data import get_training_ds
 from sensorium.utils import utils, tensorboard, checkpoint
 
@@ -26,10 +26,9 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 def train_step(
     mice_data: t.Tuple[t.Dict[str, torch.Tensor]],
-    model: nn.Module,
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
-    reg_scale: t.Union[float, torch.Tensor] = 0,
 ) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
     result = {}
     for data in mice_data:
@@ -38,8 +37,8 @@ def train_step(
         responses = data["response"].to(model.device)
         outputs = model(images, mouse_id=mouse_id)
         loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        reg_loss = model.regularizer()
-        total_loss = loss + reg_scale * reg_loss
+        reg_loss = model.regularizer(mouse_id=mouse_id)
+        total_loss = loss + reg_loss
         total_loss.backward()  # calculate and accumulate gradients
         result[mouse_id] = {
             "loss/loss": loss.item(),
@@ -55,7 +54,7 @@ def train_step(
 def train(
     args,
     ds: t.Dict[int, DataLoader],
-    model: nn.Module,
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
     epoch: int,
@@ -74,7 +73,6 @@ def train(
                 model=model,
                 optimizer=optimizer,
                 criterion=criterion,
-                reg_scale=args.reg_scale,
             )
             for mouse_id in mouse_ids:
                 utils.update_dict(results[mouse_id], step_results[mouse_id])
@@ -186,7 +184,7 @@ def main(args):
     )
     epoch = ckpt.restore()
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -336,6 +334,11 @@ if __name__ == "__main__":
         default=0,
         type=float,
         help="weight regularization coefficient.",
+    )
+    parser.add_argument(
+        "--ds_scale",
+        action="store_true",
+        help="scale loss by the size of the dataset",
     )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(

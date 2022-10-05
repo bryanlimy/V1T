@@ -14,6 +14,7 @@ REDUCTIONS = t.Literal["sum", "mean", None]
 class Gaussian2DReadout(Readout):
     def __init__(
         self,
+        args,
         input_shape: tuple,
         output_shape: tuple,
         ds: DataLoader,
@@ -25,7 +26,7 @@ class Gaussian2DReadout(Readout):
         name: str = "Gaussian2DReadout",
     ):
         super(Gaussian2DReadout, self).__init__(
-            input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
+            args, input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
         )
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
@@ -34,6 +35,10 @@ class Gaussian2DReadout(Readout):
                 "init_sigma_range is non-positive"
             )
         self.init_mu_range = init_mu_range
+
+        self.gamma_readout = torch.tensor(
+            0.0076, dtype=torch.float32, device=self._device
+        )
 
         # position grid shape
         self.grid_shape = (1, self.num_neurons, 1, 2)
@@ -88,7 +93,7 @@ class Gaussian2DReadout(Readout):
         return l1
 
     def regularizer(self, reduction: REDUCTIONS = "sum"):
-        return self.feature_l1(reduction=reduction)
+        return self.gamma_readout * self.feature_l1(reduction=reduction)
 
     def init_grid_predictor(
         self,
