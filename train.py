@@ -202,9 +202,10 @@ def main(args):
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer=optimizer,
-        mode="min",
+        mode="max",
         factor=0.5,
         patience=10,
+        threshold=1e-5,
         threshold_mode="rel",
         min_lr=1e-6,
         verbose=False,
@@ -266,11 +267,11 @@ def main(args):
             f"Elapse: {elapse:.02f}s"
         )
 
-        scheduler.step(val_results["loss/loss"])
+        scheduler.step(val_results["metrics/trial_correlation"])
 
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
-        if ckpt.monitor(loss=val_results["loss/loss"], epoch=epoch):
+        if ckpt.monitor(loss=val_results["metrics/trial_correlation"], epoch=epoch):
             break
 
     ckpt.restore()
@@ -375,7 +376,7 @@ if __name__ == "__main__":
         action="store_true",
         help="scale loss by the size of the dataset",
     )
-    parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
+    parser.add_argument("--lr", default=1e-3, type=float, help="initial learning rate")
     parser.add_argument(
         "--device",
         type=str,
