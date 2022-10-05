@@ -173,8 +173,14 @@ def main(args):
 
     utils.save_args(args)
 
-    checkpoint = Checkpoint(args, model=model, optimizer=optimizer, scheduler=scheduler)
-    epoch = checkpoint.restore()
+    checkpoint = Checkpoint(
+        args,
+        mode="min",
+        model=model.core,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        module="core",
+    )
 
     if args.mode == 0:
         train = pretrain.classification.train
@@ -183,6 +189,7 @@ def main(args):
         train = pretrain.reconstruction.train
         validate = pretrain.reconstruction.validate
 
+    epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
@@ -223,10 +230,8 @@ def main(args):
 
         scheduler.step(val_results["loss/loss"])
 
-        if checkpoint.monitor(loss=val_results["loss/loss"], epoch=epoch):
+        if checkpoint.monitor(value=val_results["loss/loss"], epoch=epoch):
             break
-
-    checkpoint.restore()
 
     validate(
         args,

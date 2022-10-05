@@ -183,7 +183,11 @@ def main(args):
     utils.save_args(args)
 
     ckpt = checkpoint.Checkpoint(
-        args, model=model, optimizer=optimizer, scheduler=scheduler, mode="max"
+        args,
+        mode="max",
+        model=model,
+        optimizer=optimizer,
+        scheduler=scheduler,
     )
     epoch = ckpt.restore()
 

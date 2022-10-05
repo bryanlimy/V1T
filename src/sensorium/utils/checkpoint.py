@@ -10,16 +10,13 @@ def load_pretrain_core(args, model: Model):
     filename = os.path.join(args.pretrain_core, "ckpt", "best_model.pt")
     assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
     model_dict = model.state_dict()
-    checkpoint = torch.load(filename, map_location=model.device)
-    pretrain_dict = checkpoint["model_state_dict"]
-    # load core parameters in pretrain_dict which should be the same as model_dict
-    core_dict = {}
-    try:
-        for name, parameter in model_dict.items():
-            if name.startswith("core"):
-                core_dict[name] = pretrain_dict[name]
-    except KeyError as e:
-        raise KeyError(f"Pretrained core module contains different parameters: {e}")
+    core_ckpt = torch.load(filename, map_location=model.device)
+    # add 'core.' to add parameters in pretrained core
+    core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
+    # check pretrained core has the same parameters in core module
+    for key in model_dict.keys():
+        if key.startswith("core."):
+            assert key in core_dict
     model_dict.update(core_dict)
     model.load_state_dict(model_dict)
     if args.verbose:
@@ -38,16 +35,17 @@ class Checkpoint:
     def __init__(
         self,
         args,
+        mode: t.Literal["min", "max"],
         model: nn.Module,
         optimizer: torch.optim = None,
         scheduler: torch.optim.lr_scheduler = None,
         patience: int = 20,
         min_epochs: int = 50,
-        mode: t.Literal["min", "max"] = "min",
     ):
         """
         Args:
             args: argparse parameters.
+            mode: 'min' or 'max', compare objective by minimum or maximum
             model: nn.Module, model.
             optimizer: torch.optim, optimizer.
             scheduler: torch.optim.lr_scheduler, scheduler.
@@ -55,7 +53,6 @@ class Checkpoint:
                 objective value does not improve.
             min_epochs: int, number of epochs to train the model before early
                 stopping begins monitoring.
-            mode: 'min' or 'max', compare objective by minimum or maximum
         """
         assert mode in ("min", "max")
         self._model = model
