@@ -131,7 +131,7 @@ def main(args):
 
     model = get_model(args, ds=test_ds)
 
-    checkpoint = Checkpoint(args, model=model)
+    checkpoint = Checkpoint(args, mode="min", model=model)
     checkpoint.restore(force=True)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
