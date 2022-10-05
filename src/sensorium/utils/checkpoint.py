@@ -43,7 +43,7 @@ class Checkpoint:
         scheduler: torch.optim.lr_scheduler = None,
         patience: int = 20,
         min_epochs: int = 50,
-        threshold_mode: t.Literal["min", "max"] = "min",
+        mode: t.Literal["min", "max"] = "min",
     ):
         """
         Args:
@@ -55,24 +55,23 @@ class Checkpoint:
                 objective value does not improve.
             min_epochs: int, number of epochs to train the model before early
                 stopping begins monitoring.
-            threshold_mode: 'min' or 'max', compare objective by minimum or maximum
+            mode: 'min' or 'max', compare objective by minimum or maximum
         """
-        assert threshold_mode in ("min", "max")
+        assert mode in ("min", "max")
         self._model = model
         self._optimizer = optimizer
         self._scheduler = scheduler
         self.patience = patience
         self.min_epochs = min_epochs
-        self.threshold_mode = threshold_mode
+        self.mode = mode
 
         self.checkpoint_dir = os.path.join(args.output_dir, "ckpt")
         if not os.path.isdir(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
 
         self._wait = 0
-        self.best_loss = np.inf
+        self.best_value = np.inf if self.mode == "min" else -np.inf
         self.best_epoch = -1
-        self.best_weights = None
         self._verbose = args.verbose
         self._device = args.device
 
@@ -118,9 +117,7 @@ class Checkpoint:
 
     def is_better(self, value: t.Union[float, torch.Tensor]):
         return (
-            value < self.best_value
-            if self.threshold_mode == "min"
-            else value > self.best_value
+            value < self.best_value if self.mode == "min" else value > self.best_value
         )
 
     def monitor(self, value: t.Union[float, torch.Tensor], epoch: int) -> bool:
