@@ -10,41 +10,8 @@ from torch.utils.data import DataLoader
 
 from sensorium import losses, metrics
 from sensorium.models import get_model, Model
-from sensorium.data import get_training_ds
+from sensorium.data import get_training_ds, CycleDataloaders
 from sensorium.utils import utils, tensorboard, checkpoint
-
-
-class CycleDataloaders:
-    """
-    Cycles through dataloaders until the loader with the largest size is
-    exhausted.
-    """
-
-    def __init__(self, ds: t.Dict[int, DataLoader]):
-        self.ds = ds
-        self.max_iterations = max([len(ds) for ds in self.ds.values()])
-
-    @staticmethod
-    def cycle(iterable: t.Iterable):
-        # see https://github.com/pytorch/pytorch/issues/23900
-        iterator = iter(iterable)
-        while True:
-            try:
-                yield next(iterator)
-            except StopIteration:
-                iterator = iter(iterable)
-
-    def __iter__(self):
-        cycles = [self.cycle(loader) for loader in self.ds.values()]
-        for mouse_id, mouse_ds, _ in zip(
-            self.cycle(self.ds.keys()),
-            (self.cycle(cycles)),
-            range(len(self.ds) * self.max_iterations),
-        ):
-            yield mouse_id, next(mouse_ds)
-
-    def __len__(self):
-        return len(self.ds) * self.max_iterations
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):

@@ -339,3 +339,36 @@ def get_submission_ds(
         args.output_shapes[mouse_id] = (test_ds[mouse_id].dataset.num_neurons,)
 
     return test_ds, final_test_ds
+
+
+class CycleDataloaders:
+    """
+    Cycles through dataloaders until the loader with the largest size is
+    exhausted.
+    """
+
+    def __init__(self, ds: t.Dict[int, DataLoader]):
+        self.ds = ds
+        self.max_iterations = max([len(ds) for ds in self.ds.values()])
+
+    @staticmethod
+    def cycle(iterable: t.Iterable):
+        # see https://github.com/pytorch/pytorch/issues/23900
+        iterator = iter(iterable)
+        while True:
+            try:
+                yield next(iterator)
+            except StopIteration:
+                iterator = iter(iterable)
+
+    def __iter__(self):
+        cycles = [self.cycle(loader) for loader in self.ds.values()]
+        for mouse_id, mouse_ds, _ in zip(
+            self.cycle(self.ds.keys()),
+            (self.cycle(cycles)),
+            range(len(self.ds) * self.max_iterations),
+        ):
+            yield mouse_id, next(mouse_ds)
+
+    def __len__(self):
+        return len(self.ds) * self.max_iterations
