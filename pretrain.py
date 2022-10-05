@@ -173,13 +173,8 @@ def main(args):
 
     utils.save_args(args)
 
-    checkpoint = Checkpoint(
-        args,
-        mode="min",
-        model=model.core,  # only save core module
-        optimizer=optimizer,
-        scheduler=scheduler,
-    )
+    # only save core module
+    checkpoint = Checkpoint(args, mode="min", model=model.core)
 
     if args.mode == 0:
         train = pretrain.classification.train
