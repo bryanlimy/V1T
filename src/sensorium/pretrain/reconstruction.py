@@ -158,7 +158,7 @@ def train(
         outputs = model(images)
         loss = criterion(y_true=images, y_pred=outputs)
         reg_loss = model.regularizer()
-        total_loss = loss + args.reg_scale * reg_loss
+        total_loss = loss + reg_loss
         total_loss.backward()
         optimizer.step()
         optimizer.zero_grad()
