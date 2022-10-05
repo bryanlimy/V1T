@@ -14,6 +14,39 @@ from sensorium.data import get_training_ds
 from sensorium.utils import utils, tensorboard, checkpoint
 
 
+class CycleDataloaders:
+    """
+    Cycles through dataloaders until the loader with the largest size is
+    exhausted.
+    """
+
+    def __init__(self, ds: t.Dict[int, DataLoader]):
+        self.ds = ds
+        self.max_iterations = max([len(ds) for ds in self.ds.values()])
+
+    @staticmethod
+    def cycle(iterable: t.Iterable):
+        # see https://github.com/pytorch/pytorch/issues/23900
+        iterator = iter(iterable)
+        while True:
+            try:
+                yield next(iterator)
+            except StopIteration:
+                iterator = iter(iterable)
+
+    def __iter__(self):
+        cycles = [self.cycle(loader) for loader in self.ds.values()]
+        for mouse_id, mouse_ds, _ in zip(
+            self.cycle(self.ds.keys()),
+            (self.cycle(cycles)),
+            range(len(self.ds) * self.max_iterations),
+        ):
+            yield mouse_id, next(mouse_ds)
+
+    def __len__(self):
+        return len(self.ds) * self.max_iterations
+
+
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     y_true, y_pred = y_true.detach().cpu(), y_pred.detach().cpu()
@@ -25,29 +58,29 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def train_step(
-    mice_data: t.Tuple[t.Dict[str, torch.Tensor]],
+    mouse_id: int,
+    data: t.Dict[str, torch.Tensor],
     model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
-) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
-    result = {}
-    for data in mice_data:
-        mouse_id = int(data["mouse_id"][0])
-        images = data["image"].to(model.device)
-        responses = data["response"].to(model.device)
-        outputs = model(images, mouse_id=mouse_id)
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        reg_loss = model.regularizer(mouse_id=mouse_id)
-        total_loss = loss + reg_loss
-        total_loss.backward()  # calculate and accumulate gradients
-        result[mouse_id] = {
-            "loss/loss": loss.item(),
-            "loss/reg_loss": reg_loss.item(),
-            "loss/total_loss": total_loss.item(),
-            **compute_metrics(y_true=responses, y_pred=outputs),
-        }
-    optimizer.step()
-    optimizer.zero_grad()
+    update: bool,
+) -> t.Dict[str, torch.Tensor]:
+    images = data["image"].to(model.device)
+    responses = data["response"].to(model.device)
+    outputs = model(images, mouse_id=mouse_id)
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = loss + reg_loss
+    total_loss.backward()  # calculate and accumulate gradients
+    result = {
+        "loss/loss": loss.item(),
+        "loss/reg_loss": reg_loss.item(),
+        "loss/total_loss": total_loss.item(),
+        **compute_metrics(y_true=responses, y_pred=outputs),
+    }
+    if update:
+        optimizer.step()
+        optimizer.zero_grad()
     return result
 
 
@@ -60,23 +93,25 @@ def train(
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
-    model.train(True)
-    model.requires_grad_(True)
     mouse_ids = list(ds.keys())
     results = {mouse_id: {} for mouse_id in mouse_ids}
-    with tqdm(
-        desc="Train", total=len(ds[mouse_ids[0]]), disable=args.verbose == 0
-    ) as pbar:
-        for mice_data in zip(*ds.values()):
-            step_results = train_step(
-                mice_data=mice_data,
-                model=model,
-                optimizer=optimizer,
-                criterion=criterion,
-            )
-            for mouse_id in mouse_ids:
-                utils.update_dict(results[mouse_id], step_results[mouse_id])
-            pbar.update(1)
+    ds = CycleDataloaders(ds)
+    # call optimizer.step() after iterate one batch from each mouse
+    update_frequency = len(mouse_ids)
+    model.train(True)
+    model.requires_grad_(True)
+    for i, (mouse_id, mouse_data) in tqdm(
+        enumerate(ds), desc="Train", total=len(ds), disable=args.verbose == 0
+    ):
+        result = train_step(
+            mouse_id=mouse_id,
+            data=mouse_data,
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            update=(i + 1) % update_frequency == 0,
+        )
+        utils.update_dict(results[mouse_id], result)
     utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
     return results
 
@@ -184,7 +219,7 @@ def main(args):
     )
     epoch = ckpt.restore()
 
-    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
