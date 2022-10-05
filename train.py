@@ -216,7 +216,11 @@ def main(args):
     utils.save_args(args)
 
     ckpt = checkpoint.Checkpoint(
-        args, model=model, optimizer=optimizer, scheduler=scheduler
+        args,
+        model=model,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        threshold_mode="max",
     )
     epoch = ckpt.restore()
 
@@ -271,7 +275,7 @@ def main(args):
 
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
-        if ckpt.monitor(loss=val_results["metrics/trial_correlation"], epoch=epoch):
+        if ckpt.monitor(value=val_results["metrics/trial_correlation"], epoch=epoch):
             break
 
     ckpt.restore()
