@@ -136,7 +136,8 @@ class Scheduler:
             elif self.lr_wait >= self.lr_patience:
                 # reduce learning rates by the factor
                 self.reduce_lr()
-                self.lr_wait = 0  # reset learning rate counter
+                self.lr_wait = 0
+                self.es_wait = 0
             else:
                 self.lr_wait += 1
                 self.es_wait += 1
