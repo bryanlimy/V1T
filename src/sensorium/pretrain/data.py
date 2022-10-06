@@ -45,9 +45,6 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     indexes = np.arange(size)
     np.random.shuffle(indexes)
 
-    size = 200
-    indexes = indexes[:size]
-
     train_idx = indexes[: int(size * 0.7)]
     val_idx = indexes[int(size * 0.7) : int(size * 0.85)]
     test_idx = indexes[int(size * 0.85) :]
