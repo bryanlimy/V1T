@@ -116,6 +116,30 @@ class PoissonLoss(Loss):
         return loss
 
 
+@register("correlation")
+class Correlation(Loss):
+    """single trial correlation"""
+
+    def forward(
+        self,
+        y_true: torch.Tensor,
+        y_pred: torch.Tensor,
+        mouse_id: int,
+        eps: float = 1e-8,
+        dim: int = 0,
+    ):
+        y1 = (y_true - y_true.mean(dim=dim, keepdim=True)) / (
+            y_true.std(dim=dim, keepdim=True, unbiased=False) + eps
+        )
+        y2 = (y_pred - y_pred.mean(dim=dim, keepdim=True)) / (
+            y_pred.std(dim=dim, keepdim=True, unbiased=False) + eps
+        )
+        corr = (y1 * y2).mean(dim=dim)
+        loss = 1.0 - corr.mean()
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        return loss
+
+
 def get_criterion(args, ds: t.Dict[int, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
     return _CRITERION[args.criterion](args, ds=ds)

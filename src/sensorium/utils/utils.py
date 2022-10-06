@@ -177,6 +177,9 @@ def evaluate(
             statement += "".join(_print(results["feve"]))
         print(statement)
     if save_result is not None:
+        # compute mean for each metric
+        for metric in results.keys():
+            results[metric]["average"] = np.mean(list(results[metric].values()))
         yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
     return results
 
