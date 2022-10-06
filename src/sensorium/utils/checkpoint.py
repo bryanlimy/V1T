@@ -6,23 +6,6 @@ from torch import nn
 from sensorium.models.model import Model
 
 
-def load_pretrain_core(args, model: Model):
-    filename = os.path.join(args.pretrain_core, "ckpt", "best_model.pt")
-    assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
-    model_dict = model.state_dict()
-    core_ckpt = torch.load(filename, map_location=model.device)
-    # add 'core.' to add parameters in pretrained core
-    core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
-    # check pretrained core has the same parameters in core module
-    for key in model_dict.keys():
-        if key.startswith("core."):
-            assert key in core_dict
-    model_dict.update(core_dict)
-    model.load_state_dict(model_dict)
-    if args.verbose:
-        print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
-
-
 class Checkpoint:
     """Checkpoint class to save and load checkpoints and early stopping.
 

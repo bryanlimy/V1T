@@ -10,13 +10,11 @@ from time import time
 from shutil import rmtree
 from einops.layers.torch import Reduce, Rearrange
 
-from sensorium.models.core import get_core
-from sensorium.utils import utils, tensorboard
-from sensorium.utils.checkpoint import Checkpoint
-
 from sensorium import pretrain
-
+from sensorium.models.core import get_core
 import sensorium.models.utils as model_utils
+from sensorium.utils import utils, tensorboard
+from sensorium.utils.scheduler import Scheduler
 
 
 class Model(nn.Module):
@@ -161,20 +159,14 @@ def main(args):
         summary.scalar("model/trainable_parameters", model_info.trainable_params)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer=optimizer,
+    scheduler = Scheduler(
+        args,
         mode="min",
-        factor=0.5,
-        patience=5,
-        threshold_mode="rel",
-        min_lr=1e-6,
-        verbose=False,
+        model=model.core,  # only save core module
+        optimizer=optimizer,
     )
 
     utils.save_args(args)
-
-    # only save core module
-    checkpoint = Checkpoint(args, mode="min", model=model.core)
 
     if args.mode == 0:
         train = pretrain.classification.train
@@ -222,9 +214,7 @@ def main(args):
         statement += f"Elapse: {elapse:.02f}s"
         print(statement)
 
-        scheduler.step(val_results["loss/loss"])
-
-        if checkpoint.monitor(value=val_results["loss/loss"], epoch=epoch):
+        if scheduler.step(val_results["loss/loss"], epoch=epoch):
             break
 
     validate(

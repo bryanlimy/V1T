@@ -10,8 +10,9 @@ from torch.utils.data import DataLoader
 
 from sensorium import losses, metrics
 from sensorium.models import get_model, Model
+from sensorium.utils import utils, tensorboard
+from sensorium.utils.scheduler import Scheduler
 from sensorium.data import get_training_ds, CycleDataloaders
-from sensorium.utils import utils, tensorboard, checkpoint
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
@@ -150,7 +151,7 @@ def main(args):
     model = get_model(args, ds=train_ds, summary=summary)
 
     if args.pretrain_core:
-        checkpoint.load_pretrain_core(args, model=model)
+        utils.load_pretrain_core(args, model=model)
 
     # separate learning rates for core and readout modules
     optimizer = torch.optim.Adam(
@@ -167,29 +168,13 @@ def main(args):
         ],
         lr=args.lr,
     )
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer=optimizer,
-        mode="max",
-        factor=0.5,
-        patience=10,
-        threshold=1e-5,
-        threshold_mode="rel",
-        min_lr=1e-6,
-        verbose=False,
-    )
+    scheduler = Scheduler(args, mode="max", model=model, optimizer=optimizer)
 
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
 
-    ckpt = checkpoint.Checkpoint(
-        args,
-        mode="max",
-        model=model,
-        optimizer=optimizer,
-        scheduler=scheduler,
-    )
-    epoch = ckpt.restore()
+    epoch = scheduler.restore()
 
     utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
@@ -238,14 +223,13 @@ def main(args):
             f"Elapse: {elapse:.02f}s"
         )
 
-        scheduler.step(val_results["metrics/trial_correlation"])
-
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
-        if ckpt.monitor(value=val_results["metrics/trial_correlation"], epoch=epoch):
+
+        if scheduler.step(val_results["metrics/trial_correlation"], epoch=epoch):
             break
 
-    ckpt.restore()
+    scheduler.restore()
 
     utils.evaluate(
         args,
