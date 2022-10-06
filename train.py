@@ -191,7 +191,7 @@ def main(args):
     )
     epoch = ckpt.restore()
 
-    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
