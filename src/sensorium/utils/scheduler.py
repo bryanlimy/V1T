@@ -13,12 +13,13 @@ class Scheduler:
         mode: t.Literal["min", "max"],
         model: Model,
         optimizer: Optimizer,
+        max_reduce: int = 2,
         min_lr: float = 1e-6,
         lr_patience: int = 5,
-        es_patience: int = 10,
         factor: float = 0.5,
         min_epochs: int = 50,
         save_optimizer: bool = True,
+        save_scheduler: bool = True,
     ):
         """
         Args:
@@ -26,21 +27,25 @@ class Scheduler:
             mode: 'min' or 'max', compare objective by minimum or maximum
             model: Model, model.
             optimizer: torch.optim, optimizer.
+            max_reduce: int, maximum number of learning rate reductions before
+                terminating early stopping.
+            min_lr: float, minimum learning rate.
             lr_patience: int, the number of epochs to wait before reducing the
                 learning rate.
-            es_patience: int, the number of epochs to wait until terminate if the
-                objective value does not improve.
+            factor: float, learning rate reduction factor.
+                i.e. new_lr = max(factor * old_lr, min_lr)
             min_epochs: int, number of epochs to train the model before early
                 stopping begins monitoring.
+            save_optimizer: bool, save optimizer state dict to checkpoint if True.
         """
         assert mode in ("min", "max")
         self.mode = mode
         self.model = model
         self.optimizer = optimizer
+        self.max_reduce = max_reduce
+        self.num_reduce = 0
         self.lr_patience = lr_patience
-        self.es_patience = es_patience
         self.lr_wait = 0
-        self.es_wait = 0
         self.min_lr = min_lr
         if factor >= 1.0:
             raise ValueError("Factor should be < 1.0.")
@@ -52,6 +57,7 @@ class Scheduler:
         if not os.path.isdir(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
         self.save_optimizer = save_optimizer
+        self.save_scheduler = save_scheduler
         self.device = args.device
         self.verbose = args.verbose
 
@@ -60,15 +66,16 @@ class Scheduler:
     ):
         """Save current model as best_model.pt"""
         filename = os.path.join(self.checkpoint_dir, "best_model.pt")
-        checkpoint = {
+        ckpt = {
             "epoch": epoch,
             "value": float(value),
             "model_state_dict": self.model.state_dict(),
-            "scheduler_state_dict": self.state_dict(),
         }
         if self.save_optimizer:
-            checkpoint["optimizer_state_dict"] = self.optimizer.state_dict()
-        torch.save(checkpoint, f=filename)
+            ckpt["optimizer_state_dict"] = self.optimizer.state_dict()
+        if self.save_scheduler:
+            ckpt["scheduler_state_dict"] = self.state_dict()
+        torch.save(ckpt, f=filename)
         print(f"\nCheckpoint saved to {filename}.")
 
     def restore(self, force: bool = False) -> int:
@@ -83,12 +90,13 @@ class Scheduler:
         epoch = 0
         filename = os.path.join(self.checkpoint_dir, "best_model.pt")
         if os.path.exists(filename):
-            checkpoint = torch.load(filename, map_location=self.device)
-            epoch = checkpoint["epoch"]
-            self.model.load_state_dict(checkpoint["model_state_dict"])
-            self.load_state_dict(checkpoint["scheduler_state_dict"])
-            if "optimizer_state_dict" in checkpoint:
-                self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            ckpt = torch.load(filename, map_location=self.device)
+            epoch = ckpt["epoch"]
+            self.model.load_state_dict(ckpt["model_state_dict"])
+            if "optimizer_state_dict" in ckpt:
+                self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            if "scheduler_state_dict" in ckpt:
+                self.load_state_dict(ckpt["scheduler_state_dict"])
             if self.verbose:
                 print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")
         elif force:
@@ -126,19 +134,16 @@ class Scheduler:
             self.best_value = value
             self.best_epoch = epoch
             self.lr_wait = 0
-            self.es_wait = 0
+            self.num_reduce = 0
             self.save_checkpoint(value=value, epoch=epoch)
         elif epoch > self.min_epochs:
-            if self.es_wait >= self.es_patience:
-                # early stop as model hasn't improved for self.es_patience epochs
+            if self.num_reduce >= self.max_reduce:
                 terminate = True
-                print(f"Model has not improved in {self.es_wait} epochs.")
+                print(f"Model has not improved after {self.num_reduce} LR reductions.")
             elif self.lr_wait >= self.lr_patience:
-                # reduce learning rates by the factor
                 self.reduce_lr()
+                self.num_reduce += 1
                 self.lr_wait = 0
-                self.es_wait = 0
             else:
                 self.lr_wait += 1
-                self.es_wait += 1
         return terminate

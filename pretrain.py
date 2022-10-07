@@ -164,6 +164,8 @@ def main(args):
         mode="min",
         model=model.core,  # only save core module
         optimizer=optimizer,
+        save_optimizer=False,
+        save_scheduler=False,
     )
 
     utils.save_args(args)
