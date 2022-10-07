@@ -156,6 +156,16 @@ def main(args):
         save_scheduler=False,
     )
 
+    model_dict = model.state_dict()
+    filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
+    ckpt = torch.load(filename, map_location=model.device)
+    core_dict = {f"core.{k}": v for k, v in ckpt["model_state_dict"].items()}
+    for key in model_dict.keys():
+        if key.startswith("core."):
+            assert key in core_dict
+    model_dict.update(core_dict)
+    model.load_state_dict(model_dict)
+
     utils.save_args(args)
 
     if args.mode == 0:
@@ -165,6 +175,8 @@ def main(args):
         train = pretrain.reconstruction.train
         validate = pretrain.reconstruction.validate
 
+    validate(args, ds=val_ds, model=model, epoch=0, summary=summary)
+    exit()
     epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")

@@ -142,9 +142,11 @@ def ssim(
 
 def criterion(y_true: torch.Tensor, y_pred: torch.Tensor):
     # restore image to their original range
-    y_true, y_pred = data.reverse(y_true), data.reverse(y_pred)
-    score = ssim(x=y_true, y=y_pred)
-    return 1 - score
+    # y_true, y_pred = data.reverse(y_true), data.reverse(y_pred)
+    # score = ssim(x=y_true, y=y_pred)
+    # return 1 - score
+    loss = torch.mean(torch.square(y_true - y_pred))
+    return loss
 
 
 def train(
