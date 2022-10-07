@@ -55,12 +55,14 @@ def inference(
         "image_ids": [],
         "trial_ids": [],
     }
+    transform = ds.dataset.transform4evaluation
     model.train(False)
     model.requires_grad_(False)
     for data in tqdm(ds, desc=desc, disable=args.verbose == 0):
         images = data["image"].to(device)
         predictions = model(images, mouse_id=mouse_id)
-        results["predictions"].extend(predictions.detach().cpu().numpy().tolist())
+        predictions = transform(predictions.numpy())
+        results["predictions"].extend(predictions.tolist())
         results["image_ids"].extend(data["image_id"].numpy().tolist())
         results["trial_ids"].extend(data["trial_id"])
     # create neuron IDs for each prediction

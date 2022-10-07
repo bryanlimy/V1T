@@ -17,7 +17,7 @@ from sensorium.data import get_training_ds, CycleDataloaders
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    y_true, y_pred = y_true.detach().cpu(), y_pred.detach().cpu()
+    y_true, y_pred = y_true.numpy(), y_pred.numpy()
     return {
         "metrics/trial_correlation": metrics.correlation(
             y1=y_pred, y2=y_true, axis=None
@@ -317,6 +317,14 @@ if __name__ == "__main__":
         "--ds_scale",
         action="store_true",
         help="scale loss by the size of the dataset",
+    )
+    parser.add_argument(
+        "--norm_mode",
+        default=0,
+        type=int,
+        choices=[0, 1],
+        help="0 - standardize responses by dividing the standard deviation"
+        "1 - normalize responses by scaling to [0, 1]",
     )
     parser.add_argument(
         "--device",

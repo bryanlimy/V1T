@@ -47,22 +47,16 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         "trial_ids": [],
         "image_ids": [],
     }
+    mouse_id, transform = ds.dataset.mouse_id, ds.dataset.transform4evaluation
     model.train(False)
-    count = 0
     with torch.no_grad():
         for data in ds:
-            predictions = model(
-                data["image"].to(model.device),
-                mouse_id=ds.dataset.mouse_id,
-            )
-            results["predictions"].append(predictions.cpu())
-            results["targets"].append(data["response"])
-            results["images"].append(ds.dataset.i_transform_image(data["image"]))
+            predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
+            results["predictions"].append(transform(predictions.cpu()))
+            results["targets"].append(transform(data["response"]))
+            results["images"].append(data["image"])
             results["image_ids"].append(data["image_id"])
             results["trial_ids"].append(data["trial_id"])
-            if count >= 5:
-                break
-            count += 1
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()

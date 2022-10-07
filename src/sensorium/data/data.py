@@ -138,17 +138,24 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(self, tier: str, data_dir: str, mouse_id: int, shuffle: bool = False):
+    def __init__(
+        self, args, tier: str, data_dir: str, mouse_id: int, shuffle: bool = False
+    ):
         """Construct Dataset
 
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
         as trial IDs (the numbers in meta/trials/trial_idx.npy)
+
+        norm_mode:
+            0 - standardize responses by dividing the standard deviation
+            1 - normalize responses by scaling to [0, 1]
 
         Args:
             - tier: str, train, validation, test or final_test
             - data_dir: str, path to where all data are stored
             - mouse_id: int, the mouse ID
         """
+        self.norm_mode = args.norm_mode
         assert tier in ("train", "validation", "test", "final_test")
         self.tier = tier
         self.mouse_id = mouse_id
@@ -202,14 +209,40 @@ class MiceDataset(Dataset):
         response_precision[idx] = 1 / std[idx]
         return response_precision
 
-    def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        """Standardize response by dividing the per neuron std if the std is
-        greater than 1% of the mean std (to avoid division by 0)"""
+    def standardize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+        """
+        Standardize response by dividing the per neuron std if the std is
+        greater than 1% of the mean std (to avoid division by 0)
+        """
         return response * self._response_precision
 
-    def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        """Reverse standardized response"""
+    def i_standardize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response / self._response_precision
+
+    def normalize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+        return (response - self.stats["response"]["min"]) / (
+            self.stats["response"]["max"] - self.stats["response"]["min"]
+        )
+
+    def i_normalize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+        return (
+            response * (self.stats["response"]["max"] - self.stats["response"]["min"])
+            + self.stats["response"]["min"]
+        )
+
+    def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+        return (
+            self.standardize_response(response)
+            if self.norm_mode == 0
+            else self.normalize_response(response)
+        )
+
+    def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+        return (
+            self.i_standardize_response(response)
+            if self.norm_mode == 0
+            else self.i_normalize_response(response)
+        )
 
     def transform(self, data: t.Dict[str, t.Union[torch.Tensor, np.ndarray]]):
         data["image"] = self.transform_image(data["image"])
@@ -218,6 +251,19 @@ class MiceDataset(Dataset):
     def i_transform(self, data: t.Dict[str, t.Union[torch.Tensor, np.ndarray]]):
         data["image"] = self.i_transform_image(data["image"])
         data["response"] = self.i_transform_response(data["response"])
+
+    def transform4evaluation(self, response: t.Union[np.ndarray, torch.Tensor]):
+        """
+        Transform (pre-processed) response for evaluation
+        Sensorium calculate metrics with standardized responses, hence in the
+        case where the model generate normalized responses (self.norm_mode == 1)
+        we have to unscale the responses and standardize it.
+        """
+        if self.norm_mode == 0:
+            return response
+        else:
+            response = self.i_normalize_response(response)
+            return self.standardize_response(response)
 
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
@@ -282,16 +328,30 @@ def get_training_ds(
     for mouse_id in mouse_ids:
         train_ds[mouse_id] = DataLoader(
             MiceDataset(
-                tier="train", data_dir=data_dir, mouse_id=mouse_id, shuffle=True
+                args,
+                tier="train",
+                data_dir=data_dir,
+                mouse_id=mouse_id,
+                shuffle=True,
             ),
             **dataloader_kwargs,
         )
         val_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="validation", data_dir=data_dir, mouse_id=mouse_id),
+            MiceDataset(
+                args,
+                tier="validation",
+                data_dir=data_dir,
+                mouse_id=mouse_id,
+            ),
             **dataloader_kwargs,
         )
         test_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="test", data_dir=data_dir, mouse_id=mouse_id),
+            MiceDataset(
+                args,
+                tier="test",
+                data_dir=data_dir,
+                mouse_id=mouse_id,
+            ),
             **dataloader_kwargs,
         )
         args.output_shapes[mouse_id] = (train_ds[mouse_id].dataset.num_neurons,)
@@ -328,12 +388,12 @@ def get_submission_ds(
 
     for mouse_id in list(args.output_shapes.keys()):
         test_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="test", data_dir=data_dir, mouse_id=mouse_id),
+            MiceDataset(args, tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
     for mouse_id in [0, 1]:
         final_test_ds[mouse_id] = DataLoader(
-            MiceDataset(tier="final_test", data_dir=data_dir, mouse_id=mouse_id),
+            MiceDataset(args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
         args.output_shapes[mouse_id] = (test_ds[mouse_id].dataset.num_neurons,)

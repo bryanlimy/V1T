@@ -11,6 +11,17 @@ from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
 
 
+class ELU1(nn.Module):
+    """ELU activation + 1 to output standardized responses"""
+
+    def __init__(self):
+        super(ELU1, self).__init__()
+        self.elu = nn.ELU()
+
+    def forward(self, inputs: torch.Tensor):
+        return self.elu(inputs) + 1
+
+
 class Model(nn.Module):
     def __init__(self, args, ds: t.Dict[int, DataLoader]):
         super(Model, self).__init__()
@@ -25,11 +36,12 @@ class Model(nn.Module):
         self.initialize_core(args)
         self.initialize_readouts(args, ds=ds)
 
-        self.elu = nn.ELU()
+        self.activation = ELU1() if args.norm_mode == 0 else nn.Sigmoid()
 
     def initialize_core(self, args):
         self.add_module(
-            name="core", module=get_core(args)(args, input_shape=self.input_shape)
+            name="core",
+            module=get_core(args)(args, input_shape=self.input_shape),
         )
 
     def initialize_readouts(self, args, ds: t.Dict[int, DataLoader]):
@@ -45,13 +57,12 @@ class Model(nn.Module):
         )
 
     def regularizer(self, mouse_id: int):
-        reg_loss = self.core.regularizer() + self.readouts.regularizer(mouse_id)
-        return reg_loss
+        return self.core.regularizer() + self.readouts.regularizer(mouse_id)
 
     def forward(self, inputs: torch.Tensor, mouse_id: torch.Union[int, torch.Tensor]):
         outputs = self.core(inputs)
         outputs = self.readouts(outputs, mouse_id=mouse_id)
-        outputs = self.elu(outputs) + 1
+        outputs = self.activation(outputs)
         return outputs
 
 
