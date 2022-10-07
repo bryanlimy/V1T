@@ -224,19 +224,18 @@ class Summary(object):
         x_axis = np.arange(results["predictions"].shape[1])
 
         for i in range(num_samples):
-            axes[i, 0].scatter(
-                x=x_axis, y=results["targets"][i], s=2, alpha=0.8, color="orangered"
-            )
+            image = results["images"][i].numpy()
+            target = results["targets"][i].numpy()
+            prediction = results["predictions"][i].numpy()
+            y_max = np.ceil(max(np.max(target), np.max(prediction)))
+            axes[i, 0].scatter(x=x_axis, y=target, s=2, alpha=0.8, color="orangered")
+            axes[i, 0].set_ylim(bottom=0, top=y_max)
             axes[i, 1].scatter(
-                x=x_axis,
-                y=results["predictions"][i],
-                s=2,
-                alpha=0.8,
-                color="dodgerblue",
+                x=x_axis, y=prediction, s=2, alpha=0.8, color="dodgerblue"
             )
-            axes[i, 2].imshow(
-                results["images"][i][0], cmap=GRAY, vmin=0, vmax=255, aspect="auto"
-            )
+            axes[i, 1].set_ylim(bottom=0, top=y_max)
+            axes[i, 1].set_yticks([])
+            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255, aspect="auto")
             axes[i, 2].set_xticks([])
             axes[i, 2].set_yticks([])
             remove_top_right_spines(axis=axes[i, 0])
