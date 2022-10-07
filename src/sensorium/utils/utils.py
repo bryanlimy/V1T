@@ -54,7 +54,7 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
             predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
             results["predictions"].append(transform(predictions.cpu()))
             results["targets"].append(transform(data["response"]))
-            results["images"].append(data["image"])
+            results["images"].append(ds.dataset.i_transform_image(data["image"]))
             results["image_ids"].append(data["image_id"])
             results["trial_ids"].append(data["trial_id"])
     results = {
