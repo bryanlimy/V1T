@@ -126,16 +126,17 @@ class Correlation(Loss):
         y_pred: torch.Tensor,
         mouse_id: int,
         eps: float = 1e-8,
-        dim: int = 0,
     ):
-        y1 = (y_true - y_true.mean(dim=dim, keepdim=True)) / (
-            y_true.std(dim=dim, keepdim=True, unbiased=False) + eps
+        num_neurons = y_true.size(1)
+        dim = 0  # compute correlation over batch dimension
+        y1 = (y_true - y_true.mean(dim=dim)) / (
+            y_true.std(dim=dim, unbiased=False) + eps
         )
-        y2 = (y_pred - y_pred.mean(dim=dim, keepdim=True)) / (
-            y_pred.std(dim=dim, keepdim=True, unbiased=False) + eps
+        y2 = (y_pred - y_pred.mean(dim=dim)) / (
+            y_pred.std(dim=dim, unbiased=False) + eps
         )
         corr = (y1 * y2).mean(dim=dim)
-        loss = 1.0 - corr.mean()
+        loss = num_neurons - torch.sum(corr)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
