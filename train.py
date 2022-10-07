@@ -20,7 +20,7 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     y_true, y_pred = y_true.detach().cpu(), y_pred.detach().cpu()
     return {
         "metrics/trial_correlation": metrics.correlation(
-            y1=y_true, y2=y_pred, axis=None
+            y1=y_pred, y2=y_true, axis=None
         ).item()
     }
 
