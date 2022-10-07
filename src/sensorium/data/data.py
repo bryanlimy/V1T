@@ -44,14 +44,15 @@ def get_image_shape(data_dir: str):
 def load_trial_data(mouse_dir: str, trial: int):
     """Load data from a single trial in mouse_dir"""
     filename, data_dir = f"{trial}.npy", os.path.join(mouse_dir, "data")
-    load_data = lambda a: np.load(os.path.join(data_dir, a, filename)).astype(
-        np.float32
-    )
+
+    def _load_data(item: str):
+        return np.load(os.path.join(data_dir, item, filename)).astype(np.float32)
+
     return {
-        "image": load_data("images"),
-        "response": load_data("responses"),
-        "behavior": load_data("behavior"),
-        "pupil_center": load_data("pupil_center"),
+        "image": _load_data("images"),
+        "response": _load_data("responses"),
+        "behavior": _load_data("behavior"),
+        "pupil_center": _load_data("pupil_center"),
     }
 
 
