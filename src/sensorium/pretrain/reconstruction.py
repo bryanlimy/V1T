@@ -73,11 +73,11 @@ def ssim(
     x: torch.Tensor,
     y: torch.Tensor,
     max_value: float = 1.0,
-    size_average: bool = True,
     win_size: int = 11,
     win_sigma: float = 1.5,
     K1: float = 0.01,
     K2: float = 0.03,
+    reduction: t.Literal["mean", "sum"] = "mean",
 ) -> torch.Tensor:
     """Computes structural similarity index metric (SSIM)
 
@@ -87,13 +87,13 @@ def ssim(
       x: images in the format of (N,C,H,W)
       y: images in the format of (N,C,H,W)
       max_value: the maximum value of the images (usually 1.0 or 255.0)
-      size_average: return SSIM average of all images
       win_size: the size of gauss kernel
       win_sigma: sigma of normal distribution
       win: 1-D gauss kernel. if None, a new kernel will be created according to
           win_size and win_sigma
       K1: scalar constant
       K2: scalar constant
+      reduction: 'mean' or 'sum', return the mean or sum of SSIm values of the batch.
     Returns:
       SSIM value(s)
     """
@@ -131,9 +131,13 @@ def ssim(
     cs_map = (2 * sigma12 + C2) / (sigma1_sq + sigma2_sq + C2)
     ssim_map = ((2 * mu1_mu2 + C1) / (mu1_sq + mu2_sq + C1)) * cs_map
 
-    ssim_per_channel = torch.flatten(ssim_map, 2).mean(-1)
+    ssim_per_channel = torch.flatten(ssim_map, start_dim=2).mean(dim=-1)
 
-    return ssim_per_channel.mean() if size_average else ssim_per_channel.mean(1)
+    return (
+        torch.sum(ssim_per_channel)
+        if reduction == "sum"
+        else torch.mean(ssim_per_channel)
+    )
 
 
 def criterion(y_true: torch.Tensor, y_pred: torch.Tensor):
