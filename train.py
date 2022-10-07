@@ -44,7 +44,7 @@ def train_step(
         "loss/loss": loss.item(),
         "loss/reg_loss": reg_loss.item(),
         "loss/total_loss": total_loss.item(),
-        **compute_metrics(y_true=responses, y_pred=outputs),
+        **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
     }
     if update:
         optimizer.step()
