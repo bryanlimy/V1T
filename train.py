@@ -17,11 +17,11 @@ from sensorium.data import get_training_ds, CycleDataloaders
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    y_true, y_pred = y_true.numpy(), y_pred.numpy()
+    y_true, y_pred = y_true.cpu().numpy(), y_pred.cpu().numpy()
     return {
         "metrics/trial_correlation": metrics.correlation(
             y1=y_pred, y2=y_true, axis=None
-        ).item()
+        )
     }
 
 

@@ -41,7 +41,7 @@ def get_image_shape(data_dir: str):
     return image.shape
 
 
-def load_trial_data(mouse_dir: str, trial: int):
+def load_trial_data(mouse_dir: str, trial: int) -> t.Dict[str, np.ndarray]:
     """Load data from a single trial in mouse_dir"""
     filename, data_dir = f"{trial}.npy", os.path.join(mouse_dir, "data")
 
