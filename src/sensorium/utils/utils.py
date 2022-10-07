@@ -281,7 +281,7 @@ def load_pretrain_core(args, model: Model):
     assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
     model_dict = model.state_dict()
     core_ckpt = torch.load(filename, map_location=model.device)
-    # add 'core.' to add parameters in pretrained core
+    # add 'core.' to parameters in pretrained core
     core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
     # check pretrained core has the same parameters in core module
     for key in model_dict.keys():
@@ -291,3 +291,13 @@ def load_pretrain_core(args, model: Model):
     model.load_state_dict(model_dict)
     if args.verbose:
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
+
+
+def load_checkpoint(args, model: Model):
+    filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
+    assert os.path.exists(filename), f"Cannot find model checkpoint {filename}."
+    ckpt = torch.load(filename, map_location=model.device)
+    epoch = ckpt["epoch"]
+    model.load_state_dict(ckpt["model_state_dict"])
+    if args.verbose:
+        print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")

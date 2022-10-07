@@ -12,7 +12,6 @@ from torch.utils.data import DataLoader
 from sensorium.utils import utils
 from sensorium.models import get_model
 from sensorium.data import get_submission_ds
-from sensorium.utils.checkpoint import Checkpoint
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
@@ -130,9 +129,7 @@ def main(args):
     )
 
     model = get_model(args, ds=test_ds)
-
-    checkpoint = Checkpoint(args, mode="min", model=model)
-    checkpoint.restore(force=True)
+    utils.load_checkpoint(args, model=model)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
