@@ -137,13 +137,16 @@ class Scheduler:
             self.num_reduce = 0
             self.save_checkpoint(value=value, epoch=epoch)
         elif epoch > self.min_epochs:
-            if self.num_reduce >= self.max_reduce:
-                terminate = True
-                print(f"Model has not improved after {self.num_reduce} LR reductions.")
-            elif self.lr_wait >= self.lr_patience:
-                self.reduce_lr()
-                self.num_reduce += 1
-                self.lr_wait = 0
+            if self.lr_wait >= self.lr_patience:
+                if self.num_reduce >= self.max_reduce:
+                    terminate = True
+                    print(
+                        f"Model has not improved after {self.num_reduce} LR reductions."
+                    )
+                else:
+                    self.reduce_lr()
+                    self.num_reduce += 1
+                    self.lr_wait = 0
             else:
                 self.lr_wait += 1
         return terminate

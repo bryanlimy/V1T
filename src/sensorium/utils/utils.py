@@ -93,8 +93,9 @@ def evaluate(
         print_result: bool, print result if True.
         save_result: str, path where the result is saved if provided.
     """
-    results = {"trial_correlation": {}, "image_correlation": {}, "feve": {}}
-    outputs = {}
+    metrics = ["single_trial_correlation", "correlation_to_average", "feve"]
+    outputs, results = {}, {k: {} for k in metrics}
+
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
@@ -102,39 +103,19 @@ def evaluate(
             continue
         outputs[mouse_id] = inference(ds=mouse_ds, model=model)
 
-        metrics = Metrics(ds=mouse_ds, results=outputs[mouse_id])
+        mouse_metric = Metrics(ds=mouse_ds, results=outputs[mouse_id])
 
-        results["trial_correlation"][mouse_id] = metrics.single_trial_correlation(
-            per_neuron=True
-        )
-        if metrics.repeat_image and not metrics.hashed:
-            results["image_correlation"][mouse_id] = metrics.correlation_to_average(
-                per_neuron=True
-            )
-            results["feve"][mouse_id] = metrics.feve(per_neuron=True)
-    # write individual and average results to TensorBoard
+        results["single_trial_correlation"][
+            mouse_id
+        ] = mouse_metric.single_trial_correlation(per_neuron=True)
+        if mouse_metric.repeat_image and not mouse_metric.hashed:
+            results["correlation_to_average"][
+                mouse_id
+            ] = mouse_metric.correlation_to_average(per_neuron=True)
+            results["feve"][mouse_id] = mouse_metric.feve(per_neuron=True)
+
     if summary is not None:
-        summary.box_plot(
-            "single_trial_correlation",
-            data=metrics2df(results["trial_correlation"]),
-            step=epoch,
-            mode=mode,
-        )
-        if results["image_correlation"]:
-            summary.box_plot(
-                "correlation_to_average",
-                data=metrics2df(results["image_correlation"]),
-                step=epoch,
-                mode=mode,
-            )
-        if results["feve"]:
-            summary.box_plot(
-                "FEVE",
-                data=metrics2df(results["feve"]),
-                step=epoch,
-                ylabel="FEVE",
-                mode=mode,
-            )
+        # create image-response pair plots
         for mouse_id in outputs.keys():
             summary.plot_image_response(
                 tag=f"image_response/mouse{mouse_id}",
@@ -142,45 +123,49 @@ def evaluate(
                 step=epoch,
                 mode=mode,
             )
-        # compute mean for each metric and log to TensorBoard
-        for metric in results.keys():
-            values = []
-            for mouse_id in results[metric].keys():
-                results[metric][mouse_id] = results[metric][mouse_id].mean()
+        # create box plot for each metric
+        for metric, values in results.items():
+            if values:
+                summary.box_plot(
+                    metric, data=metrics2df(results[metric]), step=epoch, mode=mode
+                )
+
+    # compute the average value for each mouse
+    for metric in metrics:
+        for mouse_id in results[metric].keys():
+            results[metric][mouse_id] = np.mean(results[metric][mouse_id])
+            if summary is not None:
                 summary.scalar(
                     f"{metric}/mouse{mouse_id}",
                     value=results[metric][mouse_id],
                     step=epoch,
                     mode=mode,
                 )
-                values.append(results[metric][mouse_id])
-            # log overall mean for that metric
-            if values:
+
+    if print_result:
+        _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
+        statement = ""
+        for metric in metrics:
+            if results[metric]:
+                statement += f"\n{metric}\n"
+                statement += "".join(_print(results[metric]))
+        if statement:
+            print(statement)
+
+    # compute overall average for each metric
+    for metric in metrics:
+        values = list(results[metric].values())
+        if values:
+            results[metric]["average"] = np.mean(values)
+            if summary is not None:
                 summary.scalar(
                     f"{metric}/average",
-                    value=np.mean(values),
+                    value=results[metric]["average"],
                     step=epoch,
                     mode=mode,
                 )
-    else:
-        # compute mean for each metric
-        for metric in results.keys():
-            for mouse_id in results[metric].keys():
-                results[metric][mouse_id] = results[metric][mouse_id].mean()
-    if print_result:
-        _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
-        statement = "Single trial correlation\n"
-        statement += "".join(_print(results["trial_correlation"]))
-        if results["image_correlation"]:
-            statement += "\nCorrelation to average\n"
-            statement += "".join(_print(results["image_correlation"]))
-            statement += "\nFEVE\n"
-            statement += "".join(_print(results["feve"]))
-        print(statement)
+
     if save_result is not None:
-        # compute mean for each metric
-        for metric in results.keys():
-            results[metric]["average"] = np.mean(list(results[metric].values()))
         yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
     return results
 
