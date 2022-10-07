@@ -23,6 +23,7 @@ class Model(nn.Module):
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shape = args.output_shape
+        self.reg_scale = args.reg_scale
 
         self.add_module(
             name="core",
@@ -103,7 +104,7 @@ class Model(nn.Module):
 
     def regularizer(self):
         """L1 regularization"""
-        return sum(p.abs().sum() for p in self.parameters())
+        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.core(inputs)
