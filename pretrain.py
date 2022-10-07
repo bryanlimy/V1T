@@ -25,7 +25,8 @@ class Model(nn.Module):
         self.output_shape = args.output_shape
 
         self.add_module(
-            name="core", module=get_core(args)(args, input_shape=self.input_shape)
+            name="core",
+            module=get_core(args)(args, input_shape=self.input_shape),
         )
 
         core_shape = self.core.shape
@@ -40,77 +41,64 @@ class Model(nn.Module):
                 nn.LogSoftmax(dim=1),
             )
         else:
-            latent_shape = model_utils.conv2d_shape(
+            output_shape = model_utils.transpose_conv2d_shape(
                 input_shape=core_shape,
-                num_filters=core_shape[0],
-                kernel_size=5,
-                stride=2,
-            )
-            latent_dim = int(np.prod(latent_shape))
-            # the target shape and dimension of the bottleneck layer
-            target_shape = (latent_shape[0], 18, 32)
-            target_dim = int(np.prod(target_shape))
-            output_shape = model_utils.transpose_conv2d_shape(
-                input_shape=target_shape,
-                num_filters=target_shape[0],
-                kernel_size=4,
-                stride=2,
-                padding=1,
+                num_filters=core_shape[0] // 2,
+                kernel_size=(7, 6),
+                stride=(2, 2),
+                padding=0,
+                output_padding=(1, 1),
+                dilation=(4, 4),
             )
             output_shape = model_utils.transpose_conv2d_shape(
                 input_shape=output_shape,
-                num_filters=target_shape[0],
-                kernel_size=4,
-                stride=2,
-                padding=1,
+                num_filters=core_shape[0] // 4,
+                kernel_size=(12, 12),
+                stride=(1, 1),
+                padding=0,
+                output_padding=(1, 4),
+                dilation=(5, 8),
             )
-            self._output_shape = model_utils.transpose_conv2d_shape(
+            output_shape = model_utils.conv2d_shape(
                 input_shape=output_shape,
-                num_filters=target_shape[0],
-                kernel_size=4,
-                stride=2,
-                padding=1,
+                num_filters=1,
+                kernel_size=7,
+                stride=1,
+                padding=3,
             )
+            assert output_shape == self.output_shape
             self.readout = nn.Sequential(
-                nn.Conv2d(
+                nn.ConvTranspose2d(
                     in_channels=core_shape[0],
-                    out_channels=core_shape[0],
-                    kernel_size=5,
-                    stride=2,
+                    out_channels=core_shape[0] // 2,
+                    kernel_size=(7, 6),
+                    stride=(2, 2),
+                    padding=0,
+                    output_padding=(1, 1),
+                    dilation=(4, 4),
                 ),
-                nn.BatchNorm2d(core_shape[0]),
                 nn.GELU(),
-                nn.Flatten(),  # bottleneck
-                nn.Linear(in_features=latent_dim, out_features=target_dim),
-                nn.GELU(),
-                nn.Linear(in_features=target_dim, out_features=target_dim),
-                Rearrange("b (c h w) -> b c h w", h=target_shape[1], w=target_shape[2]),
+                nn.BatchNorm2d(num_features=core_shape[0] // 2),
+                nn.Dropout2d(p=args.dropout),
                 nn.ConvTranspose2d(
-                    in_channels=target_shape[0],
-                    out_channels=target_shape[0],
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
+                    in_channels=core_shape[0] // 2,
+                    out_channels=core_shape[0] // 4,
+                    kernel_size=(12, 12),
+                    stride=(1, 1),
+                    padding=0,
+                    output_padding=(1, 4),
+                    dilation=(5, 8),
                 ),
-                nn.BatchNorm2d(num_features=target_shape[0]),
                 nn.GELU(),
-                nn.ConvTranspose2d(
-                    in_channels=target_shape[0],
-                    out_channels=target_shape[0],
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
+                nn.BatchNorm2d(num_features=core_shape[0] // 4),
+                nn.Dropout2d(p=args.dropout),
+                nn.Conv2d(
+                    in_channels=core_shape[0] // 4,
+                    out_channels=1,
+                    kernel_size=7,
+                    stride=1,
+                    padding=3,
                 ),
-                nn.BatchNorm2d(num_features=target_shape[0]),
-                nn.GELU(),
-                nn.ConvTranspose2d(
-                    in_channels=target_shape[0],
-                    out_channels=target_shape[0],
-                    kernel_size=4,
-                    stride=2,
-                    padding=1,
-                ),
-                nn.Conv2d(in_channels=target_shape[0], out_channels=1, kernel_size=1),
             )
 
     def regularizer(self):
