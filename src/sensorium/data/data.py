@@ -223,7 +223,7 @@ class MiceDataset(Dataset):
 
     def crop_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         if self.retina_crop:
-            top, left = self.retinotopy
+            left, top = self.retinotopy
             image = F.crop(image, top=top, left=left, height=72, width=128)
         return image
 
