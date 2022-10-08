@@ -100,8 +100,10 @@ class Gaussian2DReadout(Readout):
         hidden_features: int = 30,
         hidden_layers: int = 1,
         tanh_output: bool = True,
+        input_dimensions: int = 2,
     ):
         self._original_grid = False
+        source_grid = source_grid[:, :input_dimensions]
         layers = [
             nn.Linear(
                 in_features=source_grid.shape[1],
