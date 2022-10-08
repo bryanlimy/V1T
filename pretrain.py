@@ -62,10 +62,11 @@ class Model(nn.Module):
             )
             output_shape = model_utils.conv2d_shape(
                 input_shape=output_shape,
-                num_filters=1,
-                kernel_size=7,
-                stride=1,
-                padding=3,
+                num_filters=core_shape[0] // 6,
+                kernel_size=1,
+            )
+            output_shape = model_utils.conv2d_shape(
+                input_shape=output_shape, num_filters=1, kernel_size=1
             )
             assert output_shape == self.output_shape
             self.readout = nn.Sequential(
@@ -95,10 +96,14 @@ class Model(nn.Module):
                 nn.Dropout2d(p=args.dropout),
                 nn.Conv2d(
                     in_channels=core_shape[0] // 4,
-                    out_channels=1,
-                    kernel_size=7,
-                    stride=1,
-                    padding=3,
+                    out_channels=core_shape[0] // 6,
+                    kernel_size=1,
+                ),
+                nn.GELU(),
+                nn.BatchNorm2d(num_features=core_shape[0] // 6),
+                nn.Dropout2d(p=args.dropout),
+                nn.Conv2d(
+                    in_channels=core_shape[0] // 6, out_channels=1, kernel_size=1
                 ),
             )
 
