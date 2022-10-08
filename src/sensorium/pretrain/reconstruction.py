@@ -20,14 +20,27 @@ def plot_image(
     mode: int = 1,
     num_plots: int = 5,
 ):
+    images, outputs = data.reverse(images), data.reverse(outputs)
+    mse_scores = torch.mean(torch.square(images - outputs), dim=[1, 2, 3])
+    ssim_scores = ssim(x=images, y=outputs, reduction=None)
     for i in range(min(num_plots, len(images))):
         figure, axes = plt.subplots(
-            nrows=1, ncols=2, gridspec_kw={"wspace": 0.2}, figsize=(10, 3), dpi=args.dpi
+            nrows=1,
+            ncols=2,
+            gridspec_kw={"wspace": 0.2},
+            figsize=(10, 3),
+            dpi=args.dpi,
         )
-        image, output = images[i][0], outputs[i][0]
-        axes[0].imshow(image, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
-        axes[1].imshow(output, cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
-        figure.suptitle(f"MSE: {((image - output)**2).mean():.04f}", fontsize=10)
+        axes[0].imshow(
+            images[i][0], cmap=tensorboard.GRAY, vmin=0, vmax=255, aspect="auto"
+        )
+        axes[1].imshow(
+            outputs[i][0], cmap=tensorboard.GRAY, vmin=0, vmax=255, aspect="auto"
+        )
+        figure.suptitle(
+            f"MSE: {mse_scores[i]:.02f}, SSIM: {ssim_scores[i]:.4f}",
+            fontsize=12,
+        )
         summary.figure(f"images/image{i:03d}", figure=figure, step=epoch, mode=mode)
 
 
@@ -72,12 +85,12 @@ def _gaussian_filter(inputs: torch.Tensor, win: torch.Tensor) -> torch.Tensor:
 def ssim(
     x: torch.Tensor,
     y: torch.Tensor,
-    max_value: float = 1.0,
+    max_value: float = 255.0,
     win_size: int = 11,
     win_sigma: float = 1.5,
     K1: float = 0.01,
     K2: float = 0.03,
-    reduction: t.Literal["mean", "sum"] = "mean",
+    reduction: t.Literal[None, "mean", "sum"] = "mean",
 ) -> torch.Tensor:
     """Computes structural similarity index metric (SSIM)
 
@@ -133,17 +146,19 @@ def ssim(
 
     ssim_per_channel = torch.flatten(ssim_map, start_dim=2).mean(dim=-1)
 
-    return (
-        torch.sum(ssim_per_channel)
-        if reduction == "sum"
-        else torch.mean(ssim_per_channel)
-    )
+    scores = ssim_per_channel.squeeze(dim=-1)  # grayscale image hence 1 channel
+
+    if reduction == "sum":
+        scores = scores.sum()
+    elif reduction == "mean":
+        scores = scores.mean()
+    return scores
 
 
 def criterion(y_true: torch.Tensor, y_pred: torch.Tensor):
     # restore image to their original range
     y_true, y_pred = data.reverse(y_true), data.reverse(y_pred)
-    score = ssim(x=y_true, y=y_pred)
+    score = ssim(x=y_true, y=y_pred, reduction="mean")
     return 1 - score
 
 
@@ -203,8 +218,8 @@ def validate(
             if make_plot:
                 plot_image(
                     args,
-                    images=data.reverse(images.cpu()),
-                    outputs=data.reverse(outputs.cpu()),
+                    images=images.cpu(),
+                    outputs=outputs.cpu(),
                     summary=summary,
                     epoch=epoch,
                     mode=mode,

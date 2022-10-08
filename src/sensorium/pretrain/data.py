@@ -1,15 +1,18 @@
 import torch
 import typing as t
 import numpy as np
+from PIL import Image
 from torch.utils import data
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
+from torchvision.transforms import functional as F
 
 
 IMAGE_SIZE = (1, 144, 256)
 NUM_CLASSES = 1000
-IMAGE_MEAN = torch.tensor(0.44531356896770125)
-IMAGE_STD = torch.tensor(0.2692461874154524)
+# ImageNet mean and standard deviation from Sensorium train set
+IMAGE_MEAN = torch.tensor(113.52469635009766)
+IMAGE_STD = torch.tensor(64.55815124511719)
 
 
 def reverse(image: torch.Tensor):
@@ -17,18 +20,19 @@ def reverse(image: torch.Tensor):
     return image * IMAGE_STD + IMAGE_MEAN
 
 
+def transform(image: Image):
+    image = F.to_grayscale(image)
+    # ToTensor convert PIL image to range [0, 1]
+    image = F.to_tensor(image)
+    # convert image to range [0, 255] to match Sensorium images
+    image = image * 255.0
+    image = F.resize(image, size=list(IMAGE_SIZE[1:]))
+    image = (image - IMAGE_MEAN) / IMAGE_STD
+    return image
+
+
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
-    image_ds = ImageFolder(
-        root=data_dir,
-        transform=transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Grayscale(),
-                transforms.Resize(size=(IMAGE_SIZE[1:])),
-                transforms.Normalize(mean=IMAGE_MEAN, std=IMAGE_STD),
-            ]
-        ),
-    )
+    image_ds = ImageFolder(root=data_dir, transform=transform)
 
     size = len(image_ds)
 
