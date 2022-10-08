@@ -37,7 +37,7 @@ class Readout(nn.Module):
         self._response_stat = {
             k: torch.from_numpy(v) for k, v in ds.dataset.stats["response"].items()
         }
-        self._neurons_coordinate = torch.from_numpy(ds.dataset.neurons_coordinate)
+        self._coordinates = ds.dataset.coordinates
         self.reg_scale = torch.tensor(
             args.reg_scale, dtype=torch.float32, device=self._device
         )
@@ -51,10 +51,6 @@ class Readout(nn.Module):
     def num_neurons(self):
         """Number of neurons to output"""
         return self.shape[-1]
-
-    @property
-    def response_mean(self):
-        return self._response_stat["mean"]
 
     def initialize(self, *args: t.Any, **kwargs: t.Any):
         pass

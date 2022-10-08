@@ -289,6 +289,9 @@ if __name__ == "__main__":
     parser.add_argument("--num_layers", type=int, default=3)
     parser.add_argument("--dim_head", type=int, default=64)
 
+    # Gaussian2DReadout
+    parser.add_argument("--disable_grid_predictor", action="store_true")
+
     # training settings
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."

@@ -216,7 +216,7 @@ class Summary(object):
         figure, axes = plt.subplots(
             nrows=num_samples,
             ncols=3,
-            gridspec_kw={"wspace": 0.2, "hspace": 0.2},
+            gridspec_kw={"wspace": 0.1, "hspace": 0.2},
             figsize=(10, 2 * num_samples),
             dpi=self.dpi,
         )

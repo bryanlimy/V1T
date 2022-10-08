@@ -41,12 +41,15 @@ def get_image_shape(data_dir: str):
     return image.shape
 
 
-def load_trial_data(mouse_dir: str, trial: int) -> t.Dict[str, np.ndarray]:
+def load_trial_data(
+    mouse_dir: str, trial: int, to_tensor: bool = False
+) -> t.Dict[str, t.Union[np.ndarray, torch.Tensor]]:
     """Load data from a single trial in mouse_dir"""
     filename, data_dir = f"{trial}.npy", os.path.join(mouse_dir, "data")
 
     def _load_data(item: str):
-        return np.load(os.path.join(data_dir, item, filename)).astype(np.float32)
+        data = np.load(os.path.join(data_dir, item, filename)).astype(np.float32)
+        return torch.from_numpy(data) if to_tensor else data
 
     return {
         "image": _load_data("images"),
@@ -139,9 +142,7 @@ def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 
 
 
 class MiceDataset(Dataset):
-    def __init__(
-        self, args, tier: str, data_dir: str, mouse_id: int, shuffle: bool = False
-    ):
+    def __init__(self, args, tier: str, data_dir: str, mouse_id: int):
         """Construct Dataset
 
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
@@ -167,13 +168,8 @@ class MiceDataset(Dataset):
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
         self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
-        self._shuffle = shuffle
-        if self._shuffle:
-            self.shuffle()
         self.image_ids = metadata["image_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
-        # neurons cortical coordinates
-        self.neurons_coordinate = metadata["coordinates"]
         # standardizer for responses
         self._response_precision = self.compute_response_precision()
         # indicate if trial IDs and targets are hashed
@@ -183,27 +179,29 @@ class MiceDataset(Dataset):
         return len(self.indexes)
 
     @property
+    def image_stats(self):
+        return self.stats["image"]
+
+    @property
+    def response_stats(self):
+        return self.stats["response"]
+
+    @property
     def num_neurons(self):
         return len(self.neuron_ids)
 
-    def shuffle(self):
-        """
-        Shuffle the indexes of the dataset
-        This is needed due to the memory issue in DataLoader shuffle=True
-        https://github.com/pytorch/pytorch/issues/13246#issuecomment-905703662
-        """
-        np.random.shuffle(self.indexes)
-
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Standardize image"""
-        return (image - self.stats["image"]["mean"]) / self.stats["image"]["std"]
+        stats = self.image_stats
+        return (image - stats["mean"]) / stats["std"]
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
-        return (image * self.stats["image"]["std"]) + self.stats["image"]["mean"]
+        stats = self.image_stats
+        return (image * stats["std"]) + stats["mean"]
 
     def compute_response_precision(self):
-        std = self.stats["response"]["std"]
+        std = self.response_stats["std"]
         threshold = 0.01 * np.mean(std)
         idx = std > threshold
         response_precision = np.ones_like(std) / threshold
@@ -221,15 +219,14 @@ class MiceDataset(Dataset):
         return response / self._response_precision
 
     def normalize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        return (response - self.stats["response"]["min"]) / (
-            self.stats["response"]["max"] - self.stats["response"]["min"]
-        )
+        stats = self.response_stats
+        ds_min, ds_max = stats["min"].min(), stats["max"].max()
+        return (response - ds_min) / (ds_max - ds_min)
 
     def i_normalize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        return (
-            response * (self.stats["response"]["max"] - self.stats["response"]["min"])
-            + self.stats["response"]["min"]
-        )
+        stats = self.response_stats
+        ds_min, ds_max = stats["min"].min(), stats["max"].max()
+        return response * (ds_max - ds_min) + ds_min
 
     def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return (
@@ -244,14 +241,6 @@ class MiceDataset(Dataset):
             if self.norm_mode == 0
             else self.i_normalize_response(response)
         )
-
-    def transform(self, data: t.Dict[str, t.Union[torch.Tensor, np.ndarray]]):
-        data["image"] = self.transform_image(data["image"])
-        data["response"] = self.transform_response(data["response"])
-
-    def i_transform(self, data: t.Dict[str, t.Union[torch.Tensor, np.ndarray]]):
-        data["image"] = self.i_transform_image(data["image"])
-        data["response"] = self.i_transform_response(data["response"])
 
     def transform4evaluation(self, response: t.Union[np.ndarray, torch.Tensor]):
         """
@@ -281,12 +270,11 @@ class MiceDataset(Dataset):
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
-        self.transform(data)
+        data["image"] = self.transform_image(data["image"])
+        data["response"] = self.transform_response(data["response"])
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
-        if idx == len(self) - 1 and self._shuffle:
-            self.shuffle()
         return data
 
 
@@ -328,31 +316,16 @@ def get_training_ds(
 
     for mouse_id in mouse_ids:
         train_ds[mouse_id] = DataLoader(
-            MiceDataset(
-                args,
-                tier="train",
-                data_dir=data_dir,
-                mouse_id=mouse_id,
-                shuffle=True,
-            ),
+            MiceDataset(args, tier="train", data_dir=data_dir, mouse_id=mouse_id),
+            shuffle=True,
             **dataloader_kwargs,
         )
         val_ds[mouse_id] = DataLoader(
-            MiceDataset(
-                args,
-                tier="validation",
-                data_dir=data_dir,
-                mouse_id=mouse_id,
-            ),
+            MiceDataset(args, tier="validation", data_dir=data_dir, mouse_id=mouse_id),
             **dataloader_kwargs,
         )
         test_ds[mouse_id] = DataLoader(
-            MiceDataset(
-                args,
-                tier="test",
-                data_dir=data_dir,
-                mouse_id=mouse_id,
-            ),
+            MiceDataset(args, tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **dataloader_kwargs,
         )
         args.output_shapes[mouse_id] = (train_ds[mouse_id].dataset.num_neurons,)

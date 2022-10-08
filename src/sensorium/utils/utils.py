@@ -47,20 +47,24 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         "trial_ids": [],
         "image_ids": [],
     }
-    mouse_id, transform = ds.dataset.mouse_id, ds.dataset.transform4evaluation
+    mouse_id = ds.dataset.mouse_id
     model.train(False)
     with torch.no_grad():
         for data in ds:
             predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
-            results["predictions"].append(transform(predictions.cpu()))
-            results["targets"].append(transform(data["response"]))
-            results["images"].append(ds.dataset.i_transform_image(data["image"]))
+            results["predictions"].append(predictions.cpu())
+            results["targets"].append(data["response"])
+            results["images"].append(data["image"])
             results["image_ids"].append(data["image_id"])
             results["trial_ids"].append(data["trial_id"])
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
     }
+    # convert responses and images to desired range for evaluation and plotting
+    results["predictions"] = ds.dataset.transform4evaluation(results["predictions"])
+    results["targets"] = ds.dataset.transform4evaluation(results["targets"])
+    results["images"] = ds.dataset.i_transform_image(results["images"])
     return results
 
 
