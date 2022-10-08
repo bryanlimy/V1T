@@ -7,6 +7,7 @@ from tqdm import tqdm
 from zipfile import ZipFile
 from skimage.transform import rescale
 from torch.utils.data import Dataset, DataLoader
+from torchvision.transforms import functional as F
 
 from sensorium.utils import utils
 
@@ -177,6 +178,10 @@ class MiceDataset(Dataset):
         self.hashed = mouse_id in (0, 1)
 
         self.image_shape = get_image_shape(data_dir)
+        self.retina_crop = args.retina_crop
+        self.retinotopy = self.get_retinotopy(mouse_id=mouse_id)
+        if self.retina_crop:
+            self.image_shape = (1, 72, 128)
         self.scale_image = args.scale_image
         if self.scale_image < 1:
             new_h = int(self.image_shape[1] * self.scale_image)
@@ -198,21 +203,39 @@ class MiceDataset(Dataset):
     def num_neurons(self):
         return len(self.neuron_ids)
 
+    def get_retinotopy(self, mouse_id: int):
+        if mouse_id == 0:
+            return (4, 68)
+        elif mouse_id == 1:
+            return (42, 68)
+        elif mouse_id == 2:
+            return (64, 36)
+        elif mouse_id == 3:
+            return (64, 2)
+        elif mouse_id == 4:
+            return (110, 36)
+        elif mouse_id == 5:
+            return (128, 24)
+        elif mouse_id == 6:
+            return (64, 62)
+        else:
+            raise KeyError(f"No retinotopy for mouse {mouse_id}.")
+
+    def crop_image(self, image: t.Union[np.ndarray, torch.Tensor]):
+        if self.retina_crop:
+            top, left = self.retinotopy
+            image = F.crop(image, top=top, left=left, height=72, width=128)
+        return image
+
     def resize_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         if self.scale_image < 1:
-            image = rescale(
-                image,
-                scale=self.scale_image,
-                clip=True,
-                preserve_range=True,
-                anti_aliasing=False,
-                channel_axis=0,
-            )
+            image = F.resize(image, size=list(self.image_shape[1:]), antialias=False)
         return image
 
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Standardize image"""
         stats = self.image_stats
+        image = self.crop_image(image)
         image = self.resize_image(image)
         image = (image - stats["mean"]) / stats["std"]
         return image
@@ -292,6 +315,7 @@ class MiceDataset(Dataset):
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
+        data = {k: torch.from_numpy(v) for k, v in data.items()}
         data["image"] = self.transform_image(data["image"])
         data["response"] = self.transform_response(data["response"])
         data["image_id"] = self.image_ids[idx]

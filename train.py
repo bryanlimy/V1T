@@ -337,6 +337,7 @@ if __name__ == "__main__":
         help="rescale the height and width dimensions of the image by "
         "scale_image factor",
     )
+    parser.add_argument("--retina_crop", action="store_true")
     parser.add_argument(
         "--device",
         type=str,
