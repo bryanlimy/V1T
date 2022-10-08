@@ -103,7 +103,7 @@ class MixerCore(Core):
         height = 32
         self._latent_shape = (num_patches, dim)
         self._reshape_shape = (height, num_patches // height, dim)
-        self._output_shape = (dim, height, num_patches // height)
+        self.output_shape = (dim, height, num_patches // height)
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size()[0]

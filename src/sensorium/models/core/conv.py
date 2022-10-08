@@ -75,7 +75,7 @@ class ConvCore(Core):
             stride=stride,
         )
 
-        self._output_shape = output_shape
+        self.output_shape = output_shape
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.conv_block1(inputs)

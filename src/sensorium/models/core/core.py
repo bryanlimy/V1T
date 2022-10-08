@@ -26,10 +26,6 @@ class Core(nn.Module):
             args.reg_scale, dtype=torch.float32, device=self._device
         )
 
-    @property
-    def shape(self):
-        return self._output_shape
-
     def initialize(self):
         pass
 

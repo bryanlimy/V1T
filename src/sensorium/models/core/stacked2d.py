@@ -432,7 +432,7 @@ class Stacked2dCore(Core, nn.Module):
         self.add_first_layer()
         self.add_subsequent_layers()
         self.initialize()
-        self._output_shape = (
+        self.output_shape = (
             hidden_channels,
             input_shape[1] - input_kern + 1,
             input_shape[2] - input_kern + 1,

@@ -1,5 +1,6 @@
 from .core import register, Core
 
+import math
 import torch
 import typing as t
 from torch import nn
@@ -107,6 +108,44 @@ class Transformer(nn.Module):
         return outputs
 
 
+class Image2Patches(nn.Module):
+    def __init__(
+        self,
+        model,
+        image_shape: t.Tuple[int, int, int],
+        patch_size: int,
+        stride: int = 1,
+    ):
+        super(Image2Patches, self).__init__()
+        self.patch_size = patch_size
+        self.stride = stride
+        new_h = int(((image_shape[1] - (patch_size - 1) - 1) / stride) + 1)
+        new_w = int(((image_shape[2] - (patch_size - 1) - 1) / stride) + 1)
+        self.rearrange = Rearrange(
+            "b c h w p1 p2 -> b (h w) (p1 p2 c)",
+            h=new_h,
+            w=new_w,
+            p1=patch_size,
+            p2=patch_size,
+        )
+        model.num_patches = new_h * new_w
+
+    def forward(self, inputs: torch.Tensor):
+        patches = inputs.unfold(
+            dimension=2, size=self.patch_size, step=self.stride
+        ).unfold(dimension=3, size=self.patch_size, step=self.stride)
+        patches = self.rearrange(patches)
+        return patches
+
+
+def find_shape(num_patches: int):
+    dim1 = math.ceil(math.sqrt(num_patches))
+    while num_patches % dim1 != 0 and dim1 > 0:
+        dim1 -= 1
+    dim2 = num_patches // dim1
+    return (dim1, dim2)
+
+
 @register("vit")
 class ViTCore(Core):
     def __init__(
@@ -116,10 +155,9 @@ class ViTCore(Core):
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
-
-        (channels, image_height, image_width) = input_shape
-
+        (c, h, w) = input_shape
         patch_size = args.patch_size
+        patch_stride = patch_size if args.patch_stride is None else args.patch_stride
         emb_dim = args.emb_dim
         heads = args.num_heads
         mlp_dim = args.mlp_dim
@@ -133,20 +171,17 @@ class ViTCore(Core):
         else:
             patch_height, patch_width = patch_size[0], patch_size[1]
 
-        assert (
-            image_height % patch_height == 0 and image_width % patch_width == 0
-        ), "Image dimensions must be divisible by the patch size."
-
-        num_patches = (image_height // patch_height) * (image_width // patch_width)
-        patch_dim = channels * patch_height * patch_width
+        patch_dim = patch_height * patch_width * c
         self.patch_embedding = nn.Sequential(
-            Rearrange(
-                "b c (h p1) (w p2) -> b (h w) (p1 p2 c)",
-                p1=patch_height,
-                p2=patch_width,
+            Image2Patches(
+                self,
+                image_shape=input_shape,
+                patch_size=patch_size,
+                stride=patch_stride,
             ),
             nn.Linear(in_features=patch_dim, out_features=emb_dim),
         )
+        num_patches = self.num_patches
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
@@ -162,9 +197,9 @@ class ViTCore(Core):
         )
 
         # calculate latent height and width based on num_patches
-        height = 32
-        self._latent_dim = (height, num_patches // height, emb_dim)
-        self._output_shape = (emb_dim, height, num_patches // height)
+        (new_h, new_w) = find_shape(num_patches)
+        self.latent_dim = (new_h, new_w, emb_dim)
+        self.output_shape = (emb_dim, new_h, new_w)
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)
@@ -181,7 +216,7 @@ class ViTCore(Core):
         outputs = outputs[:, :-1, :]
 
         # reshape from (num patches, patch_dim) to (HWC)
-        outputs = outputs.view(*(b, *self._latent_dim))
+        outputs = outputs.view(*(b, *self.latent_dim))
         # reorder outputs to (CHW)
         outputs = torch.permute(outputs, dims=[0, 3, 1, 2])
 

@@ -282,6 +282,7 @@ if __name__ == "__main__":
 
     # ViTCore
     parser.add_argument("--patch_size", type=int, default=4)
+    parser.add_argument("--patch_stride", type=int, default=None)
     parser.add_argument("--emb_dim", type=int, default=64)
     parser.add_argument("--num_heads", type=int, default=3)
     parser.add_argument("--mlp_dim", type=int, default=64)

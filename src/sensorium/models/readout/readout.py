@@ -32,7 +32,7 @@ class Readout(nn.Module):
         super(Readout, self).__init__()
         self.name = "Readout" if name is None else name
         self._input_shape = input_shape
-        self._output_shape = output_shape
+        self.output_shape = output_shape
         self._device = args.device
         self._response_stat = {
             k: torch.from_numpy(v) for k, v in ds.dataset.stats["response"].items()
@@ -43,14 +43,9 @@ class Readout(nn.Module):
         )
 
     @property
-    def shape(self):
-        """Module output shape"""
-        return self._output_shape
-
-    @property
     def num_neurons(self):
         """Number of neurons to output"""
-        return self.shape[-1]
+        return self.output_shape[-1]
 
     def initialize(self, *args: t.Any, **kwargs: t.Any):
         pass

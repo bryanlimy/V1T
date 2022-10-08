@@ -50,7 +50,7 @@ class Model(nn.Module):
             module=Readouts(
                 args,
                 model=args.readout,
-                input_shape=self.core.shape,
+                input_shape=self.core.output_shape,
                 output_shapes=self.output_shapes,
                 ds=ds,
             ),
@@ -101,7 +101,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     mouse_id = list(model.readouts.keys())[0]
     readout_info = torchinfo.summary(
         model.readouts[mouse_id],
-        input_size=(args.batch_size, *model.core.shape),
+        input_size=(args.batch_size, *model.core.output_shape),
         device=args.device,
         verbose=0,
     )

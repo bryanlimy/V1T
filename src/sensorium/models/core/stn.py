@@ -84,7 +84,7 @@ class SpatialTransformerCore(Core):
             output_shape, num_filters=args.num_filters * 2, kernel_size=5
         )
         output_shape = utils.pool2d_shape(output_shape, kernel_size=2)
-        self._output_shape = output_shape
+        self.output_shape = output_shape
 
     def stn(self, inputs: torch.Tensor, align_corners: bool = True):
         """Spatial transformer network forward function"""
