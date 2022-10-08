@@ -187,7 +187,6 @@ def main(args):
         val_results = validate(
             args, ds=val_ds, model=model, epoch=epoch, summary=summary
         )
-
         elapse = time() - start
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)

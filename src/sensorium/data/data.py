@@ -5,6 +5,7 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
+from skimage.transform import rescale
 from torch.utils.data import Dataset, DataLoader
 
 from sensorium.utils import utils
@@ -175,6 +176,13 @@ class MiceDataset(Dataset):
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
+        self.image_shape = get_image_shape(data_dir)
+        self.scale_image = args.scale_image
+        if self.scale_image < 1:
+            new_h = int(self.image_shape[1] * self.scale_image)
+            new_w = int(self.image_shape[2] * self.scale_image)
+            self.image_shape = (1, new_h, new_w)
+
     def __len__(self):
         return len(self.indexes)
 
@@ -190,10 +198,24 @@ class MiceDataset(Dataset):
     def num_neurons(self):
         return len(self.neuron_ids)
 
+    def resize_image(self, image: t.Union[np.ndarray, torch.Tensor]):
+        if self.scale_image < 1:
+            image = rescale(
+                image,
+                scale=self.scale_image,
+                clip=True,
+                preserve_range=True,
+                anti_aliasing=False,
+                channel_axis=0,
+            )
+        return image
+
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Standardize image"""
         stats = self.image_stats
-        return (image - stats["mean"]) / stats["std"]
+        image = self.resize_image(image)
+        image = (image - stats["mean"]) / stats["std"]
+        return image
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
@@ -330,7 +352,7 @@ def get_training_ds(
         )
         args.output_shapes[mouse_id] = (train_ds[mouse_id].dataset.num_neurons,)
 
-    args.input_shape = get_image_shape(data_dir=data_dir)
+    args.input_shape = train_ds[mouse_ids[0]].dataset.image_shape
 
     return train_ds, val_ds, test_ds
 

@@ -199,7 +199,6 @@ def main(args):
             epoch=epoch,
             summary=summary,
         )
-
         elapse = time() - start
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
@@ -328,6 +327,14 @@ if __name__ == "__main__":
         choices=[0, 1],
         help="0 - standardize responses by dividing the standard deviation"
         "1 - normalize responses by scaling to [0, 1]",
+    )
+    parser.add_argument(
+        "--scale_image",
+        default=1,
+        type=float,
+        choices=[1, 0.75, 0.5, 0.25],
+        help="rescale the height and width dimensions of the image by "
+        "scale_image factor",
     )
     parser.add_argument(
         "--device",
