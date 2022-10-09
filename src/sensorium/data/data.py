@@ -38,8 +38,8 @@ def get_num_trials(mouse_dir: str):
     return len(glob(os.path.join(mouse_dir, "data", "images", "*.npy")))
 
 
-def get_image_shape(data_dir: str):
-    image = np.load(os.path.join(data_dir, MICE[2], "data", "images", "0.npy"))
+def get_image_shape(data_dir: str, mouse_id: int = 0):
+    image = np.load(os.path.join(data_dir, MICE[mouse_id], "data", "images", "0.npy"))
     return image.shape
 
 
@@ -172,7 +172,7 @@ class MiceDataset(Dataset):
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
-        self.image_shape = get_image_shape(data_dir)
+        self.image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
         self.retinotopy = self.get_retinotopy(mouse_id=mouse_id)
         assert args.crop_mode in (0, 1, 2)
         self.crop_mode = args.crop_mode
