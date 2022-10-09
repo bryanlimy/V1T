@@ -48,7 +48,7 @@ class Attention(nn.Module):
         self.attend = nn.Softmax(dim=-1)
         self.dropout = nn.Dropout(p=dropout)
 
-        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
+        self.to_qkv = nn.Linear(in_features=dim, out_features=inner_dim * 3, bias=False)
 
         self.to_out = (
             nn.Sequential(
@@ -92,10 +92,15 @@ class Transformer(nn.Module):
                         PreNorm(
                             dim=dim,
                             fn=Attention(
-                                dim, heads=heads, dim_head=dim_head, dropout=dropout
+                                dim=dim, heads=heads, dim_head=dim_head, dropout=dropout
                             ),
                         ),
-                        PreNorm(dim=dim, fn=FeedForward(dim, mlp_dim, dropout=dropout)),
+                        PreNorm(
+                            dim=dim,
+                            fn=FeedForward(
+                                dim=dim, hidden_dim=mlp_dim, dropout=dropout
+                            ),
+                        ),
                     ]
                 )
             )

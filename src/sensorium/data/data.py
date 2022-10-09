@@ -212,15 +212,8 @@ class MiceDataset(Dataset):
         else:
             raise KeyError(f"No retinotopy for mouse {mouse_id}.")
 
-    def retina_crop(self, image: t.Union[np.ndarray, torch.Tensor]):
-        left, top = self.retinotopy
-        image = image[..., top : top + 72, left : left + 128]
-        image = self.resize_image(image, scale=0.5)
-        return image
-
-    def resize_image(
-        self, image: t.Union[np.ndarray, torch.Tensor], scale: float = 0.25
-    ):
+    @staticmethod
+    def resize_image(image: t.Union[np.ndarray, torch.Tensor], scale: float = 0.25):
         image = rescale(
             image,
             scale=scale,
@@ -229,6 +222,12 @@ class MiceDataset(Dataset):
             preserve_range=True,
             channel_axis=0,
         )
+        return image
+
+    def retina_crop(self, image: t.Union[np.ndarray, torch.Tensor]):
+        left, top = self.retinotopy
+        image = image[..., top : top + 72, left : left + 128]
+        image = self.resize_image(image, scale=0.5)
         return image
 
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
@@ -246,6 +245,10 @@ class MiceDataset(Dataset):
         return (image * stats["std"]) + stats["mean"]
 
     def compute_response_precision(self):
+        """
+        Standardize response by dividing the per neuron std if the std is
+        greater than 1% of the mean std (to avoid division by 0)
+        """
         std = self.response_stats["std"]
         threshold = 0.01 * np.mean(std)
         idx = std > threshold
@@ -254,10 +257,6 @@ class MiceDataset(Dataset):
         return response_precision
 
     def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        """
-        Standardize response by dividing the per neuron std if the std is
-        greater than 1% of the mean std (to avoid division by 0)
-        """
         return response * self._response_precision
 
     def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
