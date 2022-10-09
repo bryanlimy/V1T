@@ -386,6 +386,8 @@ class Stacked2dCore(Core, nn.Module):
             nonlinearity_config if nonlinearity_config is not None else {}
         )
 
+        self.dropout_rate = args.dropout
+
         self.stride = stride
         self.use_avg_reg = use_avg_reg
         if use_avg_reg:
@@ -523,6 +525,8 @@ class Stacked2dCore(Core, nn.Module):
             )
             self.add_bn_layer(layer, self.hidden_channels[l])
             self.add_activation(layer)
+            if l != self.num_layers - 1:
+                layer["dropout"] = nn.Dropout2d(p=self.dropout_rate, inplace=True)
             self.features.add_module("layer{}".format(l), nn.Sequential(layer))
 
     class AttentionConvWrapper(AttentionConv):
