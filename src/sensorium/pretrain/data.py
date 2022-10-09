@@ -6,13 +6,13 @@ from torch.utils import data
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 from torchvision.transforms import functional as F
+from functools import partial
 
-
-IMAGE_SIZE = (1, 144, 256)
-NUM_CLASSES = 1000
+NUM_CLASSES = 1000  # ImageNet classes
 # ImageNet mean and standard deviation from Sensorium train set
 IMAGE_MEAN = torch.tensor(113.52469635009766)
 IMAGE_STD = torch.tensor(64.55815124511719)
+IMAGE_SIZE = (1, 144, 256)  # Sensorium image dimension
 
 
 def reverse(image: torch.Tensor):
@@ -20,19 +20,25 @@ def reverse(image: torch.Tensor):
     return image * IMAGE_STD + IMAGE_MEAN
 
 
-def transform(image: Image):
+def transform(image: Image, crop_mode: int):
     image = F.to_grayscale(image)
     # ToTensor convert PIL image to range [0, 1]
     image = F.to_tensor(image)
     # convert image to range [0, 255] to match Sensorium images
     image = image * 255.0
-    image = F.resize(image, size=list(IMAGE_SIZE[1:]))
+    # convert images to (1, 144, 256)
+    image = F.resize(image, size=list(IMAGE_SIZE[1:]), antialias=False)
+    if crop_mode == 1:
+        image = F.resize(image, size=[36, 64], antialias=False)
     image = (image - IMAGE_MEAN) / IMAGE_STD
     return image
 
 
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
-    image_ds = ImageFolder(root=data_dir, transform=transform)
+    image_ds = ImageFolder(
+        root=data_dir,
+        transform=partial(transform, crop_mode=args.crop_mode),
+    )
 
     size = len(image_ds)
 
@@ -53,7 +59,7 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     val_ds = data.DataLoader(val_ds, **dataloader_kwargs)
     test_ds = data.DataLoader(test_ds, **dataloader_kwargs)
 
-    args.input_shape = IMAGE_SIZE
+    args.input_shape = IMAGE_SIZE if args.crop_mode == 0 else (1, 36, 64)
     if args.mode == 0:
         args.output_shape = (NUM_CLASSES,)
     else:

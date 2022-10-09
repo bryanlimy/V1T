@@ -60,7 +60,7 @@ def train(
                 "loss/loss": loss.item(),
                 "loss/reg_loss": reg_loss.item(),
                 "loss/total_loss": total_loss.item(),
-                "accuracy": num_correct(labels, predictions),
+                "accuracy": num_correct(labels.detach(), predictions.detach()),
             },
         )
         del loss, reg_loss, total_loss, outputs, predictions

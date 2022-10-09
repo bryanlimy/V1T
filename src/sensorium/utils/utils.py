@@ -274,16 +274,6 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def load_checkpoint(args, model: Model):
-    filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
-    assert os.path.exists(filename), f"Cannot find model checkpoint {filename}."
-    ckpt = torch.load(filename, map_location=model.device)
-    epoch = ckpt["epoch"]
-    model.load_state_dict(ckpt["model_state_dict"])
-    if args.verbose:
-        print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")
-
-
 def save_model(args, model: Model, epoch: int):
     filename = os.path.join(args.output_dir, "ckpt", "model.pt")
     torch.save({"epoch": epoch, "model": model}, f=filename)

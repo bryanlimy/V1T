@@ -30,13 +30,19 @@ class Model(nn.Module):
             module=get_core(args)(args, input_shape=self.input_shape),
         )
 
-        core_shape = self.core.shape
+        core_shape = self.core.output_shape
 
         if args.mode == 0:
             self.readout = nn.Sequential(
                 Reduce("b c h w -> b c", "mean"),
                 nn.Linear(
                     in_features=core_shape[0],
+                    out_features=args.output_shape[0],
+                ),
+                nn.GELU(),
+                nn.Dropout(p=args.dropout),
+                nn.Linear(
+                    in_features=args.output_shape[0],
                     out_features=args.output_shape[0],
                 ),
                 nn.LogSoftmax(dim=1),
@@ -279,6 +285,15 @@ if __name__ == "__main__":
         help="weight regularization coefficient.",
     )
     parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
+    parser.add_argument(
+        "--crop_mode",
+        default=1,
+        type=int,
+        choices=[0, 1],
+        help="image crop mode:"
+        "0: no cropping and return full image (1, 144, 256)"
+        "1: rescale image by 0.25 in both width and height (1, 36, 64)",
+    )
     parser.add_argument(
         "--device",
         type=str,
