@@ -423,9 +423,11 @@ class Stacked2dCore(Core, nn.Module):
             self.ConvLayer = nn.Conv2d
             self.ignore_group_sparsity = False
 
-        if (self.ignore_group_sparsity) and (gamma_hidden > 0):
+        if self.ignore_group_sparsity and gamma_hidden > 0:
             warnings.warn(
-                "group sparsity can not be calculated for the requested conv type. Hidden channels will not be regularized and gamma_hidden is ignored."
+                "group sparsity can not be calculated for the requested conv "
+                "type. Hidden channels will not be regularized and gamma_hidden "
+                "is ignored."
             )
         self.set_batchnorm_type()
         self.features = nn.Sequential()
@@ -488,9 +490,9 @@ class Stacked2dCore(Core, nn.Module):
     def add_first_layer(self):
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
-            self.input_channels,
-            self.hidden_channels[0],
-            self.input_kern,
+            in_channels=self.input_channels,
+            out_channels=self.hidden_channels[0],
+            kernel_size=self.input_kern,
             padding=self.input_kern // 2 if self.pad_input else 0,
             bias=self.bias and not self.batch_norm,
         )
@@ -533,16 +535,17 @@ class Stacked2dCore(Core, nn.Module):
             """
             super().__init__(**kwargs)
 
-    def forward(self, input_):
-        ret = []
-        for l, feat in enumerate(self.features):
-            do_skip = l >= 1 and self.skip > 1
-            input_ = feat(
-                input_ if not do_skip else torch.cat(ret[-min(self.skip, l) :], dim=1)
+    def forward(self, inputs: torch.Tensor):
+        outputs = []
+        for layer, fn in enumerate(self.features):
+            do_skip = layer >= 1 and self.skip > 1
+            inputs = fn(
+                inputs
+                if not do_skip
+                else torch.cat(outputs[-min(self.skip, layer) :], dim=1)
             )
-            ret.append(input_)
-
-        return torch.cat([ret[ind] for ind in self.stack], dim=1)
+            outputs.append(inputs)
+        return torch.cat([outputs[ind] for ind in self.stack], dim=1)
 
     def laplace(self):
         """

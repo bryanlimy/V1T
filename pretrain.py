@@ -39,15 +39,14 @@ class Model(nn.Module):
                     in_features=core_shape[0],
                     out_features=args.output_shape[0],
                 ),
-                nn.GELU(),
-                nn.Dropout(p=args.dropout),
-                nn.Linear(
-                    in_features=args.output_shape[0],
-                    out_features=args.output_shape[0],
-                ),
                 nn.LogSoftmax(dim=1),
             )
         else:
+            self.initialize_reconstruction_readout(args)
+
+    def initialize_reconstruction_readout(self, args):
+        core_shape = self.core.output_shape
+        if self.core.name == "ViTCore":
             output_shape = model_utils.transpose_conv2d_shape(
                 input_shape=core_shape,
                 num_filters=core_shape[0] // 2,
@@ -89,6 +88,53 @@ class Model(nn.Module):
                 nn.Conv2d(
                     in_channels=core_shape[0] // 4, out_channels=1, kernel_size=1
                 ),
+            )
+        elif self.core.name in ("Stacked2DCore", "SpatialTransformerCore"):
+            output_shape = model_utils.transpose_conv2d_shape(
+                input_shape=core_shape,
+                num_filters=core_shape[0] // 2,
+                kernel_size=9,
+                stride=1,
+                padding=0,
+            )
+            output_shape = model_utils.conv2d_shape(
+                input_shape=output_shape,
+                num_filters=output_shape[0] // 2,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            )
+            output_shape = model_utils.conv2d_shape(
+                input_shape=output_shape, num_filters=1, kernel_size=1
+            )
+            assert output_shape == self.output_shape
+            self.readout = nn.Sequential(
+                nn.ConvTranspose2d(
+                    in_channels=core_shape[0],
+                    out_channels=core_shape[0] // 2,
+                    kernel_size=9,
+                    stride=1,
+                    padding=0,
+                ),
+                nn.GELU(),
+                nn.BatchNorm2d(num_features=core_shape[0] // 2),
+                nn.Dropout2d(p=args.dropout),
+                nn.Conv2d(
+                    in_channels=core_shape[0] // 2,
+                    out_channels=core_shape[0] // 4,
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
+                ),
+                nn.GELU(),
+                nn.BatchNorm2d(num_features=core_shape[0] // 4),
+                nn.Conv2d(
+                    in_channels=core_shape[0] // 4, out_channels=1, kernel_size=1
+                ),
+            )
+        else:
+            raise NotImplementedError(
+                f"Readout for {self.core.name} has not been implemented."
             )
 
     def regularizer(self):
