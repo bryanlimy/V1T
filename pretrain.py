@@ -51,25 +51,16 @@ class Model(nn.Module):
             output_shape = model_utils.transpose_conv2d_shape(
                 input_shape=core_shape,
                 num_filters=core_shape[0] // 2,
-                kernel_size=(7, 6),
-                stride=(2, 2),
-                padding=0,
-                output_padding=(1, 1),
-                dilation=(4, 4),
-            )
-            output_shape = model_utils.transpose_conv2d_shape(
-                input_shape=output_shape,
-                num_filters=core_shape[0] // 4,
-                kernel_size=(12, 12),
-                stride=(1, 1),
-                padding=0,
-                output_padding=(1, 4),
-                dilation=(5, 8),
+                kernel_size=6,
+                stride=1,
+                padding=1,
             )
             output_shape = model_utils.conv2d_shape(
                 input_shape=output_shape,
-                num_filters=core_shape[0] // 6,
-                kernel_size=1,
+                num_filters=output_shape[0] // 2,
+                kernel_size=3,
+                stride=1,
+                padding=1,
             )
             output_shape = model_utils.conv2d_shape(
                 input_shape=output_shape, num_filters=1, kernel_size=1
@@ -79,37 +70,24 @@ class Model(nn.Module):
                 nn.ConvTranspose2d(
                     in_channels=core_shape[0],
                     out_channels=core_shape[0] // 2,
-                    kernel_size=(7, 6),
-                    stride=(2, 2),
-                    padding=0,
-                    output_padding=(1, 1),
-                    dilation=(4, 4),
+                    kernel_size=6,
+                    stride=1,
+                    padding=1,
                 ),
                 nn.GELU(),
                 nn.BatchNorm2d(num_features=core_shape[0] // 2),
                 nn.Dropout2d(p=args.dropout),
-                nn.ConvTranspose2d(
+                nn.Conv2d(
                     in_channels=core_shape[0] // 2,
                     out_channels=core_shape[0] // 4,
-                    kernel_size=(12, 12),
-                    stride=(1, 1),
-                    padding=0,
-                    output_padding=(1, 4),
-                    dilation=(5, 8),
+                    kernel_size=3,
+                    stride=1,
+                    padding=1,
                 ),
                 nn.GELU(),
                 nn.BatchNorm2d(num_features=core_shape[0] // 4),
-                nn.Dropout2d(p=args.dropout),
                 nn.Conv2d(
-                    in_channels=core_shape[0] // 4,
-                    out_channels=core_shape[0] // 6,
-                    kernel_size=1,
-                ),
-                nn.GELU(),
-                nn.BatchNorm2d(num_features=core_shape[0] // 6),
-                nn.Dropout2d(p=args.dropout),
-                nn.Conv2d(
-                    in_channels=core_shape[0] // 6, out_channels=1, kernel_size=1
+                    in_channels=core_shape[0] // 4, out_channels=1, kernel_size=1
                 ),
             )
 
