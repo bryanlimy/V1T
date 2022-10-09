@@ -36,7 +36,7 @@ class Gaussian2DReadout(Readout):
         self.init_mu_range = init_mu_range
 
         self.gamma_readout = torch.tensor(
-            0.0076, dtype=torch.float32, device=self._device
+            0.0076, dtype=torch.float32, device=self.device
         )
 
         # position grid shape
@@ -50,7 +50,7 @@ class Gaussian2DReadout(Readout):
             # mean location of gaussian for each neuron
             self._mu = nn.Parameter(torch.Tensor(*self.grid_shape))
         else:
-            self.init_grid_predictor(source_grid=self._coordinates)
+            self.init_grid_predictor(source_grid=self.neuron_coordinates)
 
         self.gaussian_type = gaussian_type
         if gaussian_type == "full":
@@ -142,7 +142,7 @@ class Gaussian2DReadout(Readout):
         instance of FullGaussian2d via the `shared_features` (False). If it
         uses a copy, the feature_l1 regularizer for this copy will return 0
         """
-        c, w, h = self._input_shape
+        c, w, h = self.input_shape
         self._original_features = True
 
         # feature weights for each channel of the core
@@ -161,7 +161,7 @@ class Gaussian2DReadout(Readout):
             self.sigma.data.fill_(self.init_sigma)
         else:
             self.sigma.data.uniform_(-self.init_sigma, self.init_sigma)
-        self.features.data.fill_(1 / self._input_shape[0])
+        self.features.data.fill_(1 / self.input_shape[0])
         if self._shared_features:
             self.scales.data.fill_(1.0)
 
@@ -249,10 +249,10 @@ class Gaussian2DReadout(Readout):
             y: neuronal activity
         """
         batch_size, c, w, h = inputs.size()
-        c_in, w_in, h_in = self._input_shape
+        c_in, w_in, h_in = self.input_shape
         if (c_in, w_in, h_in) != (c, w, h):
             raise ValueError(
-                f"shape mismatch between expected ({self._input_shape}) and "
+                f"shape mismatch between expected ({self.input_shape}) and "
                 f"received ({inputs.size()}) inputs."
             )
         features = self.features.view(1, c, self.num_neurons)

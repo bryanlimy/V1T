@@ -61,9 +61,7 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
     }
-    # convert responses and images to desired range for evaluation and plotting
-    results["predictions"] = ds.dataset.transform4evaluation(results["predictions"])
-    results["targets"] = ds.dataset.transform4evaluation(results["targets"])
+    # convert images to their original range for plotting
     results["images"] = ds.dataset.i_transform_image(results["images"])
     return results
 
@@ -284,3 +282,9 @@ def load_checkpoint(args, model: Model):
     model.load_state_dict(ckpt["model_state_dict"])
     if args.verbose:
         print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")
+
+
+def save_model(args, model: Model, epoch: int):
+    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
+    torch.save({"epoch": epoch, "model": model}, f=filename)
+    print(f"\nModel saved to {filename}.")

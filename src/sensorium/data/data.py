@@ -150,16 +150,11 @@ class MiceDataset(Dataset):
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
         as trial IDs (the numbers in meta/trials/trial_idx.npy)
 
-        norm_mode:
-            0 - standardize responses by dividing the standard deviation
-            1 - normalize responses by scaling to [0, 1]
-
         Args:
             - tier: str, train, validation, test or final_test
             - data_dir: str, path to where all data are stored
             - mouse_id: int, the mouse ID
         """
-        self.norm_mode = args.norm_mode
         assert tier in ("train", "validation", "test", "final_test")
         self.tier = tier
         self.mouse_id = mouse_id
@@ -178,15 +173,11 @@ class MiceDataset(Dataset):
         self.hashed = mouse_id in (0, 1)
 
         self.image_shape = get_image_shape(data_dir)
-        self.retina_crop = args.retina_crop
         self.retinotopy = self.get_retinotopy(mouse_id=mouse_id)
-        if self.retina_crop:
-            self.image_shape = (1, 72, 128)
-        self.scale_image = args.scale_image
-        if self.scale_image < 1:
-            new_h = int(self.image_shape[1] * self.scale_image)
-            new_w = int(self.image_shape[2] * self.scale_image)
-            self.image_shape = (1, new_h, new_w)
+        assert args.crop_mode in (0, 1, 2)
+        self.crop_mode = args.crop_mode
+        if self.crop_mode in (1, 2):
+            self.image_shape = (1, 36, 64)
 
     def __len__(self):
         return len(self.indexes)
@@ -221,22 +212,31 @@ class MiceDataset(Dataset):
         else:
             raise KeyError(f"No retinotopy for mouse {mouse_id}.")
 
-    def crop_image(self, image: t.Union[np.ndarray, torch.Tensor]):
-        if self.retina_crop:
-            left, top = self.retinotopy
-            image = F.crop(image, top=top, left=left, height=72, width=128)
+    def retina_crop(self, image: t.Union[np.ndarray, torch.Tensor]):
+        left, top = self.retinotopy
+        image = image[..., top : top + 72, left : left + 128]
+        image = self.resize_image(image, scale=0.5)
         return image
 
-    def resize_image(self, image: t.Union[np.ndarray, torch.Tensor]):
-        if self.scale_image < 1:
-            image = F.resize(image, size=list(self.image_shape[1:]), antialias=False)
+    def resize_image(
+        self, image: t.Union[np.ndarray, torch.Tensor], scale: float = 0.25
+    ):
+        image = rescale(
+            image,
+            scale=scale,
+            anti_aliasing=False,
+            clip=True,
+            preserve_range=True,
+            channel_axis=0,
+        )
         return image
 
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
-        """Standardize image"""
+        if self.crop_mode == 1:
+            image = self.resize_image(image, scale=0.25)
+        elif self.crop_mode == 2:
+            image = self.retina_crop(image)
         stats = self.image_stats
-        image = self.crop_image(image)
-        image = self.resize_image(image)
         image = (image - stats["mean"]) / stats["std"]
         return image
 
@@ -253,52 +253,15 @@ class MiceDataset(Dataset):
         response_precision[idx] = 1 / std[idx]
         return response_precision
 
-    def standardize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
+    def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         """
         Standardize response by dividing the per neuron std if the std is
         greater than 1% of the mean std (to avoid division by 0)
         """
         return response * self._response_precision
 
-    def i_standardize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        return response / self._response_precision
-
-    def normalize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        stats = self.response_stats
-        ds_min, ds_max = stats["min"].min(), stats["max"].max()
-        return (response - ds_min) / (ds_max - ds_min)
-
-    def i_normalize_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        stats = self.response_stats
-        ds_min, ds_max = stats["min"].min(), stats["max"].max()
-        return response * (ds_max - ds_min) + ds_min
-
-    def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        return (
-            self.standardize_response(response)
-            if self.norm_mode == 0
-            else self.normalize_response(response)
-        )
-
     def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
-        return (
-            self.i_standardize_response(response)
-            if self.norm_mode == 0
-            else self.i_normalize_response(response)
-        )
-
-    def transform4evaluation(self, response: t.Union[np.ndarray, torch.Tensor]):
-        """
-        Transform (pre-processed) response for evaluation
-        Sensorium calculate metrics with standardized responses, hence in the
-        case where the model generate normalized responses (self.norm_mode == 1)
-        we have to unscale the responses and standardize it.
-        """
-        if self.norm_mode == 0:
-            return response
-        else:
-            response = self.i_normalize_response(response)
-            return self.standardize_response(response)
+        return response / self._response_precision
 
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
@@ -315,7 +278,6 @@ class MiceDataset(Dataset):
         """
         trial = self.indexes[idx]
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
-        data = {k: torch.from_numpy(v) for k, v in data.items()}
         data["image"] = self.transform_image(data["image"])
         data["response"] = self.transform_response(data["response"])
         data["image_id"] = self.image_ids[idx]

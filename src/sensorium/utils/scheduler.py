@@ -1,8 +1,8 @@
+import os
 import torch
-from torch.optim import Optimizer, lr_scheduler
 import typing as t
 import numpy as np
-import os
+from torch.optim import Optimizer
 from sensorium.models import Model
 
 

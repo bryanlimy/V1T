@@ -230,6 +230,8 @@ def main(args):
 
     scheduler.restore()
 
+    utils.save_model(args, model=model, epoch=epoch)
+
     utils.evaluate(
         args,
         ds=test_ds,
@@ -322,22 +324,15 @@ if __name__ == "__main__":
         help="scale loss by the size of the dataset",
     )
     parser.add_argument(
-        "--norm_mode",
-        default=0,
-        type=int,
-        choices=[0, 1],
-        help="0 - standardize responses by dividing the standard deviation"
-        "1 - normalize responses by scaling to [0, 1]",
-    )
-    parser.add_argument(
-        "--scale_image",
+        "--crop_mode",
         default=1,
-        type=float,
-        choices=[1, 0.75, 0.5, 0.25],
-        help="rescale the height and width dimensions of the image by "
-        "scale_image factor",
+        type=int,
+        choices=[0, 1, 2],
+        help="image crop mode:"
+        "0: no cropping and return full image (1, 144, 256)"
+        "1: rescale image by 0.25 in both width and height (1, 36, 64)"
+        "2: crop image based on retinotopy and rescale to (1, 36, 64)",
     )
-    parser.add_argument("--retina_crop", action="store_true")
     parser.add_argument(
         "--device",
         type=str,
@@ -346,7 +341,6 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument("--mixed_precision", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
 
     # pre-trained Core

@@ -36,7 +36,7 @@ class Model(nn.Module):
         self.initialize_core(args)
         self.initialize_readouts(args, ds=ds)
 
-        self.activation = ELU1() if args.norm_mode == 0 else nn.Sigmoid()
+        self.activation = ELU1()
 
     def initialize_core(self, args):
         self.add_module(

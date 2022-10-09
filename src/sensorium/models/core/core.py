@@ -21,9 +21,9 @@ class Core(nn.Module):
         super(Core, self).__init__()
         self.input_shape = input_shape
         self.name = name
-        self._device = args.device
+        self.device = args.device
         self.reg_scale = torch.tensor(
-            args.reg_scale, dtype=torch.float32, device=self._device
+            args.reg_scale, dtype=torch.float32, device=self.device
         )
 
     def initialize(self):
