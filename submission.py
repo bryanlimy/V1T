@@ -10,7 +10,6 @@ from datetime import datetime
 from torch.utils.data import DataLoader
 
 from sensorium.utils import utils
-from sensorium.models import get_model
 from sensorium.data import get_submission_ds
 
 
@@ -127,8 +126,7 @@ def main(args):
         device=args.device,
     )
 
-    model = get_model(args, ds=test_ds)
-    utils.load_checkpoint(args, model=model)
+    model = utils.load_model(args)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"

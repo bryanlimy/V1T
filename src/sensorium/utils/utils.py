@@ -288,3 +288,15 @@ def save_model(args, model: Model, epoch: int):
     filename = os.path.join(args.output_dir, "ckpt", "model.pt")
     torch.save({"epoch": epoch, "model": model}, f=filename)
     print(f"\nModel saved to {filename}.")
+
+
+def load_model(args) -> Model:
+    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"checkpoint {filename} not found.")
+    ckpt = torch.load(filename, map_location=args.device)
+    print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
+    model = ckpt["model"]
+    model.to(args.device)
+    model.device = args.device
+    return model
