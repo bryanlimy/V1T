@@ -21,9 +21,10 @@ def plot_image(
     mode: int = 1,
     num_plots: int = 5,
 ):
+    images = data.reverse(images)
     for i in range(min(num_plots, len(images))):
         figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(4, 3), dpi=args.dpi)
-        ax.imshow(images[i][0], cmap=tensorboard.GRAY, vmin=0, vmax=1, aspect="auto")
+        ax.imshow(images[i][0], cmap=tensorboard.GRAY, vmin=0, vmax=255, aspect="auto")
         ax.set_title(
             f"label: {labels[i]}   prediction: {predictions[i]}", pad=3, fontsize=10
         )
