@@ -7,7 +7,6 @@ from tqdm import tqdm
 from zipfile import ZipFile
 from skimage.transform import rescale
 from torch.utils.data import Dataset, DataLoader
-from torchvision.transforms import functional as F
 
 from sensorium.utils import utils
 
@@ -97,7 +96,7 @@ def load_mouse_metadata(mouse_dir: str):
         "mouse_dir": mouse_dir,
         "num_neurons": len(load_neuron("unit_ids.npy")),
         "neuron_ids": load_neuron("unit_ids.npy").astype(np.int32),
-        "coordinates": load_neuron("cell_motor_coordinates.npy").astype(np.int32),
+        "coordinates": load_neuron("cell_motor_coordinates.npy").astype(np.float32),
         "image_id": load_trial("frame_image_id.npy").astype(np.int32),
         "tiers": load_trial("tiers.npy"),
         "trial_id": load_trial("trial_idx.npy"),

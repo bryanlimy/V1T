@@ -292,6 +292,7 @@ if __name__ == "__main__":
 
     # Gaussian2DReadout
     parser.add_argument("--disable_grid_predictor", action="store_true")
+    parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
 
     # training settings
     parser.add_argument(

@@ -50,7 +50,10 @@ class Gaussian2DReadout(Readout):
             # mean location of gaussian for each neuron
             self._mu = nn.Parameter(torch.Tensor(*self.grid_shape))
         else:
-            self.init_grid_predictor(source_grid=self.neuron_coordinates)
+            self.init_grid_predictor(
+                source_grid=self.neuron_coordinates,
+                input_dimensions=args.grid_predictor_dim,
+            )
 
         self.gaussian_type = gaussian_type
         if gaussian_type == "full":
@@ -104,13 +107,13 @@ class Gaussian2DReadout(Readout):
     ):
         self._original_grid = False
         source_grid = source_grid[:, :input_dimensions]
+
         layers = [
             nn.Linear(
                 in_features=source_grid.shape[1],
                 out_features=hidden_features if hidden_layers > 0 else 2,
             )
         ]
-
         for i in range(hidden_layers):
             layers.extend(
                 [
@@ -121,17 +124,13 @@ class Gaussian2DReadout(Readout):
                     ),
                 ]
             )
-
         if tanh_output:
             layers.append(nn.Tanh())
-
         self.mu_transform = nn.Sequential(*layers)
 
         source_grid = source_grid - source_grid.mean(axis=0, keepdims=True)
         source_grid = source_grid / np.abs(source_grid).max()
-        self.register_buffer(
-            "source_grid", torch.from_numpy(source_grid.astype(np.float32))
-        )
+        self.register_buffer("source_grid", torch.from_numpy(source_grid))
         self._predicted_grid = True
 
     def initialize_features(self):
