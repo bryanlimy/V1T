@@ -314,7 +314,8 @@ def get_batch_size(args):
             device=args.device,
         )
         output_shape = (train_ds[0].dataset.num_neurons,)
-        model = get_model(args, ds=train_ds)
+        model = Model(args, ds=train_ds)
+        model.to(args.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         criterion = losses.get_criterion(args, ds=train_ds)
 
