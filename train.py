@@ -327,8 +327,8 @@ if __name__ == "__main__":
         "--batch_size",
         default=16,
         type=int,
-        help="batch size to train the model, if batch_size == 0 and CUDA is "
-        "available, then dynamically test batch size.",
+        help="If batch_size == 0 and CUDA is available, then dynamically test "
+        "batch size. Otherwise use the provided value.",
     )
     parser.add_argument(
         "--criterion",
