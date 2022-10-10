@@ -25,8 +25,7 @@ class Args:
 
 def train_function(config):
     args = Args(config)
-    results = trainer.main(args)
-    return results
+    return trainer.main(args)
 
 
 def main(args):

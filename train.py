@@ -6,6 +6,7 @@ from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
+from ray.air import session
 from torch.utils.data import DataLoader
 
 from sensorium import losses, metrics
@@ -183,7 +184,7 @@ def main(args):
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        train_results = train(
+        train_result = train(
             args,
             ds=train_ds,
             model=model,
@@ -192,7 +193,7 @@ def main(args):
             epoch=epoch,
             summary=summary,
         )
-        val_results = validate(
+        val_result = validate(
             args,
             ds=val_ds,
             model=model,
@@ -217,24 +218,27 @@ def main(args):
         )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t\t'
-                f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t\t'
-                f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
+                f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
+                f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
+                f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
+                f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
 
         if epoch % 10 == 0 or epoch == args.epochs:
-            utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
+            eval_result = utils.evaluate(
+                args, ds=test_ds, model=model, epoch=epoch, summary=summary
+            )
+            session.report(metrics=eval_result)
 
-        if scheduler.step(val_results["metrics/trial_correlation"], epoch=epoch):
+        if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
             break
 
     scheduler.restore()
 
     utils.save_model(args, model=model, epoch=epoch)
 
-    test_result = utils.evaluate(
+    eval_result = utils.evaluate(
         args,
         ds=test_ds,
         model=model,
@@ -250,7 +254,7 @@ def main(args):
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
 
-    return {k: test_result[k]["average"] for k in test_result.keys()}
+    return eval_result
 
 
 if __name__ == "__main__":

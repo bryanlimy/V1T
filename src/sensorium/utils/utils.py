@@ -75,7 +75,7 @@ def evaluate(
     mode: int = 1,
     print_result: bool = False,
     save_result: str = None,
-):
+) -> t.Dict[str, np.ndarray]:
     """
     Evaluate DataLoaders ds on the 3 challenge metrics
 
@@ -163,7 +163,9 @@ def evaluate(
 
     if save_result is not None:
         yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
-    return results
+
+    # only report average
+    return {k: results[k]["average"] for k in results.keys()}
 
 
 def update_dict(target: dict, source: dict, replace: bool = False):
