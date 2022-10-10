@@ -137,6 +137,8 @@ def main(args):
 
     utils.set_random_seed(args.seed)
 
+    utils.get_batch_size(args)
+
     utils.get_device(args)
 
     train_ds, val_ds, test_ds = get_training_ds(
@@ -322,7 +324,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument(
+        "--batch_size",
+        default=16,
+        type=int,
+        help="batch size to train the model, if batch_size == 0 and CUDA is "
+        "available, then dynamically test batch size.",
+    )
     parser.add_argument(
         "--criterion",
         default="poisson",

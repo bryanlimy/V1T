@@ -294,3 +294,50 @@ def load_model(args) -> Model:
     model.to(args.device)
     model.device = args.device
     return model
+
+
+def get_batch_size(args):
+    from sensorium.models import get_model
+    from sensorium.data import get_training_ds
+    from sensorium import losses
+
+    device = args.device
+
+    if args.batch_size == 0 and "cuda" in device:
+        raise ValueError("Please provide --batch_size.")
+    elif "cuda" not in device:
+        assert args.batch_size > 1
+    else:
+        train_ds, _, _ = get_training_ds(
+            args,
+            data_dir=args.dataset,
+            mouse_ids=[0],
+            batch_size=1,
+            device=device,
+        )
+        output_shape = (train_ds[0].dataset.num_neurons,)
+        model = get_model(args, ds=train_ds)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+        criterion = losses.get_criterion(args, ds=train_ds)
+
+        batch_size, terminate = 1, False
+        while not terminate:
+            try:
+                model.train(True)
+                for _ in range(5):
+                    inputs = torch.rand(*(batch_size, *args.input_shape))
+                    targets = torch.rand(*(batch_size, *output_shape))
+                    inputs, targets = inputs.to(device), targets.to(device)
+                    outputs = model(inputs, mouse_id=0)
+                    loss = criterion(y_true=targets, y_pred=outputs)
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+                batch_size *= 2
+            except RuntimeError:
+                if args.verbose > 1:
+                    print(f"Dynamic batch size: {batch_size}")
+                batch_size //= 2
+                terminate = True
+        del train_ds, model, optimizer, criterion
+        args.batch_size = batch_size
