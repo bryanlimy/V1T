@@ -42,7 +42,7 @@ def main(args):
         "batch_size": args.batch_size,
         "readout": "gaussian2d",
         "mouse_ids": None,
-        "num_workers": 2,
+        "num_workers": args.num_workers,
         "depth_scale": 1,
         "device": args.device,
         "seed": 1234,
