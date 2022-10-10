@@ -28,7 +28,6 @@ from ray.tune.utils.util import wait_for_gpu
 
 def train_function(config):
     gpu_ids = ray.get_gpu_ids()
-    print(gpu_ids)
     # if gpu_ids:
     #     gpu_id = gpu_ids[0]
     #     while not wait_for_gpu(gpu_id):
@@ -131,9 +130,7 @@ def main(args):
     if gpus > 0:
         trainable = tune.with_resources(
             train_function,
-            resources=tune.PlacementGroupFactory(
-                bundles=[{"cpu": 2, "gpu": 1} for _ in range(gpus)], strategy="PACK"
-            ),
+            resources={"cpu": 2, "gpu": 1},
         )
     tuner = tune.Tuner(
         trainable,
