@@ -1,17 +1,16 @@
 import os
-import torch
-import argparse
-from ray import air, tune
-from ray.tune.search.hebo import HEBOSearch
-from ray.air.config import RunConfig
-from shutil import rmtree
-from datetime import datetime
-
 import ray
+import torch
+import pickle
+import argparse
+from shutil import rmtree
+from ray import air, tune
+from datetime import datetime
+from ray.air.config import RunConfig
+from ray.tune.search.hebo import HEBOSearch
+
 
 import train as trainer
-
-from sensorium.utils import yaml
 
 
 class Args:
@@ -128,11 +127,13 @@ def main(args):
             checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
         ),
     )
-    # if os.path.isdir(args.output_dir):
-    #     tuner = tuner.restore(args.output_dir, restart_errored=True)
+
     results = tuner.fit()
 
-    print(results.get_best_result().config)
+    with open(os.path.join(args.output_dir, "result.pkl"), "wb") as file:
+        pickle.dump(results, file)
+
+    print(f"Best setting: {results.get_best_result().config}")
 
 
 if __name__ == "__main__":

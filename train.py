@@ -179,7 +179,8 @@ def main(args):
     utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
-        print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
+        if args.verbose:
+            print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
         train_results = train(
@@ -214,13 +215,14 @@ def main(args):
             step=epoch,
             mode=0,
         )
-        print(
-            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t\t'
-            f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
-            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t\t'
-            f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
-            f"Elapse: {elapse:.02f}s"
-        )
+        if args.verbose:
+            print(
+                f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t\t'
+                f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
+                f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t\t'
+                f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
+                f"Elapse: {elapse:.02f}s"
+            )
 
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
@@ -245,7 +247,8 @@ def main(args):
 
     summary.close()
 
-    print(f"\nResults saved to {args.output_dir}.")
+    if args.verbose:
+        print(f"\nResults saved to {args.output_dir}.")
 
     return test_result
 
@@ -394,7 +397,7 @@ if __name__ == "__main__":
         action="store_true",
         help="overwrite content in --output_dir",
     )
-    parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
+    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
 
     params = parser.parse_args()
     main(params)

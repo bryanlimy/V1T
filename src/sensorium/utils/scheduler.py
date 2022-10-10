@@ -76,7 +76,8 @@ class Scheduler:
         if self.save_scheduler:
             ckpt["scheduler_state_dict"] = self.state_dict()
         torch.save(ckpt, f=filename)
-        print(f"\nCheckpoint saved to {filename}.")
+        if self.verbose:
+            print(f"\nCheckpoint saved to {filename}.")
 
     def restore(self, force: bool = False) -> int:
         """
@@ -125,7 +126,7 @@ class Scheduler:
             old_lr = float(param_group["lr"])
             new_lr = max(old_lr * self.factor, self.min_lr)
             param_group["lr"] = new_lr
-            if self.verbose == 2:
+            if self.verbose >= 2:
                 print(f'Reduce learning rate of {param_group["name"]} to {new_lr}.')
 
     def step(self, value: t.Union[float, torch.Tensor], epoch: int):
@@ -140,9 +141,11 @@ class Scheduler:
             if self.lr_wait >= self.lr_patience:
                 if self.num_reduce >= self.max_reduce:
                     terminate = True
-                    print(
-                        f"Model has not improved after {self.num_reduce} LR reductions."
-                    )
+                    if self.verbose:
+                        print(
+                            f"Model has not improved after {self.num_reduce} "
+                            f"LR reductions."
+                        )
                 else:
                     self.reduce_lr()
                     self.num_reduce += 1

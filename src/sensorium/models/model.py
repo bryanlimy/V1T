@@ -80,7 +80,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     )
     with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
         file.write(str(model_info))
-    if args.verbose == 2:
+    if args.verbose == 3:
         print(str(model_info))
     if summary is not None:
         summary.scalar("model/trainable_parameters", model_info.trainable_params)

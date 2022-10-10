@@ -138,7 +138,7 @@ def evaluate(
                     mode=mode,
                 )
 
-    if print_result:
+    if args.verbose and print_result:
         _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
         statement = ""
         for metric in metrics:
@@ -277,7 +277,8 @@ def load_pretrain_core(args, model: Model):
 def save_model(args, model: Model, epoch: int):
     filename = os.path.join(args.output_dir, "ckpt", "model.pt")
     torch.save({"epoch": epoch, "model": model}, f=filename)
-    print(f"\nModel saved to {filename}.")
+    if args.verbose:
+        print(f"\nModel saved to {filename}.")
 
 
 def load_model(args) -> Model:
@@ -285,7 +286,8 @@ def load_model(args) -> Model:
     if not os.path.exists(filename):
         raise FileNotFoundError(f"checkpoint {filename} not found.")
     ckpt = torch.load(filename, map_location=args.device)
-    print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
+    if args.verbose:
+        print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
     model = ckpt["model"]
     model.to(args.device)
     model.device = args.device
