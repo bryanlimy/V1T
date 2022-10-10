@@ -206,7 +206,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", default=0, type=int)
     parser.add_argument("--max_concurrent", type=int, default=8)
     parser.add_argument(
         "--device",
