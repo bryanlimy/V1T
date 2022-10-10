@@ -250,7 +250,7 @@ def main(args):
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
 
-    return test_result
+    return {k: test_result[k]["average"] for k in test_result.keys()}
 
 
 if __name__ == "__main__":

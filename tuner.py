@@ -26,14 +26,15 @@ class Args:
 from ray.tune.utils.util import wait_for_gpu
 
 
-def train_model(config):
+def train_function(config):
     gpu_ids = ray.get_gpu_ids()
-    if gpu_ids:
-        gpu_id = gpu_ids[0]
-        while not wait_for_gpu(gpu_id):
-            gpu_id += 1
-            gpu_id = gpu_id % len(gpu_ids)
-        config["device"] = f"cuda:{gpu_id}"
+    print(gpu_ids)
+    # if gpu_ids:
+    #     gpu_id = gpu_ids[0]
+    #     while not wait_for_gpu(gpu_id):
+    #         gpu_id += 1
+    #         gpu_id = gpu_id % len(gpu_ids)
+    #     config["device"] = f"cuda:{gpu_id}"
     args = Args(config)
     results = trainer.main(args)
     print(results)
@@ -125,10 +126,17 @@ def main(args):
         points_to_evaluate=points_to_evaluate,
         max_concurrent=args.max_concurrent,
     )
+    trainable = train_function
+    gpus = torch.cuda.device_count()
+    if gpus > 0:
+        trainable = tune.with_resources(
+            train_function,
+            resources=tune.PlacementGroupFactory(
+                bundles=[{"cpu": 2, "gpu": 1} for _ in range(gpus)], strategy="PACK"
+            ),
+        )
     tuner = tune.Tuner(
-        tune.with_resources(
-            train_model, resources={"cpu": 6, "gpu": torch.cuda.device_count()}
-        ),
+        trainable,
         param_space=search_space,
         tune_config=tune.TuneConfig(search_alg=hebo, num_samples=args.num_samples),
         run_config=RunConfig(
