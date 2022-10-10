@@ -79,7 +79,32 @@ def main(args):
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
         )
-        points_to_evaluate = []
+        points_to_evaluate = (
+            [
+                {
+                    "core": "vit",
+                    "dropout": 0.25,
+                    "patch_size": 4,
+                    "emb_dim": 64,
+                    "num_heads": 3,
+                    "mlp_dim": 64,
+                    "num_layers": 3,
+                    "dim_head": 64,
+                    "disable_grid_predictor": False,
+                    "grid_predictor_dim": 2,
+                    "bias_mode": 0,
+                    "criterion": "poisson",
+                    "lr": 1e-3,
+                    "core_reg_scale": 0,
+                    "readout_reg_scale": 0,
+                    "ds_scale": True,
+                    "crop_mode": 1,
+                    "pretrain_core": abspath("runs/pretrain/001_vit_0.25dropout"),
+                    "core_lr_scale": 0.5,
+                }
+            ],
+        )
+        evaluated_rewards = [0.29188114404678345]
     elif args.core == "stacked2d":
         search_space.update(
             {
@@ -101,6 +126,7 @@ def main(args):
             }
         )
         points_to_evaluate = []
+        evaluated_rewards = []
     elif args.core == "stn":
         search_space.update(
             {
@@ -109,6 +135,7 @@ def main(args):
             }
         )
         points_to_evaluate = []
+        evaluated_rewards = []
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
@@ -117,6 +144,7 @@ def main(args):
         metric=metric,
         mode=mode,
         points_to_evaluate=points_to_evaluate,
+        evaluated_rewards=evaluated_rewards,
         max_concurrent=args.max_concurrent,
     )
     trainable = train_function
@@ -132,6 +160,15 @@ def main(args):
             metric=metric,
             mode=mode,
             search_alg=hebo,
+            scheduler=tune.schedulers.ASHAScheduler(
+                time_attr="training_iteration",
+                metric=metric,
+                mode=mode,
+                max_t=args.epochs,
+                grace_period=10,
+                reduction_factor=2,
+                brackets=1,
+            ),
             num_samples=args.num_samples,
         ),
         run_config=RunConfig(
