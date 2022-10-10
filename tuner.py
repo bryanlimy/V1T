@@ -123,11 +123,7 @@ def main(args):
         ),
         param_space=search_space,
         tune_config=tune.TuneConfig(search_alg=hebo, num_samples=args.num_samples),
-        run_config=RunConfig(
-            local_dir=args.output_dir,
-            verbose=args.verbose,
-            checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
-        ),
+        run_config=RunConfig(local_dir=args.output_dir, verbose=args.verbose),
     )
 
     results = tuner.fit()
