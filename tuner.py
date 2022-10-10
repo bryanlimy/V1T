@@ -44,6 +44,8 @@ def main(args):
     if args.clear_output_dir and os.path.isdir(args.output_dir):
         rmtree(args.output_dir)
 
+    restore = os.path.isdir(args.output_dir)
+
     # default search space
     search_space = {
         "dataset": abspath(args.dataset),
@@ -83,7 +85,9 @@ def main(args):
                 "readout_reg_scale": tune.loguniform(1e-5, 1),
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
-                "pretrain_core": tune.choice(["", "runs/pretrain/001_vit_0.25dropout"]),
+                "pretrain_core": tune.choice(
+                    ["", abspath("runs/pretrain/001_vit_0.25dropout")]
+                ),
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
         )
@@ -103,7 +107,7 @@ def main(args):
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
                 "pretrain_core": tune.choice(
-                    ["", "runs/pretrain/001_stacked2d_0.25dropout"]
+                    ["", abspath("runs/pretrain/001_stacked2d_0.25dropout")]
                 ),
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
@@ -148,13 +152,15 @@ def main(args):
             checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
         ),
     )
+    if restore:
+        tuner = tuner.restore(args.output_dir)
 
     results = tuner.fit()
 
     with open(os.path.join(args.output_dir, "result.pkl"), "wb") as file:
         pickle.dump(results, file)
 
-    print(f"Best setting: {results.get_best_result().config}")
+    print(f"\n\nBest setting\n{results.get_best_result()}")
 
 
 if __name__ == "__main__":
