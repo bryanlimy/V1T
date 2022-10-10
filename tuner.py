@@ -8,7 +8,7 @@ from ray import air, tune
 from datetime import datetime
 from ray.air.config import RunConfig
 from ray.tune.search.hebo import HEBOSearch
-
+from os.path import abspath
 
 import train as trainer
 
@@ -46,8 +46,8 @@ def main(args):
 
     # default search space
     search_space = {
-        "dataset": os.path.abspath(args.dataset),
-        "output_dir": os.path.abspath(os.path.join(args.output_dir, "output_dir")),
+        "dataset": abspath(args.dataset),
+        "output_dir": abspath(os.path.join(args.output_dir, "output_dir")),
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "readout": "gaussian2d",
@@ -102,7 +102,9 @@ def main(args):
                 "readout_reg_scale": tune.loguniform(1e-5, 1),
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
-                "pretrain_core": tune.choice(["", "runs/pretrain/001_vit_0.25dropout"]),
+                "pretrain_core": tune.choice(
+                    ["", "runs/pretrain/001_stacked2d_0.25dropout"]
+                ),
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
         )
@@ -118,16 +120,15 @@ def main(args):
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
-    # ray.init(address=f"localhost:{args.ray_address}")
+    metric, mode = "single_trial_correlation", "max"
     hebo = HEBOSearch(
-        metric="single_trial_correlation",
-        mode="max",
+        metric=metric,
+        mode=mode,
         points_to_evaluate=points_to_evaluate,
         max_concurrent=args.max_concurrent,
     )
     trainable = train_function
-    gpus = torch.cuda.device_count()
-    if gpus > 0:
+    if torch.cuda.device_count() > 0:
         trainable = tune.with_resources(
             train_function,
             resources={"cpu": 2, "gpu": 1},
@@ -135,7 +136,12 @@ def main(args):
     tuner = tune.Tuner(
         trainable,
         param_space=search_space,
-        tune_config=tune.TuneConfig(search_alg=hebo, num_samples=args.num_samples),
+        tune_config=tune.TuneConfig(
+            metric=metric,
+            mode=mode,
+            search_alg=hebo,
+            num_samples=args.num_samples,
+        ),
         run_config=RunConfig(
             local_dir=args.output_dir,
             verbose=args.verbose,
