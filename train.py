@@ -2,6 +2,7 @@ import os
 import torch
 import argparse
 import typing as t
+from ray import tune
 from torch import nn
 from tqdm import tqdm
 from time import time
@@ -235,7 +236,8 @@ def main(args):
                 summary=summary,
                 mode=2,
             )
-            session.report(metrics=eval_result)
+            if tune.is_session_enabled():
+                session.report(metrics=eval_result)
 
         if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
             break
