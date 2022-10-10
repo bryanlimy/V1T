@@ -34,9 +34,6 @@ class Readout(nn.Module):
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.device = args.device
-        self._response_stat = {
-            k: torch.from_numpy(v) for k, v in ds.dataset.stats["response"].items()
-        }
         self.neuron_coordinates = ds.dataset.coordinates
         self.reg_scale = torch.tensor(
             args.reg_scale, dtype=torch.float32, device=self.device

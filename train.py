@@ -293,6 +293,16 @@ if __name__ == "__main__":
     # Gaussian2DReadout
     parser.add_argument("--disable_grid_predictor", action="store_true")
     parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
+    parser.add_argument(
+        "--bias_mode",
+        type=int,
+        default=0,
+        choices=[0, 1, 2],
+        help="Gaussian2d readout bias mode:"
+        "0: initialize bias with zeros"
+        "1: initialize bias with the mean responses"
+        "2: initialize bias with the mean responses divide by standard deviation",
+    )
 
     # training settings
     parser.add_argument(
