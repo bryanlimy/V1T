@@ -121,8 +121,8 @@ class AdaptiveELU(nn.Module):
     def __init__(self, xshift: int, yshift: int, **kwargs):
         super(AdaptiveELU, self).__init__(**kwargs)
 
-        self.x_shift = torch.Tensor(xshift, dtype=torch.float)
-        self.y_shift = torch.Tensor(yshift, dtype=torch.float)
+        self.x_shift = torch.tensor(xshift, dtype=torch.float)
+        self.y_shift = torch.tensor(yshift, dtype=torch.float)
         self.elu = nn.ELU()
 
     def forward(self, inputs: torch.Tensor):
