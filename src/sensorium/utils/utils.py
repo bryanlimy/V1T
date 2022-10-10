@@ -303,9 +303,7 @@ def get_batch_size(args):
 
     device = args.device
 
-    if args.batch_size == 0 and "cuda" in device:
-        raise ValueError("Please provide --batch_size.")
-    elif "cuda" not in device:
+    if ("cuda" not in device) or ("cuda" in device and args.batch_size):
         assert args.batch_size > 1
     else:
         train_ds, _, _ = get_training_ds(
