@@ -227,7 +227,12 @@ def main(args):
 
         if epoch % 10 == 0 or epoch == args.epochs:
             eval_result = utils.evaluate(
-                args, ds=test_ds, model=model, epoch=epoch, summary=summary
+                args,
+                ds=test_ds,
+                model=model,
+                epoch=epoch,
+                summary=summary,
+                mode=2,
             )
             session.report(metrics=eval_result)
 
