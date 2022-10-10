@@ -302,8 +302,9 @@ def get_batch_size(args):
     from sensorium import losses
 
     device = args.device
+    print(device)
 
-    if ("cuda" not in device) or ("cuda" in device and args.batch_size):
+    if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
         assert args.batch_size > 1
     else:
         train_ds, _, _ = get_training_ds(
