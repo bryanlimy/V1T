@@ -329,7 +329,7 @@ def get_batch_size(args):
                     targets = torch.rand(*(batch_size, *output_shape))
                     inputs, targets = inputs.to(args.device), targets.to(args.device)
                     outputs = model(inputs, mouse_id=mouse_id)
-                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=)
+                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
