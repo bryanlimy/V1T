@@ -81,7 +81,6 @@ def main(args):
         )
         points_to_evaluate = [
             {
-                "core": "vit",
                 "dropout": 0.25,
                 "patch_size": 4,
                 "emb_dim": 64,
