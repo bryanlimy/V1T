@@ -26,7 +26,6 @@ class Args:
 @ray.remote(num_gpus=1)
 def train_model(config):
     print(ray.get_gpu_ids())
-    exit()
     args = Args(config)
     results = trainer.main(args)
     print(results)
@@ -124,7 +123,11 @@ def main(args):
         ),
         param_space=search_space,
         tune_config=tune.TuneConfig(search_alg=hebo, num_samples=args.num_samples),
-        run_config=RunConfig(local_dir=args.output_dir, verbose=args.verbose),
+        run_config=RunConfig(
+            local_dir=args.output_dir,
+            verbose=args.verbose,
+            checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
+        ),
     )
 
     results = tuner.fit()
