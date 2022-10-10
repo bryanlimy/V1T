@@ -159,8 +159,6 @@ def main(args):
             search_alg=hebo,
             scheduler=tune.schedulers.ASHAScheduler(
                 time_attr="training_iteration",
-                metric=metric,
-                mode=mode,
                 max_t=args.epochs,
                 grace_period=10,
                 reduction_factor=2,
