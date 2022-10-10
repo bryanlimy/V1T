@@ -212,38 +212,24 @@ class MiceDataset(Dataset):
             raise KeyError(f"No retinotopy for mouse {mouse_id}.")
 
     @staticmethod
-    def resize_image(
-        image: t.Union[np.ndarray, torch.Tensor], width: int = 36, height: int = 64
-    ):
-        # image = rescale(
-        #     image,
-        #     scale=scale,
-        #     anti_aliasing=False,
-        #     clip=True,
-        #     preserve_range=True,
-        #     channel_axis=0,
-        # )
+    def resize_image(image: np.ndarray, height: int = 36, width: int = 64):
         image = resize(
             image,
-            output_shape=(image.shape[0], width, height),
+            output_shape=(image.shape[0], height, width),
             clip=True,
             preserve_range=True,
             anti_aliasing=False,
         )
         return image
 
-    def retina_crop(
-        self,
-        image: t.Union[np.ndarray, torch.Tensor],
-        width: int = 179,
-        height: int = 101,
-    ):
+    def retina_crop(self, image: np.ndarray, width: int = 179, height: int = 101):
+        """Crop image based on the retinotopy of the mouse"""
         left, top = self.retinotopy
         image = image[..., top : top + height, left : left + width]
         image = self.resize_image(image)
         return image
 
-    def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
+    def transform_image(self, image: np.ndarray):
         if self.crop_mode == 1:
             image = self.resize_image(image)
         elif self.crop_mode == 2:
@@ -252,7 +238,7 @@ class MiceDataset(Dataset):
         image = (image - stats["mean"]) / stats["std"]
         return image
 
-    def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
+    def i_transform_image(self, image: np.ndarray):
         """Reverse standardized image"""
         stats = self.image_stats
         return (image * stats["std"]) + stats["mean"]
