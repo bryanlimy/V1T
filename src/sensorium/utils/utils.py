@@ -311,7 +311,7 @@ def get_batch_size(args):
             data_dir=args.dataset,
             mouse_ids=[0],
             batch_size=1,
-            device=device,
+            device=args.device,
         )
         output_shape = (train_ds[0].dataset.num_neurons,)
         model = get_model(args, ds=train_ds)
@@ -325,7 +325,7 @@ def get_batch_size(args):
                 for _ in range(5):
                     inputs = torch.rand(*(batch_size, *args.input_shape))
                     targets = torch.rand(*(batch_size, *output_shape))
-                    inputs, targets = inputs.to(device), targets.to(device)
+                    inputs, targets = inputs.to(args.device), targets.to(args.device)
                     outputs = model(inputs, mouse_id=0)
                     loss = criterion(y_true=targets, y_pred=outputs)
                     loss.backward()
