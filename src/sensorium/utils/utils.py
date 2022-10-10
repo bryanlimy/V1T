@@ -306,14 +306,15 @@ def get_batch_size(args):
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
         assert args.batch_size > 1
     else:
+        mouse_id = 2
         train_ds, _, _ = get_training_ds(
             args,
             data_dir=args.dataset,
-            mouse_ids=[0],
+            mouse_ids=[mouse_id],
             batch_size=1,
             device=args.device,
         )
-        output_shape = (train_ds[0].dataset.num_neurons,)
+        output_shape = (train_ds[mouse_id].dataset.num_neurons,)
         model = Model(args, ds=train_ds)
         model.to(args.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -327,8 +328,8 @@ def get_batch_size(args):
                     inputs = torch.rand(*(batch_size, *args.input_shape))
                     targets = torch.rand(*(batch_size, *output_shape))
                     inputs, targets = inputs.to(args.device), targets.to(args.device)
-                    outputs = model(inputs, mouse_id=0)
-                    loss = criterion(y_true=targets, y_pred=outputs)
+                    outputs = model(inputs, mouse_id=mouse_id)
+                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=)
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
