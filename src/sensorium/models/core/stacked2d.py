@@ -561,7 +561,8 @@ class Stacked2dCore(Core, nn.Module):
 
     def group_sparsity(self):
         """
-        Sparsity regularization on the filters of all the conv2d layers except the first one.
+        Sparsity regularization on the filters of all the Conv2d layers except
+        the first one.
         """
         ret = 0
         if self.ignore_group_sparsity:
@@ -579,10 +580,9 @@ class Stacked2dCore(Core, nn.Module):
         return ret / ((self.num_layers - 1) if self.num_layers > 1 else 1)
 
     def regularizer(self):
-        return (
-            self.group_sparsity() * self.gamma_hidden
-            + self.gamma_input * self.laplace()
-        )
+        term1 = self.group_sparsity() * self.gamma_hidden
+        term2 = self.gamma_input * self.laplace()
+        return self.reg_scale * (term1 + term2)
 
     @property
     def outchannels(self):

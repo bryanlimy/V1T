@@ -232,7 +232,7 @@ def main(args):
 
     utils.save_model(args, model=model, epoch=epoch)
 
-    utils.evaluate(
+    test_result = utils.evaluate(
         args,
         ds=test_ds,
         model=model,
@@ -246,6 +246,8 @@ def main(args):
     summary.close()
 
     print(f"\nResults saved to {args.output_dir}.")
+
+    return test_result
 
 
 if __name__ == "__main__":
@@ -323,10 +325,16 @@ if __name__ == "__main__":
         help="the coefficient to scale loss for neurons in depth of 240 to 260.",
     )
     parser.add_argument(
-        "--reg_scale",
+        "--core_reg_scale",
         default=0,
         type=float,
-        help="weight regularization coefficient.",
+        help="weight regularization coefficient for core module.",
+    )
+    parser.add_argument(
+        "--readout_reg_scale",
+        default=0,
+        type=float,
+        help="weight regularization coefficient for readout module.",
     )
     parser.add_argument(
         "--ds_scale",
