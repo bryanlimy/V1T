@@ -10,9 +10,7 @@ from datetime import datetime
 from torch.utils.data import DataLoader
 
 from sensorium.utils import utils
-from sensorium.models import get_model
 from sensorium.data import get_submission_ds
-from sensorium.utils.checkpoint import Checkpoint
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
@@ -59,9 +57,8 @@ def inference(
     model.train(False)
     model.requires_grad_(False)
     for data in tqdm(ds, desc=desc, disable=args.verbose == 0):
-        images = data["image"].to(device)
-        predictions = model(images, mouse_id=mouse_id)
-        results["predictions"].extend(predictions.detach().cpu().numpy().tolist())
+        predictions = model(data["image"].to(device), mouse_id=mouse_id)
+        results["predictions"].extend(predictions.cpu().numpy().tolist())
         results["image_ids"].extend(data["image_id"].numpy().tolist())
         results["trial_ids"].extend(data["trial_id"])
     # create neuron IDs for each prediction
@@ -129,17 +126,16 @@ def main(args):
         device=args.device,
     )
 
-    model = get_model(args, ds=test_ds)
-
-    checkpoint = Checkpoint(args, model=model)
-    checkpoint.restore(force=True)
-
-    # run evaluation on test set for all mouse
-    utils.evaluate(args, ds=test_ds, model=model, print_result=True)
+    model = utils.load_model(args)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
     csv_dir = os.path.join(args.output_dir, "submissions", timestamp)
+
+    # run evaluation on test set for all mouse
+    utils.evaluate(
+        args, ds=test_ds, model=model, print_result=True, save_result=csv_dir
+    )
 
     # Sensorium challenge
     generate_submission(

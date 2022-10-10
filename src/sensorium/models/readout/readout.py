@@ -22,36 +22,37 @@ class Readout(nn.Module):
     """Basic readout module for a single rodent"""
 
     def __init__(
-        self, input_shape: tuple, output_shape: tuple, ds: DataLoader, name: str = None
+        self,
+        args,
+        input_shape: tuple,
+        output_shape: tuple,
+        ds: DataLoader,
+        name: str = None,
     ):
         super(Readout, self).__init__()
         self.name = "Readout" if name is None else name
-        self._input_shape = input_shape
-        self._output_shape = output_shape
+        self.input_shape = input_shape
+        self.output_shape = output_shape
+        self.device = args.device
         self._response_stat = {
             k: torch.from_numpy(v) for k, v in ds.dataset.stats["response"].items()
         }
-        self._neurons_coordinate = torch.from_numpy(ds.dataset.neurons_coordinate)
-
-    @property
-    def shape(self):
-        """Module output shape"""
-        return self._output_shape
+        self.neuron_coordinates = ds.dataset.coordinates
+        self.reg_scale = torch.tensor(
+            args.reg_scale, dtype=torch.float32, device=self.device
+        )
 
     @property
     def num_neurons(self):
         """Number of neurons to output"""
-        return self.shape[-1]
-
-    @property
-    def response_mean(self):
-        return self._response_stat["mean"]
+        return self.output_shape[-1]
 
     def initialize(self, *args: t.Any, **kwargs: t.Any):
         pass
 
     def regularizer(self, reduction: str):
-        return 0
+        """L1 regularization"""
+        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
 
 class Readouts(nn.ModuleDict):
@@ -59,6 +60,7 @@ class Readouts(nn.ModuleDict):
 
     def __init__(
         self,
+        args,
         model: str,
         input_shape: t.Tuple[int],
         output_shapes: t.Dict[int, tuple],
@@ -67,13 +69,15 @@ class Readouts(nn.ModuleDict):
         super(Readouts, self).__init__()
         if model not in _READOUTS.keys():
             raise NotImplementedError(f"Readout {model} has not been implemented.")
-        self._input_shape = input_shape
-        self._output_shapes = output_shapes
+        self.input_shape = input_shape
+        self.output_shapes = output_shapes
+        self.device = args.device
         readout_model = _READOUTS[model]
-        for mouse_id, output_shape in self._output_shapes.items():
+        for mouse_id, output_shape in self.output_shapes.items():
             self.add_module(
                 name=str(mouse_id),
                 module=readout_model(
+                    args,
                     input_shape=input_shape,
                     output_shape=output_shape,
                     ds=ds[mouse_id],
@@ -86,8 +90,8 @@ class Readouts(nn.ModuleDict):
         for mouse_id, readout in self.items():
             readout.initialize()
 
-    def regularizer(self, mouse_id: str = None, reduction: str = "sum"):
-        return self[mouse_id].regularizer(reduction=reduction)
+    def regularizer(self, mouse_id: int, reduction: str = "sum"):
+        return self[str(mouse_id)].regularizer(reduction=reduction)
 
     def forward(self, inputs: torch.Tensor, mouse_id: torch.Union[int, torch.Tensor]):
         return self[str(mouse_id)](inputs)

@@ -56,35 +56,61 @@ class SpatialTransformerCore(Core):
             torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32)
         )
 
-        # Feedforward network
-        self.network = nn.Sequential(
+        # CNN network
+        output_shape = utils.conv2d_shape(
+            input_shape,
+            num_filters=args.num_filters,
+            kernel_size=9,
+            stride=1,
+            padding=0,
+        )
+        output_shape = utils.conv2d_shape(
+            output_shape,
+            num_filters=args.num_filters * 2,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
+        output_shape = utils.conv2d_shape(
+            output_shape,
+            num_filters=args.num_filters * 4,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
+        self.output_shape = output_shape
+
+        self.cnn = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
                 out_channels=args.num_filters,
-                kernel_size=5,
+                kernel_size=9,
+                stride=1,
+                padding=0,
             ),
-            nn.MaxPool2d(kernel_size=2),
+            nn.BatchNorm2d(num_features=args.num_filters),
             nn.GELU(),
             nn.Dropout2d(p=args.dropout),
             nn.Conv2d(
                 in_channels=args.num_filters,
                 out_channels=args.num_filters * 2,
-                kernel_size=5,
+                kernel_size=3,
+                stride=1,
+                padding=1,
             ),
-            nn.MaxPool2d(kernel_size=2),
+            nn.BatchNorm2d(num_features=args.num_filters * 2),
+            nn.GELU(),
+            nn.Dropout2d(p=args.dropout),
+            nn.Conv2d(
+                in_channels=args.num_filters * 2,
+                out_channels=args.num_filters * 4,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+            ),
+            nn.BatchNorm2d(num_features=args.num_filters * 4),
             nn.GELU(),
         )
-
-        # calculate feedforward network output shape
-        output_shape = utils.conv2d_shape(
-            input_shape, num_filters=args.num_filters, kernel_size=5
-        )
-        output_shape = utils.pool2d_shape(output_shape, kernel_size=2)
-        output_shape = utils.conv2d_shape(
-            output_shape, num_filters=args.num_filters * 2, kernel_size=5
-        )
-        output_shape = utils.pool2d_shape(output_shape, kernel_size=2)
-        self._output_shape = output_shape
 
     def stn(self, inputs: torch.Tensor, align_corners: bool = True):
         """Spatial transformer network forward function"""
@@ -97,5 +123,5 @@ class SpatialTransformerCore(Core):
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.stn(inputs)
-        outputs = self.network(outputs)
+        outputs = self.cnn(outputs)
         return outputs

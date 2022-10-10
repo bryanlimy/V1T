@@ -9,87 +9,77 @@ from shutil import rmtree
 from torch.utils.data import DataLoader
 
 from sensorium import losses, metrics
-from sensorium.models import get_model
-from sensorium.data import get_training_ds
-from sensorium.utils import utils, tensorboard, checkpoint
+from sensorium.models import get_model, Model
+from sensorium.utils import utils, tensorboard
+from sensorium.utils.scheduler import Scheduler
+from sensorium.data import get_training_ds, CycleDataloaders
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    y_true, y_pred = y_true.detach().cpu(), y_pred.detach().cpu()
+    y_true, y_pred = y_true.cpu().numpy(), y_pred.cpu().numpy()
     return {
         "metrics/trial_correlation": metrics.correlation(
-            y1=y_true, y2=y_pred, axis=None
+            y1=y_pred, y2=y_true, axis=None
         )
     }
 
 
 def train_step(
-    mice_data: t.Tuple[t.Dict[str, torch.Tensor]],
-    model: nn.Module,
+    mouse_id: int,
+    data: t.Dict[str, torch.Tensor],
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
-    reg_scale: t.Union[float, torch.Tensor] = 0,
-) -> t.Dict[int, t.Dict[str, torch.Tensor]]:
-    result = {}
-    optimizer.zero_grad()
-    all_loss = []
-    for data in mice_data:
-        mouse_id = int(data["mouse_id"][0])
-        images = data["image"].to(model.device)
-        responses = data["response"].to(model.device)
-        outputs = model(images, mouse_id=mouse_id)
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        reg_loss = model.regularizer()
-        total_loss = loss + reg_scale * reg_loss
-        all_loss.append(total_loss)
-        result[mouse_id] = {
-            "loss/loss": loss.detach(),
-            "loss/reg_loss": reg_loss.detach(),
-            "loss/total_loss": total_loss.detach(),
-            **compute_metrics(y_true=responses, y_pred=outputs),
-        }
-    total_loss = torch.sum(torch.stack(all_loss))
-    total_loss.backward()
-    optimizer.step()
+    update: bool,
+) -> t.Dict[str, torch.Tensor]:
+    images = data["image"].to(model.device)
+    responses = data["response"].to(model.device)
+    outputs = model(images, mouse_id=mouse_id)
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = loss + reg_loss
+    total_loss.backward()  # calculate and accumulate gradients
+    result = {
+        "loss/loss": loss.item(),
+        "loss/reg_loss": reg_loss.item(),
+        "loss/total_loss": total_loss.item(),
+        **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+    }
+    if update:
+        optimizer.step()
+        optimizer.zero_grad()
     return result
 
 
 def train(
     args,
     ds: t.Dict[int, DataLoader],
-    model: nn.Module,
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
-    model.train(True)
-    model.requires_grad_(True)
     mouse_ids = list(ds.keys())
     results = {mouse_id: {} for mouse_id in mouse_ids}
-    with tqdm(
-        desc="Train", total=len(ds[mouse_ids[0]]), disable=args.verbose == 0
-    ) as pbar:
-        for mice_data in zip(*ds.values()):
-            step_results = train_step(
-                mice_data=mice_data,
-                model=model,
-                optimizer=optimizer,
-                criterion=criterion,
-                reg_scale=args.reg_scale,
-            )
-            for mouse_id in mouse_ids:
-                utils.update_dict(results[mouse_id], step_results[mouse_id])
-            pbar.update(1)
-    for mouse_id in mouse_ids:
-        utils.log_metrics(
-            results=results[mouse_id],
-            epoch=epoch,
-            mode=0,
-            summary=summary,
+    ds = CycleDataloaders(ds)
+    # call optimizer.step() after iterate one batch from each mouse
+    update_frequency = len(mouse_ids)
+    model.train(True)
+    model.requires_grad_(True)
+    for i, (mouse_id, mouse_data) in tqdm(
+        enumerate(ds), desc="Train", total=len(ds), disable=args.verbose == 0
+    ):
+        result = train_step(
             mouse_id=mouse_id,
+            data=mouse_data,
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            update=(i + 1) % update_frequency == 0,
         )
+        utils.update_dict(results[mouse_id], result)
     utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
     return results
 
@@ -105,7 +95,7 @@ def validation_step(
     responses = data["response"].to(model.device)
     outputs = model(images, mouse_id=mouse_id)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-    result["loss/loss"] = loss
+    result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
     return result
 
@@ -133,13 +123,6 @@ def validate(
                     )
                     utils.update_dict(mouse_result, result)
                     pbar.update(1)
-                utils.log_metrics(
-                    results=mouse_result,
-                    epoch=epoch,
-                    mode=1,
-                    summary=summary,
-                    mouse_id=mouse_id,
-                )
                 results[mouse_id] = mouse_result
     utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
     return results
@@ -168,7 +151,7 @@ def main(args):
     model = get_model(args, ds=train_ds, summary=summary)
 
     if args.pretrain_core:
-        checkpoint.load_pretrain_core(args, model=model)
+        utils.load_pretrain_core(args, model=model)
 
     # separate learning rates for core and readout modules
     optimizer = torch.optim.Adam(
@@ -185,34 +168,15 @@ def main(args):
         ],
         lr=args.lr,
     )
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer=optimizer,
-        mode="min",
-        factor=0.5,
-        patience=5,
-        threshold_mode="rel",
-        min_lr=1e-6,
-        verbose=False,
-    )
+    scheduler = Scheduler(args, mode="max", model=model, optimizer=optimizer)
 
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
 
-    ckpt = checkpoint.Checkpoint(
-        args, model=model, optimizer=optimizer, scheduler=scheduler
-    )
-    epoch = ckpt.restore()
+    epoch = scheduler.restore()
 
-    utils.evaluate(
-        args,
-        ds=val_ds,
-        model=model,
-        epoch=epoch,
-        summary=summary,
-        mode=1,
-        print_result=True,
-    )
+    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -235,7 +199,6 @@ def main(args):
             epoch=epoch,
             summary=summary,
         )
-
         elapse = time() - start
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
@@ -259,16 +222,26 @@ def main(args):
             f"Elapse: {elapse:.02f}s"
         )
 
-        scheduler.step(val_results["loss/loss"])
-
         if epoch % 10 == 0 or epoch == args.epochs:
             utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
-        if ckpt.monitor(loss=val_results["loss/loss"], epoch=epoch):
+
+        if scheduler.step(val_results["metrics/trial_correlation"], epoch=epoch):
             break
 
-    ckpt.restore()
+    scheduler.restore()
 
-    utils.evaluate(args, ds=test_ds, model=model, epoch=epoch, summary=summary, mode=2)
+    utils.save_model(args, model=model, epoch=epoch)
+
+    utils.evaluate(
+        args,
+        ds=test_ds,
+        model=model,
+        epoch=epoch,
+        summary=summary,
+        mode=2,
+        print_result=True,
+        save_result=args.output_dir,
+    )
 
     summary.close()
 
@@ -292,6 +265,9 @@ if __name__ == "__main__":
         default=None,
         help="Mouse to use for training, use Mouse 2-7 if None.",
     )
+    parser.add_argument(
+        "--num_workers", default=2, type=int, help="number of works for DataLoader."
+    )
 
     # model settings
     parser.add_argument(
@@ -299,20 +275,6 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--readout", type=str, required=True, help="The readout module to use."
-    )
-
-    # pre-trained Core
-    parser.add_argument(
-        "--pretrain_core",
-        type=str,
-        default="",
-        help="path to directory where pre-trained core model is stored.",
-    )
-    parser.add_argument(
-        "--core_lr_scale",
-        type=float,
-        default=1,
-        help="scale learning rate for core as it might already be trained.",
     )
 
     # ConvCore
@@ -328,6 +290,10 @@ if __name__ == "__main__":
     parser.add_argument("--num_layers", type=int, default=3)
     parser.add_argument("--dim_head", type=int, default=64)
 
+    # Gaussian2DReadout
+    parser.add_argument("--disable_grid_predictor", action="store_true")
+    parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
+
     # training settings
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
@@ -339,6 +305,7 @@ if __name__ == "__main__":
         type=str,
         help="criterion (loss function) to use.",
     )
+    parser.add_argument("--lr", default=1e-3, type=float, help="initial learning rate")
     parser.add_argument(
         "--depth_scale",
         default=1.0,
@@ -351,7 +318,21 @@ if __name__ == "__main__":
         type=float,
         help="weight regularization coefficient.",
     )
-    parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
+    parser.add_argument(
+        "--ds_scale",
+        action="store_true",
+        help="scale loss by the size of the dataset",
+    )
+    parser.add_argument(
+        "--crop_mode",
+        default=1,
+        type=int,
+        choices=[0, 1, 2],
+        help="image crop mode:"
+        "0: no cropping and return full image (1, 144, 256)"
+        "1: rescale image by 0.25 in both width and height (1, 36, 64)"
+        "2: crop image based on retinotopy and rescale to (1, 36, 64)",
+    )
     parser.add_argument(
         "--device",
         type=str,
@@ -360,8 +341,21 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument("--mixed_precision", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
+
+    # pre-trained Core
+    parser.add_argument(
+        "--pretrain_core",
+        type=str,
+        default="",
+        help="path to directory where pre-trained core model is stored.",
+    )
+    parser.add_argument(
+        "--core_lr_scale",
+        type=float,
+        default=1,
+        help="scale learning rate for core as it might already be trained.",
+    )
 
     # plot settings
     parser.add_argument(

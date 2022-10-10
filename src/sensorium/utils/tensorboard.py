@@ -187,7 +187,7 @@ class Summary(object):
         if close:
             plt.close(figure)
 
-    def plot_correlation(
+    def box_plot(
         self,
         tag: str,
         data: pd.DataFrame,
@@ -209,34 +209,33 @@ class Summary(object):
         results: t.Dict[str, torch.Tensor],
         step: int = 0,
         mode: int = 1,
+        num_samples: int = 3,
     ):
         """Plot 3 image-prediction-response for each mouse"""
-        n_samples = 3
         label_fontsize, tick_fontsize = 12, 10
         figure, axes = plt.subplots(
-            nrows=n_samples,
+            nrows=num_samples,
             ncols=3,
             gridspec_kw={"wspace": 0.1, "hspace": 0.2},
-            figsize=(10, 2 * n_samples),
+            figsize=(10, 2 * num_samples),
             dpi=self.dpi,
         )
 
         x_axis = np.arange(results["predictions"].shape[1])
 
-        for i in range(n_samples):
-            axes[i, 0].scatter(
-                x=x_axis, y=results["targets"][i], s=2, alpha=0.8, color="orangered"
-            )
+        for i in range(num_samples):
+            image = results["images"][i].numpy()
+            target = results["targets"][i].numpy()
+            prediction = results["predictions"][i].numpy()
+            y_max = np.ceil(max(np.max(target), np.max(prediction)))
+            axes[i, 0].scatter(x=x_axis, y=target, s=2, alpha=0.8, color="orangered")
+            axes[i, 0].set_ylim(bottom=0, top=y_max)
             axes[i, 1].scatter(
-                x=x_axis,
-                y=results["predictions"][i],
-                s=2,
-                alpha=0.8,
-                color="dodgerblue",
+                x=x_axis, y=prediction, s=2, alpha=0.8, color="dodgerblue"
             )
-            axes[i, 2].imshow(
-                results["images"][i][0], cmap=GRAY, vmin=0, vmax=255, aspect="auto"
-            )
+            axes[i, 1].set_ylim(bottom=0, top=y_max)
+            axes[i, 1].set_yticks([])
+            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255, aspect="auto")
             axes[i, 2].set_xticks([])
             axes[i, 2].set_yticks([])
             remove_top_right_spines(axis=axes[i, 0])

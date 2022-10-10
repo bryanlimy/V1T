@@ -33,7 +33,9 @@ class Loss(_Loss):
         )
         self._device = args.device
         self._depth_scale = args.depth_scale
+        self._ds_scale = args.ds_scale
         self._compute_depth_masks(ds)
+        self._get_ds_sizes(ds)
 
     def _compute_depth_masks(self, ds: t.Dict[int, DataLoader]):
         """Extract the weighted loss mask based on the depth (z-axis) of neurons
@@ -47,8 +49,23 @@ class Loss(_Loss):
             mask = torch.where((depth >= 240) & (depth <= 260), self._depth_scale, 1)
             self._depth_masks[mouse_id] = mask.to(self._device)
 
-    def scale_loss(self, loss: torch.Tensor, mouse_id: int):
+    def _get_ds_sizes(self, ds: t.Dict[int, DataLoader]):
+        self._ds_sizes = {
+            mouse_id: torch.tensor(
+                len(mouse_ds.dataset), dtype=torch.int32, device=self._device
+            )
+            for mouse_id, mouse_ds in ds.items()
+        }
+
+    def scale_neurons(self, loss: torch.Tensor, mouse_id: int):
         return loss * self._depth_masks[mouse_id]
+
+    def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
+        """Scale loss based on the size of the dataset"""
+        loss_scale = (
+            torch.sqrt(self._ds_sizes[mouse_id] / batch_size) if self._ds_scale else 1.0
+        )
+        return loss_scale * loss
 
 
 @register("rmsse")
@@ -57,8 +74,9 @@ class RMSSE(Loss):
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         loss = torch.square(y_true - y_pred)
-        loss = self.scale_loss(loss, mouse_id=mouse_id)
+        loss = self.scale_neurons(loss, mouse_id=mouse_id)
         loss = torch.sqrt(torch.mean(torch.sum(loss, dim=-1)))
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
 
@@ -92,8 +110,34 @@ class PoissonLoss(Loss):
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         loss = y_pred - y_true * torch.log(y_pred + self.eps)
-        loss = self.scale_loss(loss, mouse_id=mouse_id)
+        loss = self.scale_neurons(loss, mouse_id=mouse_id)
         loss = torch.mean(torch.sum(loss, dim=-1))
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        return loss
+
+
+@register("correlation")
+class Correlation(Loss):
+    """single trial correlation"""
+
+    def forward(
+        self,
+        y_true: torch.Tensor,
+        y_pred: torch.Tensor,
+        mouse_id: int,
+        eps: float = 1e-8,
+    ):
+        num_neurons = y_true.size(1)
+        dim = 0  # compute correlation over batch dimension
+        y1 = (y_true - y_true.mean(dim=dim)) / (
+            y_true.std(dim=dim, unbiased=False) + eps
+        )
+        y2 = (y_pred - y_pred.mean(dim=dim)) / (
+            y_pred.std(dim=dim, unbiased=False) + eps
+        )
+        corr = (y1 * y2).mean(dim=dim)
+        loss = num_neurons - torch.sum(corr)
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
 

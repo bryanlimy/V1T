@@ -10,6 +10,7 @@ from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
+from sensorium.models import Model
 from sensorium.metrics import Metrics
 from sensorium.utils import yaml, tensorboard
 
@@ -46,22 +47,22 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         "trial_ids": [],
         "image_ids": [],
     }
+    mouse_id = ds.dataset.mouse_id
     model.train(False)
     with torch.no_grad():
         for data in ds:
-            predictions = model(
-                data["image"].to(model.device),
-                mouse_id=ds.dataset.mouse_id,
-            )
+            predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
-            results["images"].append(ds.dataset.i_transform_image(data["image"]))
+            results["images"].append(data["image"])
             results["image_ids"].append(data["image_id"])
             results["trial_ids"].append(data["trial_id"])
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
     }
+    # convert images to their original range for plotting
+    results["images"] = ds.dataset.i_transform_image(results["images"])
     return results
 
 
@@ -73,88 +74,95 @@ def evaluate(
     summary: tensorboard.Summary = None,
     mode: int = 1,
     print_result: bool = False,
+    save_result: str = None,
 ):
-    """Evaluate DataLoaders ds on the 3 challenge metrics"""
-    results = {"trial_correlation": {}, "image_correlation": {}, "feve": {}}
-    trial_corrs, image_corrs, feves = {}, {}, {}
+    """
+    Evaluate DataLoaders ds on the 3 challenge metrics
+
+    Args:
+        args
+        ds: t.Dict[int, DataLoader], dictionary of DataLoader, one for each mouse.
+        model: nn.Module, the model.
+        epoch: int, the current epoch number.
+        summary: tensorboard.Summary (optional), log result to TensorBoard.
+        mode: int (optional), Summary mode.
+        print_result: bool, print result if True.
+        save_result: str, path where the result is saved if provided.
+    """
+    metrics = ["single_trial_correlation", "correlation_to_average", "feve"]
+    outputs, results = {}, {k: {} for k in metrics}
+
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose == 0
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
-        mouse_result = inference(ds=mouse_ds, model=model)
-        if summary is not None:
+        outputs[mouse_id] = inference(ds=mouse_ds, model=model)
+
+        mouse_metric = Metrics(ds=mouse_ds, results=outputs[mouse_id])
+
+        results["single_trial_correlation"][
+            mouse_id
+        ] = mouse_metric.single_trial_correlation(per_neuron=True)
+        if mouse_metric.repeat_image and not mouse_metric.hashed:
+            results["correlation_to_average"][
+                mouse_id
+            ] = mouse_metric.correlation_to_average(per_neuron=True)
+            results["feve"][mouse_id] = mouse_metric.feve(per_neuron=True)
+
+    if summary is not None:
+        # create image-response pair plots
+        for mouse_id in outputs.keys():
             summary.plot_image_response(
                 tag=f"image_response/mouse{mouse_id}",
-                results=mouse_result,
+                results=outputs[mouse_id],
                 step=epoch,
                 mode=mode,
             )
-        metrics = Metrics(ds=mouse_ds, results=mouse_result)
-
-        trial_corr = metrics.single_trial_correlation(per_neuron=True)
-        results["trial_correlation"][mouse_id] = trial_corr.mean()
-        trial_corrs[mouse_id] = trial_corr
-
-        if metrics.repeat_image and not metrics.hashed:
-            image_corr = metrics.correlation_to_average(per_neuron=True)
-            results["image_correlation"][mouse_id] = image_corr.mean()
-            image_corrs[mouse_id] = image_corr
-            feve = metrics.feve(per_neuron=True)
-            results["feve"][mouse_id] = feve.mean()
-            feves[mouse_id] = feve
-
-    # write individual and average results to TensorBoard
-    if summary is not None:
-        summary.plot_correlation(
-            "single_trial_correlation",
-            data=metrics2df(trial_corrs),
-            step=epoch,
-            mode=mode,
-        )
-        if image_corrs:
-            summary.plot_correlation(
-                "correlation_to_average",
-                data=metrics2df(image_corrs),
-                step=epoch,
-                mode=mode,
-            )
-        if feves:
-            summary.plot_correlation(
-                "FEVE",
-                data=metrics2df(feves),
-                step=epoch,
-                ylabel="FEVE",
-                mode=mode,
-            )
-        for metric, result in results.items():
-            for mouse_id, value in result.items():
-                summary.scalar(
-                    tag=f"{metric}/mouse{mouse_id}",
-                    value=value,
-                    step=epoch,
-                    mode=mode,
-                )
-            values = list(result.values())
+        # create box plot for each metric
+        for metric, values in results.items():
             if values:
+                summary.box_plot(
+                    metric, data=metrics2df(results[metric]), step=epoch, mode=mode
+                )
+
+    # compute the average value for each mouse
+    for metric in metrics:
+        for mouse_id in results[metric].keys():
+            results[metric][mouse_id] = np.mean(results[metric][mouse_id])
+            if summary is not None:
                 summary.scalar(
-                    tag=f"{metric}/average",
-                    value=np.mean(values),
+                    f"{metric}/mouse{mouse_id}",
+                    value=results[metric][mouse_id],
                     step=epoch,
                     mode=mode,
                 )
+
     if print_result:
-        statement = "Single trial correlation\n"
-        for mouse_id, value in results["trial_correlation"].items():
-            statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
-        if results["image_correlation"]:
-            statement += "\nAverage to correlation\n"
-            for mouse_id, value in results["image_correlation"].items():
-                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
-            statement += "\nFEVE\n"
-            for mouse_id, value in results["feve"].items():
-                statement += f"Mouse {mouse_id}: {value:.04f}\t\t"
-        print(statement)
+        _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
+        statement = ""
+        for metric in metrics:
+            if results[metric]:
+                statement += f"\n{metric}\n"
+                statement += "".join(_print(results[metric]))
+        if statement:
+            print(statement)
+
+    # compute overall average for each metric
+    for metric in metrics:
+        values = list(results[metric].values())
+        if values:
+            results[metric]["average"] = np.mean(values)
+            if summary is not None:
+                summary.scalar(
+                    f"{metric}/average",
+                    value=results[metric]["average"],
+                    step=epoch,
+                    mode=mode,
+                )
+
+    if save_result is not None:
+        yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
     return results
 
 
@@ -211,53 +219,74 @@ def metrics2df(results: t.Dict[int, torch.Tensor]):
 
 
 def log_metrics(
-    results: t.Dict[
-        t.Union[str, int],
-        t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]],
-    ],
+    results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
     epoch: int,
     mode: int,
     summary: tensorboard.Summary,
-    mouse_id: int = None,
 ):
     """Compute the mean of the metrics in results and log to Summary
 
     Args:
-        results: t.Dict[
-                t.Union[str, int],
-                t.Union[t.List[torch.Tensor], t.Dict[str, torch.Tensor]]
-            ],
+        results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
             a dictionary of tensors where keys are the name of the metrics
-            that represent results from of a mouse, or a dictionary of a
-            dictionary of tensors where the keys are the mouse IDs that
-            represents the average results of multiple mice.
-            When mouse_id is provided, it assumes the former.
+            that represent results from of a mouse.
         epoch: int, the current epoch number.
         mode: int, Summary logging mode.
         summary: tensorboard.Summary, Summary class
         mouse_id: int, the mouse_id of the result dictionary, None if the
             dictionary represents results from multiple mice.
     """
-    if mouse_id is not None:
-        metrics = list(results.keys())
+    keys = list(results.keys())
+    metrics = list(results[keys[0]].keys())
+    for mouse_id in keys:
         for metric in metrics:
-            results[metric] = torch.stack(results[metric]).mean()
+            results[mouse_id][metric] = np.mean(results[mouse_id][metric])
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
-                value=results[metric],
+                value=results[mouse_id][metric],
                 step=epoch,
                 mode=mode,
             )
-    else:
-        mouse_ids = list(results.keys())
-        metrics = list(results[mouse_ids[0]].keys())
-        for metric in metrics:
-            results[metric] = torch.stack(
-                [results[mouse_id][metric] for mouse_id in mouse_ids]
-            ).mean()
-            summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
+    for metric in metrics:
+        results[metric] = np.mean([results[mouse_id][metric] for mouse_id in keys])
+        summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
 
 
 def num_steps(ds: t.Dict[int, DataLoader]):
     """Return the number of total steps to iterate all the DataLoaders"""
     return sum([len(ds[k]) for k in ds.keys()])
+
+
+def load_pretrain_core(args, model: Model):
+    filename = os.path.join(args.pretrain_core, "ckpt", "best_model.pt")
+    assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
+    model_dict = model.state_dict()
+    core_ckpt = torch.load(filename, map_location=model.device)
+    # add 'core.' to parameters in pretrained core
+    core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
+    # check pretrained core has the same parameters in core module
+    for key in model_dict.keys():
+        if key.startswith("core."):
+            assert key in core_dict
+    model_dict.update(core_dict)
+    model.load_state_dict(model_dict)
+    if args.verbose:
+        print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
+
+
+def save_model(args, model: Model, epoch: int):
+    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
+    torch.save({"epoch": epoch, "model": model}, f=filename)
+    print(f"\nModel saved to {filename}.")
+
+
+def load_model(args) -> Model:
+    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"checkpoint {filename} not found.")
+    ckpt = torch.load(filename, map_location=args.device)
+    print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
+    model = ckpt["model"]
+    model.to(args.device)
+    model.device = args.device
+    return model

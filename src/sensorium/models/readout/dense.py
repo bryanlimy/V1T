@@ -10,13 +10,14 @@ from torch.utils.data import DataLoader
 class DenseReadout(Readout):
     def __init__(
         self,
+        args,
         input_shape: tuple,
         output_shape: tuple,
         ds: DataLoader,
         name: str = "DenseReadout",
     ):
         super(DenseReadout, self).__init__(
-            input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
+            args, input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
         )
 
         out_features = int(np.prod(output_shape))

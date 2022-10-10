@@ -9,7 +9,7 @@ def correlation(
     y1: t.Union[torch.Tensor, np.ndarray],
     y2: t.Union[torch.Tensor, np.ndarray],
     axis: t.Union[None, int, t.Tuple[int]] = -1,
-    eps: int = 1e-8,
+    eps: float = 1e-8,
     **kwargs
 ):
     """
