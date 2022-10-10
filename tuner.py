@@ -41,7 +41,7 @@ def main(args):
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "readout": "gaussian2d",
-        "mouse_ids": [0, 2],
+        "mouse_ids": None,
         "num_workers": 2,
         "depth_scale": 1,
         "device": args.device,
