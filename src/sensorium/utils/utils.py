@@ -149,14 +149,15 @@ def evaluate(
             print(statement)
 
     # compute overall average for each metric
+    overall_result = {}
     for metric in metrics:
         values = list(results[metric].values())
         if values:
-            results[metric]["average"] = np.mean(values)
+            overall_result[metric] = np.mean(values)
             if summary is not None:
                 summary.scalar(
                     f"{metric}/average",
-                    value=results[metric]["average"],
+                    value=overall_result[metric],
                     step=epoch,
                     mode=mode,
                 )
@@ -164,8 +165,7 @@ def evaluate(
     if save_result is not None:
         yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
 
-    # only report average
-    return {k: results[k]["average"] for k in results.keys()}
+    return overall_result
 
 
 def update_dict(target: dict, source: dict, replace: bool = False):
