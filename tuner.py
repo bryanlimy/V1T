@@ -23,8 +23,17 @@ class Args:
                 setattr(self, key, value)
 
 
+from ray.tune.utils.util import wait_for_gpu
+
+
 def train_model(config):
-    print(ray.get_gpu_ids())
+    gpu_ids = ray.get_gpu_ids()
+    if gpu_ids:
+        gpu_id = gpu_ids[0]
+        while not wait_for_gpu(gpu_id):
+            gpu_id += 1
+            gpu_id = gpu_id % len(gpu_ids)
+        config["device"] = f"cuda:{gpu_id}"
     args = Args(config)
     results = trainer.main(args)
     print(results)
