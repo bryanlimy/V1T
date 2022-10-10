@@ -79,31 +79,29 @@ def main(args):
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
         )
-        points_to_evaluate = (
-            [
-                {
-                    "core": "vit",
-                    "dropout": 0.25,
-                    "patch_size": 4,
-                    "emb_dim": 64,
-                    "num_heads": 3,
-                    "mlp_dim": 64,
-                    "num_layers": 3,
-                    "dim_head": 64,
-                    "disable_grid_predictor": False,
-                    "grid_predictor_dim": 2,
-                    "bias_mode": 0,
-                    "criterion": "poisson",
-                    "lr": 1e-3,
-                    "core_reg_scale": 0,
-                    "readout_reg_scale": 0,
-                    "ds_scale": True,
-                    "crop_mode": 1,
-                    "pretrain_core": abspath("runs/pretrain/001_vit_0.25dropout"),
-                    "core_lr_scale": 0.5,
-                }
-            ],
-        )
+        points_to_evaluate = [
+            {
+                "core": "vit",
+                "dropout": 0.25,
+                "patch_size": 4,
+                "emb_dim": 64,
+                "num_heads": 3,
+                "mlp_dim": 64,
+                "num_layers": 3,
+                "dim_head": 64,
+                "disable_grid_predictor": False,
+                "grid_predictor_dim": 2,
+                "bias_mode": 0,
+                "criterion": "poisson",
+                "lr": 1e-3,
+                "core_reg_scale": 0,
+                "readout_reg_scale": 0,
+                "ds_scale": True,
+                "crop_mode": 1,
+                "pretrain_core": abspath("runs/pretrain/001_vit_0.25dropout"),
+                "core_lr_scale": 0.5,
+            }
+        ]
         evaluated_rewards = [0.29188114404678345]
     elif args.core == "stacked2d":
         search_space.update(
