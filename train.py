@@ -279,7 +279,7 @@ if __name__ == "__main__":
 
     # ConvCore
     parser.add_argument("--num_filters", type=int, default=8)
-    parser.add_argument("--dropout", type=float, default=0.2)
+    parser.add_argument("--dropout", type=float, default=0.0)
     parser.add_argument("--activation", type=str, default="gelu")
 
     # ViTCore
