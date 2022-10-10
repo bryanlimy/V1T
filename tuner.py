@@ -96,7 +96,7 @@ def main(args):
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
                 "pretrain_core": tune.choice(
-                    ["", abspath("runs/pretrain/001_stacked2d_0.25dropout")]
+                    ["", abspath("runs/pretrain/002_stacked2d")]
                 ),
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
