@@ -23,7 +23,9 @@ class Args:
                 setattr(self, key, value)
 
 
+@ray.remote(num_gpus=1)
 def train_model(config):
+    print(ray.get_gpu_ids())
     args = Args(config)
     results = trainer.main(args)
     print(results)
@@ -41,7 +43,7 @@ def main(args):
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "readout": "gaussian2d",
-        "mouse_ids": None,
+        "mouse_ids": [0, 2],
         "num_workers": 2,
         "depth_scale": 1,
         "device": args.device,
@@ -113,11 +115,11 @@ def main(args):
         metric="single_trial_correlation",
         mode="max",
         points_to_evaluate=points_to_evaluate,
-        max_concurrent=args.num_jobs,
+        max_concurrent=args.max_concurrent,
     )
     tuner = tune.Tuner(
         tune.with_resources(
-            train_model, resources={"cpu": 2, "gpu": torch.cuda.device_count()}
+            train_model, resources={"cpu": 6, "gpu": torch.cuda.device_count()}
         ),
         param_space=search_space,
         tune_config=tune.TuneConfig(search_alg=hebo, num_samples=args.num_samples),
@@ -160,7 +162,7 @@ if __name__ == "__main__":
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
     parser.add_argument("--batch_size", default=64, type=int)
-    parser.add_argument("--num_jobs", type=int, default=8)
+    parser.add_argument("--max_concurrent", type=int, default=8)
     parser.add_argument(
         "--device",
         type=str,

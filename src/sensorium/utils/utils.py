@@ -93,7 +93,7 @@ def evaluate(
     outputs, results = {}, {k: {} for k in metrics}
 
     for mouse_id, mouse_ds in tqdm(
-        ds.items(), desc="Evaluation", disable=args.verbose == 0
+        ds.items(), desc="Evaluation", disable=args.verbose < 2
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue

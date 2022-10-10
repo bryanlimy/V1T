@@ -69,7 +69,7 @@ def train(
     model.train(True)
     model.requires_grad_(True)
     for i, (mouse_id, mouse_data) in tqdm(
-        enumerate(ds), desc="Train", total=len(ds), disable=args.verbose == 0
+        enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
         result = train_step(
             mouse_id=mouse_id,
@@ -110,7 +110,7 @@ def validate(
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
     results = {}
-    with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
+    with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose < 2) as pbar:
         with torch.no_grad():
             for mouse_id, mouse_ds in ds.items():
                 mouse_result = {}

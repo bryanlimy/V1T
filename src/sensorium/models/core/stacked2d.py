@@ -113,23 +113,20 @@ class AttentionConv(nn.Module):
         )
 
 
-def adaptive_elu(x, xshift, yshift):
-    return F.elu(x - xshift, inplace=True) + yshift
-
-
 class AdaptiveELU(nn.Module):
     """
     ELU shifted by user specified values. This helps to ensure the output to stay positive.
     """
 
-    def __init__(self, xshift, yshift, **kwargs):
+    def __init__(self, xshift: int, yshift: int, **kwargs):
         super(AdaptiveELU, self).__init__(**kwargs)
 
-        self.xshift = xshift
-        self.yshift = yshift
+        self.x_shift = torch.Tensor(xshift, dtype=torch.float)
+        self.y_shift = torch.Tensor(yshift, dtype=torch.float)
+        self.elu = nn.ELU()
 
-    def forward(self, x):
-        return adaptive_elu(x, self.xshift, self.yshift)
+    def forward(self, inputs: torch.Tensor):
+        return self.elu(inputs - self.x_shift) + self.y_shift
 
 
 def laplace():

@@ -19,3 +19,4 @@ jupyter_http_over_ws
 ray[tune]
 hebo
 pymoo==0.5.0
+gputil
