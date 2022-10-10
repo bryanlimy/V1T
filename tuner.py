@@ -23,7 +23,6 @@ class Args:
                 setattr(self, key, value)
 
 
-@ray.remote(num_gpus=1)
 def train_model(config):
     print(ray.get_gpu_ids())
     args = Args(config)
