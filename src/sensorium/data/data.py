@@ -5,7 +5,7 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
-from skimage.transform import rescale
+from skimage.transform import rescale, resize
 from torch.utils.data import Dataset, DataLoader
 
 from sensorium.utils import utils
@@ -195,43 +195,57 @@ class MiceDataset(Dataset):
 
     def get_retinotopy(self, mouse_id: int):
         if mouse_id == 0:
-            return (4, 68)
+            return (0, 43)
         elif mouse_id == 1:
-            return (42, 68)
+            return (26, 43)
         elif mouse_id == 2:
-            return (64, 36)
+            return (46, 14)
         elif mouse_id == 3:
-            return (64, 2)
+            return (38, 0)
         elif mouse_id == 4:
-            return (110, 36)
+            return (77, 14)
         elif mouse_id == 5:
-            return (128, 24)
+            return (77, 0)
         elif mouse_id == 6:
-            return (64, 62)
+            return (62, 43)
         else:
             raise KeyError(f"No retinotopy for mouse {mouse_id}.")
 
     @staticmethod
-    def resize_image(image: t.Union[np.ndarray, torch.Tensor], scale: float = 0.25):
-        image = rescale(
+    def resize_image(
+        image: t.Union[np.ndarray, torch.Tensor], width: int = 36, height: int = 64
+    ):
+        # image = rescale(
+        #     image,
+        #     scale=scale,
+        #     anti_aliasing=False,
+        #     clip=True,
+        #     preserve_range=True,
+        #     channel_axis=0,
+        # )
+        image = resize(
             image,
-            scale=scale,
-            anti_aliasing=False,
+            output_shape=(image.shape[0], width, height),
             clip=True,
             preserve_range=True,
-            channel_axis=0,
+            anti_aliasing=False,
         )
         return image
 
-    def retina_crop(self, image: t.Union[np.ndarray, torch.Tensor]):
+    def retina_crop(
+        self,
+        image: t.Union[np.ndarray, torch.Tensor],
+        width: int = 179,
+        height: int = 101,
+    ):
         left, top = self.retinotopy
-        image = image[..., top : top + 72, left : left + 128]
-        image = self.resize_image(image, scale=0.5)
+        image = image[..., top : top + height, left : left + width]
+        image = self.resize_image(image)
         return image
 
     def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         if self.crop_mode == 1:
-            image = self.resize_image(image, scale=0.25)
+            image = self.resize_image(image)
         elif self.crop_mode == 2:
             image = self.retina_crop(image)
         stats = self.image_stats
