@@ -26,6 +26,7 @@ class Args:
 @ray.remote(num_gpus=1)
 def train_model(config):
     print(ray.get_gpu_ids())
+    exit()
     args = Args(config)
     results = trainer.main(args)
     print(results)
