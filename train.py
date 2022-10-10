@@ -136,10 +136,9 @@ def main(args):
         os.makedirs(args.output_dir)
 
     utils.set_random_seed(args.seed)
+    utils.get_device(args)
 
     utils.get_batch_size(args)
-
-    utils.get_device(args)
 
     train_ds, val_ds, test_ds = get_training_ds(
         args,
