@@ -6,6 +6,7 @@ import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader
 
+from sensorium.models import shifter
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
@@ -25,7 +26,7 @@ class ELU1(nn.Module):
 class Model(nn.Module):
     def __init__(self, args, ds: t.Dict[int, DataLoader]):
         super(Model, self).__init__()
-
+        self.plus = args.plus
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
@@ -35,6 +36,7 @@ class Model(nn.Module):
 
         self.initialize_core(args)
         self.initialize_readouts(args, ds=ds)
+        self.initialize_shifter(args, ds=ds)
 
         self.activation = ELU1()
 
@@ -56,12 +58,38 @@ class Model(nn.Module):
             ),
         )
 
+    def initialize_shifter(self, args, ds: t.Dict[int, DataLoader]):
+        if self.plus:
+            self.add_module(
+                "shifter",
+                module=shifter.MLPShifter(
+                    mouse_ids=list(ds.keys()),
+                    input_channels=2,
+                    hidden_channels_shifter=5,
+                    shift_layers=3,
+                    gamma_shifter=0,
+                ),
+            )
+        else:
+            self.shifter = None
+
     def regularizer(self, mouse_id: int):
         return self.core.regularizer() + self.readouts.regularizer(mouse_id)
 
-    def forward(self, inputs: torch.Tensor, mouse_id: torch.Union[int, torch.Tensor]):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        mouse_id: torch.Union[int, torch.Tensor],
+        pupil_center: torch.Tensor,
+        trial_idx: torch.Tensor = None,
+    ):
         outputs = self.core(inputs)
-        outputs = self.readouts(outputs, mouse_id=mouse_id)
+        shift = None
+        if self.shifter is not None:
+            shift = self.shifter(
+                mouse_id=mouse_id, pupil_center=pupil_center, trial_idx=trial_idx
+            )
+        outputs = self.readouts(outputs, mouse_id=mouse_id, shift=shift)
         outputs = self.activation(outputs)
         return outputs
 
@@ -77,6 +105,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
         device=args.device,
         verbose=0,
         mouse_id=list(args.output_shapes.keys())[0],
+        pupil_center=torch.rand(size=(args.batch_size, 2)),
     )
     with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
         file.write(str(model_info))

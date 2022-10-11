@@ -27,9 +27,11 @@ class SpatialTransformerCore(Core):
             args, input_shape=input_shape, name=name
         )
 
+        c, h, w = input_shape
+
         # Spatial transformer localization network
         self.localization = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=8, kernel_size=7),
+            nn.Conv2d(in_channels=c, out_channels=8, kernel_size=7),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=8, out_channels=10, kernel_size=5),
@@ -80,7 +82,7 @@ class SpatialTransformerCore(Core):
         layer = OrderedDict(
             {
                 "conv": nn.Conv2d(
-                    in_channels=1,
+                    in_channels=c,
                     out_channels=args.num_filters,
                     kernel_size=9,
                     stride=1,

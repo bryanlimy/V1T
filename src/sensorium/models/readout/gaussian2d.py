@@ -229,7 +229,9 @@ class Gaussian2DReadout(Readout):
                 max=1,
             )
 
-    def forward(self, inputs: torch.Tensor, sample: bool = None, shift: bool = None):
+    def forward(
+        self, inputs: torch.Tensor, sample: bool = None, shift: torch.Tensor = None
+    ):
         """
         Propagates the input forwards through the readout
         Args:
@@ -244,10 +246,8 @@ class Gaussian2DReadout(Readout):
                                 If sample is True/False, overrides the
                                 model_state (i.e. training or eval) and does
                                 as instructed
-            shift (bool): shifts the location of the grid (from eye-tracking data)
-
-        Returns:
-            y: neuronal activity
+            shift (torch.Tensor): shifts the location of the grid from
+                eye-tracking data
         """
         batch_size, c, w, h = inputs.size()
         c_in, w_in, h_in = self.input_shape

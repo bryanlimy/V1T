@@ -254,10 +254,17 @@ class MiceDataset(Dataset):
         image = (image - stats["mean"]) / stats["std"]
         return image
 
-    def i_transform_image(self, image: np.ndarray):
+    def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
         stats = self.image_stats
-        return (image * stats["std"]) + stats["mean"]
+        image = (image * stats["std"]) + stats["mean"]
+        if self.plus:
+            image = (
+                torch.unsqueeze(image[0], dim=0)
+                if len(image.shape) == 3
+                else torch.unsqueeze(image[:, 0, :, :], dim=1)
+            )
+        return image
 
     def transform_pupil_center(self, pupil_center: np.ndarray):
         """standardize pupil center"""

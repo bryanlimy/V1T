@@ -50,11 +50,15 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         "trial_ids": [],
         "image_ids": [],
     }
-    mouse_id = ds.dataset.mouse_id
+    mouse_id, device = ds.dataset.mouse_id, model.device
     model.train(False)
     with torch.no_grad():
         for data in ds:
-            predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
+            predictions = model(
+                data["image"].to(device),
+                mouse_id=mouse_id,
+                pupil_center=data["pupil_center"].to(device),
+            )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
             results["images"].append(data["image"])

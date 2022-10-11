@@ -35,9 +35,11 @@ def train_step(
     criterion: losses.Loss,
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
-    images = data["image"].to(model.device)
-    responses = data["response"].to(model.device)
-    outputs = model(images, mouse_id=mouse_id)
+    device = model.device
+    images = data["image"].to(device)
+    responses = data["response"].to(device)
+    pupil_center = data["pupil_center"].to(device)
+    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
@@ -92,10 +94,11 @@ def validation_step(
     model: nn.Module,
     criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
-    result = {}
-    images = data["image"].to(model.device)
-    responses = data["response"].to(model.device)
-    outputs = model(images, mouse_id=mouse_id)
+    result, device = {}, model.device
+    images = data["image"].to(device)
+    responses = data["response"].to(device)
+    pupil_center = data["pupil_center"].to(device)
+    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
