@@ -26,7 +26,7 @@ class ELU1(nn.Module):
 class Model(nn.Module):
     def __init__(self, args, ds: t.Dict[int, DataLoader]):
         super(Model, self).__init__()
-        self.plus = args.plus
+        self.use_shifter = args.plus or args.use_shifter
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
@@ -59,7 +59,7 @@ class Model(nn.Module):
         )
 
     def initialize_shifter(self, args, ds: t.Dict[int, DataLoader]):
-        if self.plus:
+        if self.use_shifter:
             self.add_module(
                 "shifter",
                 module=shifter.MLPShifter(
@@ -85,14 +85,11 @@ class Model(nn.Module):
         inputs: torch.Tensor,
         mouse_id: torch.Union[int, torch.Tensor],
         pupil_center: torch.Tensor,
-        trial_idx: torch.Tensor = None,
     ):
         outputs = self.core(inputs)
         shift = None
         if self.shifter is not None:
-            shift = self.shifter(
-                mouse_id=mouse_id, pupil_center=pupil_center, trial_idx=trial_idx
-            )
+            shift = self.shifter(mouse_id=mouse_id, pupil_center=pupil_center)
         outputs = self.readouts(outputs, mouse_id=mouse_id, shift=shift)
         outputs = self.activation(outputs)
         return outputs

@@ -323,7 +323,6 @@ class Stacked2dCore(Core, nn.Module):
         hidden_channels: int = 64,
         input_kern: int = 9,
         hidden_kern: int = 7,
-        layers: int = 4,
         gamma_hidden: int = 0,
         gamma_input: float = 6.3831,
         skip: int = 0,
@@ -362,7 +361,7 @@ class Stacked2dCore(Core, nn.Module):
         )
         regularizer_config = dict(padding=laplace_padding)
         self._input_weights_regularizer = LaplaceL2norm(**regularizer_config)
-        self.num_layers = layers
+        self.num_layers = args.num_layers
         self.gamma_input = gamma_input
         self.gamma_hidden = gamma_hidden
         self.input_channels = self.input_shape[0]
@@ -374,7 +373,7 @@ class Stacked2dCore(Core, nn.Module):
         self.hidden_channels = (
             hidden_channels
             if isinstance(hidden_channels, Iterable)
-            else [hidden_channels] * layers
+            else [hidden_channels] * self.num_layers
         )
         self.skip = skip
 

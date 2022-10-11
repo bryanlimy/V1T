@@ -299,7 +299,7 @@ if __name__ == "__main__":
     )
 
     # ConvCore
-    parser.add_argument("--num_layers", type=int, default=3)
+    parser.add_argument("--num_layers", type=int, default=4)
     parser.add_argument("--num_filters", type=int, default=8)
     parser.add_argument("--dropout", type=float, default=0.0)
 
@@ -323,6 +323,9 @@ if __name__ == "__main__":
         "1: initialize bias with the mean responses"
         "2: initialize bias with the mean responses divide by standard deviation",
     )
+
+    # Shifter
+    parser.add_argument("--use_shifter", action="store_true")
 
     # training settings
     parser.add_argument(
