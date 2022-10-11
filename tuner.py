@@ -29,8 +29,6 @@ def main(args):
     if args.clear_output_dir and os.path.isdir(args.output_dir):
         rmtree(args.output_dir)
 
-    restore = os.path.isdir(args.output_dir)
-
     # default search space
     search_space = {
         "dataset": abspath(args.dataset),
@@ -156,30 +154,32 @@ def main(args):
             train_function,
             resources={"cpu": 2, "gpu": 1},
         )
-    tuner = tune.Tuner(
-        trainable,
-        param_space=search_space,
-        tune_config=tune.TuneConfig(
-            metric=metric,
-            mode=mode,
-            search_alg=hebo,
-            scheduler=tune.schedulers.ASHAScheduler(
-                time_attr="training_iteration",
-                max_t=args.epochs,
-                grace_period=10,
-                reduction_factor=2,
-                brackets=1,
-            ),
-            num_samples=args.num_samples,
-        ),
-        run_config=RunConfig(
-            local_dir=args.output_dir,
-            verbose=args.verbose,
-            checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
-        ),
-    )
+
     if args.resume_dir:
-        tuner = tuner.restore(args.resume_dir)
+        tuner = tune.Tuner.restore(args.resume_dir)
+    else:
+        tuner = tune.Tuner(
+            trainable,
+            param_space=search_space,
+            tune_config=tune.TuneConfig(
+                metric=metric,
+                mode=mode,
+                search_alg=hebo,
+                scheduler=tune.schedulers.ASHAScheduler(
+                    time_attr="training_iteration",
+                    max_t=args.epochs,
+                    grace_period=10,
+                    reduction_factor=2,
+                    brackets=1,
+                ),
+                num_samples=args.num_samples,
+            ),
+            run_config=RunConfig(
+                local_dir=args.output_dir,
+                verbose=args.verbose,
+                checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
+            ),
+        )
 
     results = tuner.fit()
 
