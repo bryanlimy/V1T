@@ -57,7 +57,7 @@ def main(args):
         "readout_reg_scale": tune.loguniform(1e-5, 1),
         "shifter_reg_scale": tune.loguniform(1e-5, 1),
         "ds_scale": tune.choice([True, False]),
-        "crop_mode": tune.choice([0, 1, 2]),
+        "crop_mode": tune.choice([1, 2]),
         "core_lr_scale": tune.uniform(0, 1),
         "use_shifter": tune.choice([True, False]),
     }
@@ -140,42 +140,42 @@ def main(args):
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
-    if args.resume_dir:
-        tuner = tune.Tuner.restore(abspath(args.resume_dir))
-    else:
-        metric, mode = "single_trial_correlation", "max"
-        num_gpus = torch.cuda.device_count()
-        max_concurrent = max(1, num_gpus)
+    metric, mode = "single_trial_correlation", "max"
+    num_gpus = torch.cuda.device_count()
+    max_concurrent = max(1, num_gpus)
 
-        hebo = HEBOSearch(
+    hebo = HEBOSearch(
+        metric=metric,
+        mode=mode,
+        points_to_evaluate=points_to_evaluate,
+        evaluated_rewards=evaluated_rewards,
+        max_concurrent=max_concurrent,
+    )
+
+    trainable = train_function
+    if num_gpus > 0:
+        trainable = tune.with_resources(
+            train_function,
+            resources={"cpu": 4, "gpu": 1},
+        )
+    tuner = tune.Tuner(
+        trainable,
+        param_space=search_space,
+        tune_config=tune.TuneConfig(
             metric=metric,
             mode=mode,
-            points_to_evaluate=points_to_evaluate,
-            evaluated_rewards=evaluated_rewards,
-            max_concurrent=max_concurrent,
-        )
+            search_alg=hebo,
+            num_samples=args.num_samples,
+        ),
+        run_config=RunConfig(
+            local_dir=args.output_dir,
+            verbose=args.verbose,
+            checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
+        ),
+    )
 
-        trainable = train_function
-        if num_gpus > 0:
-            trainable = tune.with_resources(
-                train_function,
-                resources={"cpu": 4, "gpu": 1},
-            )
-        tuner = tune.Tuner(
-            trainable,
-            param_space=search_space,
-            tune_config=tune.TuneConfig(
-                metric=metric,
-                mode=mode,
-                search_alg=hebo,
-                num_samples=args.num_samples,
-            ),
-            run_config=RunConfig(
-                local_dir=args.output_dir,
-                verbose=args.verbose,
-                checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
-            ),
-        )
+    if args.resume_dir:
+        tuner = tuner.restore(abspath(args.resume_dir))
 
     results = tuner.fit()
 
