@@ -131,28 +131,12 @@ def main(args):
             {
                 "core": "stn",
                 "num_filters": tune.randint(8, 64),
+                "num_layers": tune.randint(1, 8),
                 "dropout": tune.uniform(0, 0.8),
             }
         )
-        points_to_evaluate = [
-            {
-                "num_filters": 16,
-                "dropout": 0.0,
-                "disable_grid_predictor": False,
-                "grid_predictor_dim": 2,
-                "bias_mode": 0,
-                "criterion": "poisson",
-                "lr": 1e-3,
-                "core_reg_scale": 0,
-                "readout_reg_scale": 0.0076,
-                "shifter_reg_scale": 0,
-                "ds_scale": True,
-                "crop_mode": 1,
-                "core_lr_scale": 1,
-                "use_shifter": False,
-            }
-        ]
-        evaluated_rewards = [0.2712489068508148]
+        points_to_evaluate = []
+        evaluated_rewards = []
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
