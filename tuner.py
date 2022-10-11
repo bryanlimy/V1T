@@ -15,6 +15,15 @@ import train as trainer
 class Args:
     def __init__(self, config, trial_id: str):
         self.output_dir = os.path.join(config["output_dir"], trial_id)
+        self.mouse_ids = None
+        self.pretrain_core = ""
+        self.depth_scale = 1
+        self.seed = 1234
+        self.save_plots = False
+        self.dpi = 120
+        self.format = "svg"
+        self.clear_output_dir = False
+        self.verbose = 0
         for key, value in config.items():
             if not hasattr(self, key):
                 setattr(self, key, value)
@@ -36,18 +45,21 @@ def main(args):
         "epochs": args.epochs,
         "batch_size": args.batch_size,
         "readout": "gaussian2d",
-        "mouse_ids": None,
         "num_workers": args.num_workers,
         "plus": False,
-        "depth_scale": 1,
         "device": args.device,
-        "pretrain_core": "",
-        "seed": 1234,
-        "save_plots": False,
-        "dpi": 120,
-        "format": "svg",
-        "clear_output_dir": False,
-        "verbose": 0,
+        "disable_grid_predictor": tune.choice([True, False]),
+        "grid_predictor_dim": tune.choice([2, 3]),
+        "bias_mode": tune.choice([0, 1, 2]),
+        "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
+        "lr": tune.loguniform(1e-4, 1e-2),
+        "core_reg_scale": tune.loguniform(1e-5, 1),
+        "readout_reg_scale": tune.loguniform(1e-5, 1),
+        "shifter_reg_scale": tune.loguniform(1e-5, 1),
+        "ds_scale": tune.choice([True, False]),
+        "crop_mode": tune.choice([0, 1, 2]),
+        "core_lr_scale": tune.uniform(0, 1),
+        "use_shifter": tune.choice([True, False]),
     }
 
     if args.core == "vit":
@@ -61,18 +73,6 @@ def main(args):
                 "mlp_dim": tune.randint(8, 128),
                 "num_layers": tune.randint(1, 8),
                 "dim_head": tune.randint(8, 128),
-                "disable_grid_predictor": tune.choice([True, False]),
-                "grid_predictor_dim": tune.choice([2, 3]),
-                "bias_mode": tune.choice([0, 1, 2]),
-                "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
-                "lr": tune.loguniform(1e-4, 1e-2),
-                "core_reg_scale": tune.loguniform(1e-5, 1),
-                "readout_reg_scale": tune.loguniform(1e-5, 1),
-                "shifter_reg_scale": tune.loguniform(1e-5, 1),
-                "ds_scale": tune.choice([True, False]),
-                "crop_mode": tune.choice([0, 1, 2]),
-                "core_lr_scale": tune.uniform(0, 1),
-                "use_shifter": tune.choice([True, False]),
             }
         )
         points_to_evaluate = [
@@ -105,18 +105,6 @@ def main(args):
                 "core": "stacked2d",
                 "num_layers": tune.uniform(1, 8),
                 "dropout": tune.uniform(0, 0.8),
-                "disable_grid_predictor": tune.choice([True, False]),
-                "grid_predictor_dim": tune.choice([2, 3]),
-                "bias_mode": tune.choice([0, 1, 2]),
-                "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
-                "lr": tune.loguniform(1e-4, 1e-2),
-                "core_reg_scale": tune.loguniform(1e-5, 1),
-                "readout_reg_scale": tune.loguniform(1e-5, 1),
-                "shifter_reg_scale": tune.loguniform(1e-5, 1),
-                "ds_scale": tune.choice([True, False]),
-                "crop_mode": tune.choice([0, 1, 2]),
-                "core_lr_scale": tune.uniform(0, 1),
-                "use_shifter": tune.choice([True, False]),
             }
         )
         points_to_evaluate = [
@@ -144,18 +132,6 @@ def main(args):
                 "core": "stn",
                 "num_filters": tune.randint(8, 64),
                 "dropout": tune.uniform(0, 0.8),
-                "disable_grid_predictor": tune.choice([True, False]),
-                "grid_predictor_dim": tune.choice([2, 3]),
-                "bias_mode": tune.choice([0, 1, 2]),
-                "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
-                "lr": tune.loguniform(1e-4, 1e-2),
-                "core_reg_scale": tune.loguniform(1e-5, 1),
-                "readout_reg_scale": tune.loguniform(1e-5, 1),
-                "shifter_reg_scale": tune.loguniform(1e-5, 1),
-                "ds_scale": tune.choice([True, False]),
-                "crop_mode": tune.choice([0, 1, 2]),
-                "core_lr_scale": tune.uniform(0, 1),
-                "use_shifter": tune.choice([True, False]),
             }
         )
         points_to_evaluate = [
