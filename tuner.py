@@ -140,24 +140,27 @@ def main(args):
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
-    metric, mode = "single_trial_correlation", "max"
-    hebo = HEBOSearch(
-        metric=metric,
-        mode=mode,
-        points_to_evaluate=points_to_evaluate,
-        evaluated_rewards=evaluated_rewards,
-        max_concurrent=args.max_concurrent,
-    )
-    trainable = train_function
-    if torch.cuda.device_count() > 0:
-        trainable = tune.with_resources(
-            train_function,
-            resources={"cpu": 2, "gpu": 1},
-        )
-
     if args.resume_dir:
         tuner = tune.Tuner.restore(abspath(args.resume_dir))
     else:
+        metric, mode = "single_trial_correlation", "max"
+        num_gpus = torch.cuda.device_count()
+        max_concurrent = max(1, num_gpus)
+
+        hebo = HEBOSearch(
+            metric=metric,
+            mode=mode,
+            points_to_evaluate=points_to_evaluate,
+            evaluated_rewards=evaluated_rewards,
+            max_concurrent=max_concurrent,
+        )
+
+        trainable = train_function
+        if num_gpus > 0:
+            trainable = tune.with_resources(
+                train_function,
+                resources={"cpu": args.num_workers, "gpu": 1},
+            )
         tuner = tune.Tuner(
             trainable,
             param_space=search_space,
@@ -214,7 +217,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
-    parser.add_argument("--max_concurrent", type=int, default=8)
     parser.add_argument(
         "--device",
         type=str,
