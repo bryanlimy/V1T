@@ -178,8 +178,8 @@ def main(args):
             checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
         ),
     )
-    if restore:
-        tuner = tuner.restore(args.output_dir)
+    if args.resume_dir:
+        tuner = tuner.restore(args.resume_dir)
 
     results = tuner.fit()
 
@@ -199,6 +199,7 @@ if __name__ == "__main__":
         help="path to directory where the compressed dataset is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--resume_dir", type=str, default="")
     parser.add_argument(
         "--num_workers", default=2, type=int, help="number of works for DataLoader."
     )
