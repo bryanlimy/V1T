@@ -38,6 +38,7 @@ def main(args):
         "readout": "gaussian2d",
         "mouse_ids": None,
         "num_workers": args.num_workers,
+        "plus": False,
         "depth_scale": 1,
         "device": args.device,
         "pretrain_core": "",
@@ -70,6 +71,7 @@ def main(args):
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
                 "core_lr_scale": tune.uniform(0, 1),
+                "use_shifter": tune.choice([True, False]),
             }
         )
         points_to_evaluate = [
@@ -91,6 +93,7 @@ def main(args):
                 "ds_scale": True,
                 "crop_mode": 1,
                 "core_lr_scale": 1,
+                "use_shifter": False,
             }
         ]
         evaluated_rewards = [0.29188114404678345]
