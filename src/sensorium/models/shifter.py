@@ -115,7 +115,7 @@ class MLPShifter(ModuleDict):
             xavier_normal(linear_layer.weight)
 
     def regularizer(self, mouse_id: int):
-        return self[str(mouse_id)].regularizer() * self.gamma_shifter
+        return self.gamma_shifter * self[str(mouse_id)].regularizer()
 
     def forward(
         self,

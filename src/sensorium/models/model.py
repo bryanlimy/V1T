@@ -74,7 +74,11 @@ class Model(nn.Module):
             self.shifter = None
 
     def regularizer(self, mouse_id: int):
-        return self.core.regularizer() + self.readouts.regularizer(mouse_id)
+        reg = self.core.regularizer()
+        reg += self.readouts.regularizer(mouse_id=mouse_id)
+        if self.shifter is not None:
+            reg += self.shifter.regularizer(mouse_id=mouse_id)
+        return reg
 
     def forward(
         self,
