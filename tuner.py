@@ -1,11 +1,10 @@
 import os
-import ray
 import torch
 import pickle
 import argparse
 from shutil import rmtree
 from ray import air, tune
-from datetime import datetime
+from ray.air import session
 from ray.air.config import RunConfig
 from ray.tune.search.hebo import HEBOSearch
 from os.path import abspath
@@ -14,17 +13,15 @@ import train as trainer
 
 
 class Args:
-    def __init__(self, config):
-        self.output_dir = os.path.join(
-            config["output_dir"], f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
-        )
+    def __init__(self, config, trial_id: str):
+        self.output_dir = os.path.join(config["output_dir"], trial_id)
         for key, value in config.items():
             if not hasattr(self, key):
                 setattr(self, key, value)
 
 
 def train_function(config):
-    args = Args(config)
+    args = Args(config, trial_id=session.get_trial_id())
     return trainer.main(args)
 
 
@@ -45,6 +42,7 @@ def main(args):
         "num_workers": args.num_workers,
         "depth_scale": 1,
         "device": args.device,
+        "pretrain_core": "",
         "seed": 1234,
         "save_plots": False,
         "dpi": 120,
@@ -73,9 +71,6 @@ def main(args):
                 "readout_reg_scale": tune.loguniform(1e-5, 1),
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
-                "pretrain_core": tune.choice(
-                    ["", abspath("runs/pretrain/001_vit_0.25dropout")]
-                ),
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
         )
@@ -97,8 +92,7 @@ def main(args):
                 "readout_reg_scale": 0,
                 "ds_scale": True,
                 "crop_mode": 1,
-                "pretrain_core": abspath("runs/pretrain/001_vit_0.25dropout"),
-                "core_lr_scale": 0.5,
+                "core_lr_scale": 1,
             }
         ]
         evaluated_rewards = [0.29188114404678345]
@@ -116,14 +110,26 @@ def main(args):
                 "readout_reg_scale": tune.loguniform(1e-5, 1),
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
-                "pretrain_core": tune.choice(
-                    ["", abspath("runs/pretrain/002_stacked2d")]
-                ),
                 "core_lr_scale": tune.loguniform(1e-4, 1),
             }
         )
-        points_to_evaluate = []
-        evaluated_rewards = []
+        points_to_evaluate = [
+            {
+                "core": "stacked2d",
+                "dropout": 0.0,
+                "disable_grid_predictor": False,
+                "grid_predictor_dim": 2,
+                "bias_mode": 0,
+                "criterion": "poisson",
+                "lr": 1e-3,
+                "core_reg_scale": 0,
+                "readout_reg_scale": 0.0076,
+                "ds_scale": True,
+                "crop_mode": 1,
+                "core_lr_scale": 1,
+            }
+        ]
+        evaluated_rewards = [0.30914896726608276]
     elif args.core == "stn":
         search_space.update(
             {
@@ -206,7 +212,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
-    parser.add_argument("--batch_size", default=0, type=int)
     parser.add_argument("--max_concurrent", type=int, default=8)
     parser.add_argument(
         "--device",
@@ -217,8 +222,7 @@ if __name__ == "__main__":
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--seed", type=int, default=1234)
-    parser.add_argument("--ray_address", type=int, default=6123)
-    parser.add_argument("--num_samples", type=int, default=-1)
+    parser.add_argument("--num_samples", type=int, default=100)
 
     # misc
     parser.add_argument(
