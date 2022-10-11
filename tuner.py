@@ -142,7 +142,6 @@ def main(args):
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
-    ray.init(address="localhost:6234")
     if args.resume_dir:
         tuner = tune.Tuner.restore(abspath(args.resume_dir))
     else:
