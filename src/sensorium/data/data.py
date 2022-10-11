@@ -158,6 +158,9 @@ class MiceDataset(Dataset):
         self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
+        self.plus = args.plus
+        if self.plus and mouse_id == 0:
+            raise ValueError("Mouse 0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
         self.coordinates = metadata["coordinates"]
@@ -168,15 +171,20 @@ class MiceDataset(Dataset):
         self.trial_ids = metadata["trial_id"][self.indexes]
         # standardizer for responses
         self._response_precision = self.compute_response_precision()
+
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
-        self.image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
+        image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
         self.retinotopy = self.get_retinotopy(mouse_id=mouse_id)
         assert args.crop_mode in (0, 1, 2)
         self.crop_mode = args.crop_mode
         if self.crop_mode in (1, 2):
-            self.image_shape = (1, 36, 64)
+            image_shape = (1, 36, 64)
+        # include the 3 behaviour data as channel of the image
+        if self.plus:
+            image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
+        self.image_shape = image_shape
 
     def __len__(self):
         return len(self.indexes)
@@ -188,6 +196,14 @@ class MiceDataset(Dataset):
     @property
     def response_stats(self):
         return self.stats["response"]
+
+    @property
+    def behavior_stats(self):
+        return self.stats["behavior"]
+
+    @property
+    def pupil_stats(self):
+        return self.stats["pupil_center"]
 
     @property
     def num_neurons(self):
@@ -243,6 +259,16 @@ class MiceDataset(Dataset):
         stats = self.image_stats
         return (image * stats["std"]) + stats["mean"]
 
+    def transform_pupil_center(self, pupil_center: np.ndarray):
+        """standardize pupil center"""
+        stats = self.pupil_stats
+        return (pupil_center - stats["mean"]) / stats["std"]
+
+    def transform_behavior(self, behavior: np.ndarray):
+        """standardize behaviour"""
+        stats = self.behavior_stats
+        return behavior / stats["std"]
+
     def compute_response_precision(self):
         """
         Standardize response by dividing the per neuron std if the std is
@@ -261,6 +287,14 @@ class MiceDataset(Dataset):
     def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response / self._response_precision
 
+    def add_behavior_to_image(self, image: np.ndarray, behavior: np.ndarray):
+        # broadcast each behavior variable to (height, width)
+        behaviour = np.tile(behavior, reps=(image.shape[1], image.shape[2], 1))
+        # transpose to (channel, height, width)
+        behaviour = np.transpose(behaviour, axes=[2, 0, 1])
+        image = np.concatenate((image, behaviour), axis=0)
+        return image
+
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
 
@@ -278,6 +312,12 @@ class MiceDataset(Dataset):
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
         data["image"] = self.transform_image(data["image"])
         data["response"] = self.transform_response(data["response"])
+        data["behavior"] = self.transform_behavior(data["behavior"])
+        data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
+        if self.plus:
+            data["image"] = self.add_behavior_to_image(
+                image=data["image"], behavior=data["behavior"]
+            )
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
@@ -308,7 +348,7 @@ def get_training_ds(
             sets where keys are the mouse IDs.
     """
     if mouse_ids is None:
-        mouse_ids = list(range(0, 7))
+        mouse_ids = list(range(1, 7)) if args.plus else list(range(0, 7))
 
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}

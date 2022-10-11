@@ -282,6 +282,7 @@ if __name__ == "__main__":
         default=None,
         help="Mouse to use for training, use Mouse 2-7 if None.",
     )
+    parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
     parser.add_argument(
         "--num_workers", default=2, type=int, help="number of works for DataLoader."
     )
