@@ -10,8 +10,11 @@ from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
+
+from sensorium import losses
 from sensorium.models import Model
 from sensorium.metrics import Metrics
+from sensorium.data import get_training_ds
 from sensorium.utils import yaml, tensorboard
 
 
@@ -153,11 +156,13 @@ def evaluate(
     for metric in metrics:
         values = list(results[metric].values())
         if values:
-            overall_result[metric] = np.mean(values)
+            average = np.mean(values)
+            overall_result[metric] = average
+            results[metric]["average"] = average
             if summary is not None:
                 summary.scalar(
                     f"{metric}/average",
-                    value=overall_result[metric],
+                    value=average,
                     step=epoch,
                     mode=mode,
                 )
@@ -297,10 +302,6 @@ def load_model(args) -> Model:
 
 
 def get_batch_size(args):
-    from sensorium.models import get_model
-    from sensorium.data import get_training_ds
-    from sensorium import losses
-
     device = args.device.type
 
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
