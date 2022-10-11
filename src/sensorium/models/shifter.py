@@ -5,47 +5,13 @@ from torch.nn import ModuleDict
 from torch.nn.init import xavier_normal
 
 
-class Shifter(nn.Module):
-    """
-    Abstract base class for a shifter. It's strongly advised that the
-    regularizer and initialize methods are implemented by the inheriting class.
-    """
-
-    def __init__(self, name: str = "Shifter"):
-        super(Shifter, self).__init__()
-        self.name = name
-
-    def __repr__(self):
-        s = super().__repr__()
-        s += " [{} regularizers: ".format(self.__class__.__name__)
-        ret = []
-        for attr in filter(lambda x: "gamma" in x, dir(self)):
-            ret.append("{} = {}".format(attr, getattr(self, attr)))
-        return s + "|".join(ret) + "]\n"
-
-    def regularizer(self):
-        """
-        Regularizer method to be used during training.
-        """
-        raise NotImplementedError(
-            "regularizer method must be implemented by the inheriting class"
-        )
-
-    def initialize(self):
-        """
-        weight initialization of the torch.parameters
-        """
-        raise NotImplementedError(
-            "initialize method must be implemented by the inheriting class"
-        )
-
-
-class MLP(Shifter):
+class MLP(nn.Module):
     def __init__(
         self,
-        input_features: int = 2,
-        hidden_channels: int = 10,
-        shift_layers: int = 1,
+        args,
+        in_features: int = 2,
+        hidden_features: int = 10,
+        num_layers: int = 1,
         name: str = "MLPShifter",
     ):
         """
@@ -57,23 +23,33 @@ class MLP(Shifter):
                 to a network without a hidden layer).
             **kwargs:
         """
-        super(MLP, self).__init__(name=name)
-
-        prev_output = input_features
-        feat = []
-        for _ in range(shift_layers - 1):
-            feat.extend([nn.Linear(prev_output, hidden_channels), nn.Tanh()])
-            prev_output = hidden_channels
-
-        feat.extend([nn.Linear(prev_output, 2), nn.Tanh()])
-        self.mlp = nn.Sequential(*feat)
+        super(MLP, self).__init__()
+        self.name = name
+        self.device = args.device
+        self.reg_scale = torch.tensor(
+            args.shifter_reg_scale, dtype=torch.float32, device=self.device
+        )
+        out_features = in_features
+        layers = []
+        for _ in range(num_layers - 1):
+            layers.extend(
+                [
+                    nn.Linear(in_features=out_features, out_features=hidden_features),
+                    nn.Tanh(),
+                ]
+            )
+            out_features = hidden_features
+        layers.extend([nn.Linear(in_features=out_features, out_features=2), nn.Tanh()])
+        self.mlp = nn.Sequential(*layers)
+        self.initialize()
 
     def regularizer(self):
-        return 0
+        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
     def initialize(self):
-        for linear_layer in [p for p in self.parameters() if isinstance(p, nn.Linear)]:
-            xavier_normal(linear_layer.weight)
+        for layer in self.mlp:
+            if isinstance(layer, nn.Linear):
+                torch.nn.init.xavier_normal_(layer.weight)
 
     def forward(self, pupil_center: torch.Tensor, trial_idx: torch.Tensor = None):
         if trial_idx is not None:
@@ -84,11 +60,11 @@ class MLP(Shifter):
 class MLPShifter(ModuleDict):
     def __init__(
         self,
+        args,
         mouse_ids: t.List[int],
         input_channels: int = 2,
-        hidden_channels_shifter: int = 5,
-        shift_layers: int = 1,
-        gamma_shifter: float = 0,
+        hidden_features: int = 5,
+        num_layers: int = 3,
     ):
         """
         Args:
@@ -98,24 +74,20 @@ class MLPShifter(ModuleDict):
             See docstring of base class for the other arguments.
         """
         super().__init__()
-        self.gamma_shifter = gamma_shifter
         for mouse_id in mouse_ids:
             self.add_module(
                 name=str(mouse_id),
                 module=MLP(
-                    input_features=input_channels,
-                    hidden_channels=hidden_channels_shifter,
-                    shift_layers=shift_layers,
+                    args,
+                    in_features=input_channels,
+                    hidden_features=hidden_features,
+                    num_layers=num_layers,
                     name=f"Mouse{mouse_id}Shifter",
                 ),
             )
 
-    def initialize(self):
-        for linear_layer in [p for p in self.parameters() if isinstance(p, nn.Linear)]:
-            xavier_normal(linear_layer.weight)
-
     def regularizer(self, mouse_id: int):
-        return self.gamma_shifter * self[str(mouse_id)].regularizer()
+        return self[str(mouse_id)].regularizer()
 
     def forward(
         self,

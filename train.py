@@ -364,6 +364,12 @@ if __name__ == "__main__":
         help="weight regularization coefficient for readout module.",
     )
     parser.add_argument(
+        "--shifter_reg_scale",
+        default=0.0,
+        type=float,
+        help="weight regularization coefficient for shifter module.",
+    )
+    parser.add_argument(
         "--ds_scale",
         action="store_true",
         help="scale loss by the size of the dataset",

@@ -63,11 +63,11 @@ class Model(nn.Module):
             self.add_module(
                 "shifter",
                 module=shifter.MLPShifter(
+                    args,
                     mouse_ids=list(ds.keys()),
                     input_channels=2,
-                    hidden_channels_shifter=5,
-                    shift_layers=3,
-                    gamma_shifter=0,
+                    hidden_features=5,
+                    num_layers=3,
                 ),
             )
         else:
