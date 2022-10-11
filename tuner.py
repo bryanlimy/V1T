@@ -69,7 +69,7 @@ def main(args):
                 "readout_reg_scale": tune.loguniform(1e-5, 1),
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
-                "core_lr_scale": tune.loguniform(1e-4, 1),
+                "core_lr_scale": tune.uniform(0, 1),
             }
         )
         points_to_evaluate = [
@@ -87,7 +87,7 @@ def main(args):
                 "criterion": "poisson",
                 "lr": 1e-3,
                 "core_reg_scale": 0,
-                "readout_reg_scale": 0,
+                "readout_reg_scale": 0.0076,
                 "ds_scale": True,
                 "crop_mode": 1,
                 "core_lr_scale": 1,
@@ -108,7 +108,7 @@ def main(args):
                 "readout_reg_scale": tune.loguniform(1e-5, 1),
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
-                "core_lr_scale": tune.loguniform(1e-4, 1),
+                "core_lr_scale": tune.uniform(0, 1),
             }
         )
         points_to_evaluate = [
@@ -131,12 +131,39 @@ def main(args):
     elif args.core == "stn":
         search_space.update(
             {
-                "core": tune.choice(["stn"]),
-                "readout": tune.choice(["gaussian2d"]),
+                "core": "stn",
+                "num_filters": tune.randint(8, 64),
+                "dropout": tune.uniform(0, 0.8),
+                "disable_grid_predictor": tune.choice([True, False]),
+                "grid_predictor_dim": tune.choice([2, 3]),
+                "bias_mode": tune.choice([0, 1, 2]),
+                "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
+                "lr": tune.loguniform(1e-4, 1e-2),
+                "core_reg_scale": tune.loguniform(1e-5, 1),
+                "readout_reg_scale": tune.loguniform(1e-5, 1),
+                "ds_scale": tune.choice([True, False]),
+                "crop_mode": tune.choice([0, 1, 2]),
+                "core_lr_scale": tune.uniform(0, 1),
             }
         )
-        points_to_evaluate = []
-        evaluated_rewards = []
+        points_to_evaluate = [
+            {
+                "core": "stn",
+                "num_filters": 16,
+                "dropout": 0.0,
+                "disable_grid_predictor": False,
+                "grid_predictor_dim": 2,
+                "bias_mode": 0,
+                "criterion": "poisson",
+                "lr": 1e-3,
+                "core_reg_scale": 0,
+                "readout_reg_scale": 0.0076,
+                "ds_scale": True,
+                "crop_mode": 1,
+                "core_lr_scale": 1,
+            }
+        ]
+        evaluated_rewards = [0.2712489068508148]
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
@@ -168,13 +195,6 @@ def main(args):
                 metric=metric,
                 mode=mode,
                 search_alg=hebo,
-                scheduler=tune.schedulers.ASHAScheduler(
-                    time_attr="training_iteration",
-                    max_t=args.epochs,
-                    grace_period=10,
-                    reduction_factor=2,
-                    brackets=1,
-                ),
                 num_samples=args.num_samples,
             ),
             run_config=RunConfig(

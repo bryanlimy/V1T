@@ -1,6 +1,6 @@
 tqdm
 h5py
-hebo
+HEBO
 numpy
 torch
 pymoo==0.5.0
