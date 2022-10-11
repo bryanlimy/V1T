@@ -1,4 +1,5 @@
 import os
+import ray
 import torch
 import pickle
 import argparse
@@ -141,6 +142,7 @@ def main(args):
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
+    ray.init(address="localhost:6234")
     if args.resume_dir:
         tuner = tune.Tuner.restore(abspath(args.resume_dir))
     else:
@@ -155,7 +157,6 @@ def main(args):
             evaluated_rewards=evaluated_rewards,
             max_concurrent=max_concurrent,
         )
-
         scheduler = ASHAScheduler(
             time_attr="iterations",
             max_t=args.epochs // 10,
@@ -167,7 +168,7 @@ def main(args):
         if num_gpus > 0:
             trainable = tune.with_resources(
                 train_function,
-                resources={"cpu": 4, "gpu": 1},
+                resources={"cpu": args.num_cpus, "gpu": 1},
             )
         tuner = tune.Tuner(
             trainable,
@@ -205,6 +206,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--resume_dir", type=str, default="")
+    parser.add_argument("--num_cpus", type=int, default=3)
     parser.add_argument(
         "--num_workers", default=2, type=int, help="number of works for DataLoader."
     )
