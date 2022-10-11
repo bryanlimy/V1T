@@ -283,7 +283,7 @@ if __name__ == "__main__":
         nargs="+",
         type=int,
         default=None,
-        help="Mouse to use for training, use Mouse 2-7 if None.",
+        help="Mouse to use for training.",
     )
     parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
     parser.add_argument(
