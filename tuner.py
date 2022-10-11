@@ -101,6 +101,7 @@ def main(args):
         search_space.update(
             {
                 "core": "stacked2d",
+                "num_layers": tune.uniform(1, 8),
                 "dropout": tune.uniform(0, 0.8),
                 "disable_grid_predictor": tune.choice([True, False]),
                 "grid_predictor_dim": tune.choice([2, 3]),
@@ -112,10 +113,12 @@ def main(args):
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
                 "core_lr_scale": tune.uniform(0, 1),
+                "use_shifter": tune.choice([True, False]),
             }
         )
         points_to_evaluate = [
             {
+                "num_layers": 4,
                 "dropout": 0.0,
                 "disable_grid_predictor": False,
                 "grid_predictor_dim": 2,
@@ -127,6 +130,7 @@ def main(args):
                 "ds_scale": True,
                 "crop_mode": 1,
                 "core_lr_scale": 1,
+                "use_shifter": False,
             }
         ]
         evaluated_rewards = [0.30914896726608276]
@@ -146,6 +150,7 @@ def main(args):
                 "ds_scale": tune.choice([True, False]),
                 "crop_mode": tune.choice([0, 1, 2]),
                 "core_lr_scale": tune.uniform(0, 1),
+                "use_shifter": tune.choice([True, False]),
             }
         )
         points_to_evaluate = [
@@ -162,6 +167,7 @@ def main(args):
                 "ds_scale": True,
                 "crop_mode": 1,
                 "core_lr_scale": 1,
+                "use_shifter": False,
             }
         ]
         evaluated_rewards = [0.2712489068508148]
