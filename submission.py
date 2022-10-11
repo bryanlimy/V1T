@@ -56,7 +56,7 @@ def inference(
     }
     model.train(False)
     model.requires_grad_(False)
-    for data in tqdm(ds, desc=desc, disable=args.verbose == 0):
+    for data in tqdm(ds, desc=desc, disable=args.verbose < 2):
         predictions = model(data["image"].to(device), mouse_id=mouse_id)
         results["predictions"].extend(predictions.cpu().numpy().tolist())
         results["image_ids"].extend(data["image_id"].numpy().tolist())
@@ -178,7 +178,7 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
+    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
 
     params = parser.parse_args()
     main(params)
