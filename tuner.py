@@ -207,6 +207,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--core", type=str, required=True, help="The core module to use."
     )
+    parser.add_argument("--batch_size", type=int, default=0)
 
     # training settings
     parser.add_argument(
