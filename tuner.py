@@ -156,7 +156,7 @@ def main(args):
         )
 
     if args.resume_dir:
-        tuner = tune.Tuner.restore(args.resume_dir)
+        tuner = tune.Tuner.restore(abspath(args.resume_dir))
     else:
         tuner = tune.Tuner(
             trainable,
