@@ -104,7 +104,7 @@ def main(args):
         search_space.update(
             {
                 "core": "stacked2d",
-                "num_layers": tune.uniform(1, 8),
+                "num_layers": tune.randint(1, 8),
                 "dropout": tune.uniform(0, 0.8),
             }
         )
