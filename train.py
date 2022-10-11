@@ -240,6 +240,7 @@ def main(args):
                 mode=2,
             )
             if tune.is_session_enabled():
+                eval_result["iterations"] = epoch // 10
                 session.report(metrics=eval_result)
 
         if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):

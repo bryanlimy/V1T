@@ -8,6 +8,7 @@ from ray.air import session
 from ray.air.config import RunConfig
 from ray.tune.search.hebo import HEBOSearch
 from os.path import abspath
+from ray.tune.schedulers import ASHAScheduler
 
 import train as trainer
 
@@ -140,42 +141,50 @@ def main(args):
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
-    metric, mode = "single_trial_correlation", "max"
-    num_gpus = torch.cuda.device_count()
-    max_concurrent = max(1, num_gpus)
+    if args.resume_dir:
+        tuner = tune.Tuner.restore(abspath(args.resume_dir))
+    else:
+        metric, mode = "single_trial_correlation", "max"
+        num_gpus = torch.cuda.device_count()
+        max_concurrent = max(1, num_gpus)
 
-    hebo = HEBOSearch(
-        metric=metric,
-        mode=mode,
-        points_to_evaluate=points_to_evaluate,
-        evaluated_rewards=evaluated_rewards,
-        max_concurrent=max_concurrent,
-    )
-
-    trainable = train_function
-    if num_gpus > 0:
-        trainable = tune.with_resources(
-            train_function,
-            resources={"cpu": 4, "gpu": 1},
-        )
-    tuner = tune.Tuner(
-        trainable,
-        param_space=search_space,
-        tune_config=tune.TuneConfig(
+        hebo = HEBOSearch(
             metric=metric,
             mode=mode,
-            search_alg=hebo,
-            num_samples=args.num_samples,
-        ),
-        run_config=RunConfig(
-            local_dir=args.output_dir,
-            verbose=args.verbose,
-            checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
-        ),
-    )
+            points_to_evaluate=points_to_evaluate,
+            evaluated_rewards=evaluated_rewards,
+            max_concurrent=max_concurrent,
+        )
 
-    if args.resume_dir:
-        tuner = tuner.restore(abspath(args.resume_dir))
+        scheduler = ASHAScheduler(
+            time_attr="iterations",
+            max_t=args.epochs // 10,
+            grace_period=2,
+            reduction_factor=2,
+        )
+
+        trainable = train_function
+        if num_gpus > 0:
+            trainable = tune.with_resources(
+                train_function,
+                resources={"cpu": 4, "gpu": 1},
+            )
+        tuner = tune.Tuner(
+            trainable,
+            param_space=search_space,
+            tune_config=tune.TuneConfig(
+                metric=metric,
+                mode=mode,
+                search_alg=hebo,
+                scheduler=scheduler,
+                num_samples=args.num_samples,
+            ),
+            run_config=RunConfig(
+                local_dir=args.output_dir,
+                verbose=args.verbose,
+                checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
+            ),
+        )
 
     results = tuner.fit()
 
