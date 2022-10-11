@@ -353,7 +353,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--readout_reg_scale",
-        default=0,
+        default=0.0076,
         type=float,
         help="weight regularization coefficient for readout module.",
     )
