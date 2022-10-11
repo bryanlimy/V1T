@@ -184,7 +184,7 @@ def main(args):
         if num_gpus > 0:
             trainable = tune.with_resources(
                 train_function,
-                resources={"cpu": args.num_workers, "gpu": 1},
+                resources={"cpu": 4, "gpu": 1},
             )
         tuner = tune.Tuner(
             trainable,
