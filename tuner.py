@@ -116,7 +116,7 @@ def main(args):
                 "bias_mode": 0,
                 "criterion": "poisson",
                 "lr": 1e-3,
-                "core_reg_scale": 0,
+                "core_reg_scale": 1,
                 "readout_reg_scale": 0.0076,
                 "shifter_reg_scale": 0,
                 "ds_scale": True,
