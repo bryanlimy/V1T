@@ -113,7 +113,6 @@ def main(args):
         )
         points_to_evaluate = [
             {
-                "core": "stacked2d",
                 "dropout": 0.0,
                 "disable_grid_predictor": False,
                 "grid_predictor_dim": 2,
@@ -148,7 +147,6 @@ def main(args):
         )
         points_to_evaluate = [
             {
-                "core": "stn",
                 "num_filters": 16,
                 "dropout": 0.0,
                 "disable_grid_predictor": False,
