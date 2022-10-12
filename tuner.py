@@ -246,7 +246,6 @@ def main(args):
         verbose=args.verbose,
         trial_name_creator=trial_name_creator,
         trial_dirname_creator=trial_dirname_creator,
-        server_port=6234,
         resume="LOCAL" if args.resume_dir else None,
         max_concurrent_trials=max_concurrent,
     )
