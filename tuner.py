@@ -217,9 +217,11 @@ def main(args):
             "disable_grid_predictor",
         ],
         max_progress_rows=6,
-        max_column_length=6,
+        max_error_rows=3,
+        max_column_length=20,
         max_report_frequency=30,
         metric=metric,
+        mode=mode,
         sort_by_metric=True,
     )
 
