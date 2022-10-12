@@ -209,7 +209,7 @@ def main(args):
         partial(
             train_function,
             data_dir=abspath(args.dataset),
-            output_dir=abspath(os.path.join(args.dataset, "output_dir")),
+            output_dir=abspath(os.path.join(args.output_dir, "output_dir")),
             readout="gaussian2d",
             epochs=args.epochs,
             batch_size=args.batch_size,
