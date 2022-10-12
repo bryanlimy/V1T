@@ -8,6 +8,8 @@ from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
+from sensorium.models import utils as model_utils
+
 
 class PreNorm(nn.Module):
     def __init__(self, dim: int, fn: nn.Module):
@@ -27,7 +29,6 @@ class FeedForward(nn.Module):
             nn.GELU(),
             nn.Dropout(p=dropout),
             nn.Linear(in_features=hidden_dim, out_features=dim),
-            nn.Dropout(p=dropout),
         )
 
     def forward(self, inputs: torch.Tensor):
@@ -85,7 +86,7 @@ class Transformer(nn.Module):
     ):
         super(Transformer, self).__init__()
         layers = []
-        for _ in range(num_layers):
+        for i in range(num_layers):
             layers.append(
                 nn.ModuleList(
                     [
@@ -114,32 +115,46 @@ class Transformer(nn.Module):
         return outputs
 
 
-class Image2Patches(nn.Module):
+class PatchEmbedding(nn.Module):
     def __init__(
         self,
         image_shape: t.Tuple[int, int, int],
+        emb_dim: int,
         patch_size: int,
         stride: int = 1,
     ):
-        super(Image2Patches, self).__init__()
-        self.patch_size = patch_size
-        self.stride = stride
-        new_h = int(((image_shape[1] - (patch_size - 1) - 1) / stride) + 1)
-        new_w = int(((image_shape[2] - (patch_size - 1) - 1) / stride) + 1)
-        self.rearrange = Rearrange(
-            "b c h w p1 p2 -> b (h w) (p1 p2 c)",
-            h=new_h,
-            w=new_w,
-            p1=patch_size,
-            p2=patch_size,
+        super(PatchEmbedding, self).__init__()
+        c, h, w = image_shape
+        self.projection = nn.Sequential(
+            nn.Conv2d(
+                in_channels=c,
+                out_channels=emb_dim,
+                kernel_size=patch_size,
+                stride=stride,
+            ),
+            Rearrange("b c h w -> b (h w) c"),
         )
-        self.num_patches = new_h * new_w
+        output_shape = model_utils.conv2d_shape(
+            input_shape=image_shape,
+            num_filters=emb_dim,
+            kernel_size=patch_size,
+            stride=stride,
+        )
+        self.output_shape = (output_shape[0], output_shape[1] * output_shape[2])
+
+        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
+        self.positions = nn.Parameter(torch.randn((self.num_patches + 1, emb_dim)))
+
+    @property
+    def num_patches(self):
+        return self.output_shape[1]
 
     def forward(self, inputs: torch.Tensor):
-        patches = inputs.unfold(
-            dimension=2, size=self.patch_size, step=self.stride
-        ).unfold(dimension=3, size=self.patch_size, step=self.stride)
-        patches = self.rearrange(patches)
+        batch_size = inputs.size(0)
+        patches = self.projection(inputs)
+        cls_tokens = repeat(self.cls_token, "() n e -> b n e", b=batch_size)
+        patches = torch.cat([cls_tokens, patches], dim=1)
+        patches += self.positions
         return patches
 
 
@@ -160,7 +175,6 @@ class ViTCore(Core):
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
-        (c, h, w) = input_shape
         patch_size = args.patch_size
         emb_dim = args.emb_dim
         heads = args.num_heads
@@ -168,20 +182,13 @@ class ViTCore(Core):
         num_layers = args.num_layers
         dim_head = args.dim_head
         dropout = args.dropout
-        emb_dropout = args.dropout
 
-        patch_dim = patch_size * patch_size * c
-        self.image2patches = Image2Patches(
+        self.patch_embedding = PatchEmbedding(
             image_shape=input_shape,
+            emb_dim=emb_dim,
             patch_size=patch_size,
-            stride=1 if args.crop_mode else patch_size,
+            stride=patch_size,
         )
-        num_patches = self.image2patches.num_patches
-        self.patches2emb = nn.Linear(in_features=patch_dim, out_features=emb_dim)
-
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
-        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
-        self.emb_dropout = nn.Dropout(p=emb_dropout)
 
         self.transformer = Transformer(
             dim=emb_dim,
@@ -193,7 +200,7 @@ class ViTCore(Core):
         )
 
         # calculate latent height and width based on num_patches
-        (latent_height, latent_width) = find_shape(num_patches)
+        (latent_height, latent_width) = find_shape(self.patch_embedding.num_patches)
         self.output_shape = (emb_dim, latent_height, latent_width)
 
         # reshape transformer output from (batch_size, num_patches, channels)
@@ -206,21 +213,9 @@ class ViTCore(Core):
         )
 
     def forward(self, inputs: torch.Tensor):
-        outputs = self.image2patches(inputs)
-        outputs = self.patches2emb(outputs)
-
-        batch_size, num_patches, _ = outputs.shape
-
-        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
-        outputs = torch.cat((cls_tokens, outputs), dim=1)
-        outputs += self.pos_embedding[:, : num_patches + 1]
-        outputs = self.emb_dropout(outputs)
-
+        outputs = self.patch_embedding(inputs)
         outputs = self.transformer(outputs)
-
         # remove cls_token
         outputs = outputs[:, :-1, :]
-
         outputs = self.output_layer(outputs)
-
         return outputs
