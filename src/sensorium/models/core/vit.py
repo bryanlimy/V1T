@@ -199,21 +199,23 @@ class ViTCore(Core):
 
         # reshape transformer output from (batch_size, num_patches, channels)
         # to (batch_size, channel, latent height, latent width)
-        self.output_layer = Rearrange(
+        self.rearrange = Rearrange(
             "b (lh lw) c -> b c lh lw",
             lh=latent_height,
             lw=latent_width,
             c=emb_dim,
         )
+        self.activation = nn.ELU()
 
     def forward(self, inputs: torch.Tensor):
+        batch_size = inputs.size(0)
         outputs = self.image2patches(inputs)
         outputs = self.patches2emb(outputs)
-        batch_size, num_patches, _ = outputs.shape
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
-        outputs += self.pos_embedding[:, : num_patches + 1]
+        outputs += self.pos_embedding
         outputs = self.emb_dropout(outputs)
         outputs = self.transformer(outputs)
-        outputs = self.output_layer(outputs)
+        outputs = self.rearrange(outputs)
+        outputs = self.activation(outputs)
         return outputs
