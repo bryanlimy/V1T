@@ -11,10 +11,9 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 
-from sensorium import losses
+from sensorium import losses, data
 from sensorium.models import Model
 from sensorium.metrics import Metrics
-from sensorium.data import get_training_ds
 from sensorium.utils import yaml, tensorboard
 
 
@@ -312,7 +311,7 @@ def get_batch_size(args):
         assert args.batch_size > 1
     else:
         device, mouse_id = args.device, 2
-        train_ds, _, _ = get_training_ds(
+        train_ds, _, _ = data.get_training_ds(
             args,
             data_dir=args.dataset,
             mouse_ids=[mouse_id],

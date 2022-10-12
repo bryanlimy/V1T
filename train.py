@@ -10,11 +10,10 @@ from shutil import rmtree
 from ray.air import session
 from torch.utils.data import DataLoader
 
-from sensorium import losses, metrics
+from sensorium import losses, metrics, data
 from sensorium.models import get_model, Model
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
-from sensorium.data import get_training_ds, CycleDataloaders
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
@@ -67,7 +66,7 @@ def train(
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     mouse_ids = list(ds.keys())
     results = {mouse_id: {} for mouse_id in mouse_ids}
-    ds = CycleDataloaders(ds)
+    ds = data.CycleDataloaders(ds)
     # call optimizer.step() after iterate one batch from each mouse
     update_frequency = len(mouse_ids)
     model.train(True)
@@ -144,7 +143,7 @@ def main(args):
 
     utils.get_batch_size(args)
 
-    train_ds, val_ds, test_ds = get_training_ds(
+    train_ds, val_ds, test_ds = data.get_training_ds(
         args,
         data_dir=args.dataset,
         mouse_ids=args.mouse_ids,

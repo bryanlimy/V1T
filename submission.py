@@ -10,7 +10,7 @@ from datetime import datetime
 from torch.utils.data import DataLoader
 
 from sensorium.utils import utils
-from sensorium.data import get_submission_ds
+from sensorium import data
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
@@ -121,7 +121,7 @@ def main(args):
 
     utils.get_device(args)
 
-    test_ds, final_test_ds = get_submission_ds(
+    test_ds, final_test_ds = data.get_submission_ds(
         args,
         data_dir=args.dataset,
         batch_size=args.batch_size,

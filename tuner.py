@@ -3,20 +3,46 @@ import ray
 import torch
 import pickle
 import argparse
+from ray import tune
 from shutil import rmtree
-from ray import air, tune
-from ray.air import session
-from ray.air.config import RunConfig
-from ray.tune.search.hebo import HEBOSearch
 from os.path import abspath
+from ray.air import session
+from functools import partial
+from datetime import datetime
+from ray.tune import CLIReporter
+from ray.tune.search.hebo import HEBOSearch
 from ray.tune.schedulers import ASHAScheduler
 
 import train as trainer
 
 
+def trial_name_creator(trial: tune.experiment.trial.Trial):
+    return f"{trial.trial_id}"
+
+
+def trial_dirname_creator(trial: tune.experiment.trial.Trial):
+    return f"{datetime.now():%Y-%m-%d-%Hh%Mm}-{trial.trial_id}"
+
+
 class Args:
-    def __init__(self, config, trial_id: str):
-        self.output_dir = os.path.join(config["output_dir"], trial_id)
+    def __init__(
+        self,
+        config: dict,
+        data_dir: str,
+        output_dir: str,
+        readout: str,
+        epochs: int,
+        batch_size: int,
+        num_workers: int,
+        device: str,
+    ):
+        self.dataset = data_dir
+        self.output_dir = output_dir
+        self.readout = readout
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.device = device
         self.mouse_ids = None
         self.pretrain_core = ""
         self.depth_scale = 1
@@ -31,8 +57,26 @@ class Args:
                 setattr(self, key, value)
 
 
-def train_function(config):
-    args = Args(config, trial_id=session.get_trial_id())
+def train_function(
+    config: dict,
+    data_dir: str,
+    output_dir: str,
+    readout: str,
+    epochs: int,
+    batch_size: int,
+    num_workers: int,
+    device: str,
+):
+    args = Args(
+        config,
+        data_dir=data_dir,
+        output_dir=os.path.join(output_dir, session.get_trial_id()),
+        readout=readout,
+        epochs=epochs,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        device=device,
+    )
     return trainer.main(args)
 
 
@@ -42,14 +86,7 @@ def main(args):
 
     # default search space
     search_space = {
-        "dataset": abspath(args.dataset),
-        "output_dir": abspath(os.path.join(args.output_dir, "output_dir")),
-        "epochs": args.epochs,
-        "batch_size": args.batch_size,
-        "readout": "gaussian2d",
-        "num_workers": args.num_workers,
         "plus": False,
-        "device": args.device,
         "disable_grid_predictor": tune.choice([True, False]),
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
@@ -142,55 +179,59 @@ def main(args):
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
 
-    if args.resume_dir:
-        tuner = tune.Tuner.restore(abspath(args.resume_dir))
-        tuner._local_tuner._is_restored = True
-        tuner._local_tuner._param_space = search_space
-        tuner._local_tuner._tune_config.num_samples = args.num_samples
-        # del tuner._local_tuner._resume_config
-    else:
-        metric, mode = "single_trial_correlation", "max"
-        num_gpus = torch.cuda.device_count()
-        max_concurrent = max(1, num_gpus)
+    metric, mode = "single_trial_correlation", "max"
+    num_gpus = torch.cuda.device_count()
+    max_concurrent = max(1, num_gpus)
 
-        hebo = HEBOSearch(
-            metric=metric,
-            mode=mode,
-            points_to_evaluate=points_to_evaluate,
-            evaluated_rewards=evaluated_rewards,
-            max_concurrent=max_concurrent,
-        )
-        scheduler = ASHAScheduler(
-            time_attr="iterations",
-            max_t=args.epochs // 10,
-            grace_period=2,
-            reduction_factor=2,
-        )
+    scheduler = ASHAScheduler(
+        metric=metric,
+        mode=mode,
+        max_t=args.epochs // 10,
+        grace_period=1,
+        reduction_factor=2,
+    )
+    hebo = HEBOSearch(
+        metric=metric,
+        mode=mode,
+        points_to_evaluate=points_to_evaluate,
+        evaluated_rewards=evaluated_rewards,
+        max_concurrent=max_concurrent,
+    )
+    reporter = CLIReporter(
+        metric_columns=[
+            "single_trial_correlation",
+            "correlation_to_average",
+            "iterations",
+        ]
+    )
 
-        trainable = train_function
-        if num_gpus > 0:
-            trainable = tune.with_resources(
-                train_function,
-                resources={"cpu": args.num_cpus, "gpu": 1},
-            )
-        tuner = tune.Tuner(
-            trainable,
-            param_space=search_space,
-            tune_config=tune.TuneConfig(
-                metric=metric,
-                mode=mode,
-                search_alg=hebo,
-                scheduler=scheduler,
-                num_samples=args.num_samples,
-            ),
-            run_config=RunConfig(
-                local_dir=args.output_dir,
-                verbose=args.verbose,
-                checkpoint_config=air.CheckpointConfig(checkpoint_frequency=2),
-            ),
-        )
-
-    results = tuner.fit()
+    results = tune.run(
+        partial(
+            train_function,
+            data_dir=abspath(args.dataset),
+            output_dir=abspath(os.path.join(args.dataset, "output_dir")),
+            readout="gaussian2d",
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            device=args.device,
+        ),
+        name=args.resume_dir if args.resume_dir else None,
+        resources_per_trial={"cpu": args.num_cpus, "gpu": 1 if num_gpus else 0},
+        config=search_space,
+        num_samples=args.num_samples,
+        local_dir=args.output_dir,
+        search_alg=hebo,
+        scheduler=scheduler,
+        progress_reporter=reporter,
+        checkpoint_freq=2,
+        verbose=args.verbose,
+        trial_name_creator=trial_name_creator,
+        trial_dirname_creator=trial_dirname_creator,
+        server_port=6234,
+        resume="LOCAL" if args.resume_dir else None,
+        max_concurrent_trials=max_concurrent,
+    )
 
     with open(os.path.join(args.output_dir, "result.pkl"), "wb") as file:
         pickle.dump(results.get_best_result(), file)
