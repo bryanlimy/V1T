@@ -234,7 +234,7 @@ def main(args):
             num_workers=args.num_workers,
             device=args.device,
         ),
-        name=args.resume_dir if args.resume_dir else None,
+        name=os.path.basename(args.resume_dir) if args.resume_dir else None,
         resources_per_trial={"cpu": args.num_cpus, "gpu": 1 if num_gpus else 0},
         config=search_space,
         num_samples=args.num_samples,
