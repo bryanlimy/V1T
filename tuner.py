@@ -102,15 +102,10 @@ def train_function(
     return trainer.main(args)
 
 
-def main(args):
-    if args.clear_output_dir and os.path.isdir(args.output_dir):
-        rmtree(args.output_dir)
-    if not os.path.isdir(args.output_dir):
-        os.makedirs(args.output_dir)
-
+def get_search_space(args):
     # default search space
     search_space = {
-        "plus": False,
+        "plus": args.plus,
         "disable_grid_predictor": tune.choice([True, False]),
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
@@ -202,6 +197,17 @@ def main(args):
         evaluated_rewards = []
     else:
         raise NotImplementedError(f"Core {args.core} has not been implemented.")
+
+    return search_space, points_to_evaluate, evaluated_rewards
+
+
+def main(args):
+    if args.clear_output_dir and os.path.isdir(args.output_dir):
+        rmtree(args.output_dir)
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
+    search_space, points_to_evaluate, evaluated_rewards = get_search_space(args)
 
     metric, mode = "single_trial_correlation", "max"
     num_gpus = torch.cuda.device_count()
@@ -303,6 +309,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_workers", default=2, type=int, help="number of works for DataLoader."
     )
+    parser.add_argument("--plus", actiion="store_true")
 
     # model settings
     parser.add_argument(
