@@ -187,7 +187,7 @@ class ViTCore(Core):
             image_shape=input_shape,
             emb_dim=emb_dim,
             patch_size=patch_size,
-            stride=patch_size,
+            stride=patch_size if args.crop_mode == 0 else 1,
         )
 
         self.transformer = Transformer(
