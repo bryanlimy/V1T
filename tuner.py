@@ -144,6 +144,10 @@ def main(args):
 
     if args.resume_dir:
         tuner = tune.Tuner.restore(abspath(args.resume_dir))
+        tuner._local_tuner._is_restored = False
+        tuner._local_tuner._param_space = search_space
+        tuner._local_tuner._tune_config.num_samples = args.num_samples
+        del tuner._local_tuner._resume_config
     else:
         metric, mode = "single_trial_correlation", "max"
         num_gpus = torch.cuda.device_count()
@@ -189,7 +193,7 @@ def main(args):
     results = tuner.fit()
 
     with open(os.path.join(args.output_dir, "result.pkl"), "wb") as file:
-        pickle.dump(results, file)
+        pickle.dump(results.get_best_result(), file)
 
     print(f"\n\nBest setting\n{results.get_best_result()}")
 
