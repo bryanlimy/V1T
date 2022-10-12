@@ -147,7 +147,7 @@ def main(args):
         tuner._local_tuner._is_restored = False
         tuner._local_tuner._param_space = search_space
         # tuner._local_tuner._tune_config.num_samples = args.num_samples
-        # del tuner._local_tuner._resume_config
+        del tuner._local_tuner._resume_config
     else:
         metric, mode = "single_trial_correlation", "max"
         num_gpus = torch.cuda.device_count()
