@@ -310,6 +310,13 @@ if __name__ == "__main__":
     parser.add_argument("--mlp_dim", type=int, default=64)
     parser.add_argument("--dim_head", type=int, default=64)
 
+    parser.add_argument(
+        "--core_reg_scale",
+        default=0,
+        type=float,
+        help="weight regularization coefficient for core module.",
+    )
+
     # Gaussian2DReadout
     parser.add_argument("--disable_grid_predictor", action="store_true")
     parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
@@ -323,9 +330,21 @@ if __name__ == "__main__":
         "1: initialize bias with the mean responses"
         "2: initialize bias with the mean responses divide by standard deviation",
     )
+    parser.add_argument(
+        "--readout_reg_scale",
+        default=0.0076,
+        type=float,
+        help="weight regularization coefficient for readout module.",
+    )
 
     # Shifter
     parser.add_argument("--use_shifter", action="store_true")
+    parser.add_argument(
+        "--shifter_reg_scale",
+        default=0.0,
+        type=float,
+        help="weight regularization coefficient for shifter module.",
+    )
 
     # training settings
     parser.add_argument(
@@ -350,24 +369,6 @@ if __name__ == "__main__":
         default=1.0,
         type=float,
         help="the coefficient to scale loss for neurons in depth of 240 to 260.",
-    )
-    parser.add_argument(
-        "--core_reg_scale",
-        default=0,
-        type=float,
-        help="weight regularization coefficient for core module.",
-    )
-    parser.add_argument(
-        "--readout_reg_scale",
-        default=0.0076,
-        type=float,
-        help="weight regularization coefficient for readout module.",
-    )
-    parser.add_argument(
-        "--shifter_reg_scale",
-        default=0.0,
-        type=float,
-        help="weight regularization coefficient for shifter module.",
     )
     parser.add_argument(
         "--ds_scale",
