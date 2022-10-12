@@ -402,7 +402,10 @@ def get_training_ds(
 
 
 def get_submission_ds(
-    args, data_dir: str, batch_size: int, device: torch.device = torch.device("cpu")
+    args,
+    data_dir: str,
+    batch_size: int,
+    device: torch.device = torch.device("cpu"),
 ):
     """
     Get DataLoaders for submission to Sensorium and Sensorium+
@@ -431,12 +434,13 @@ def get_submission_ds(
             MiceDataset(args, tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
-    for mouse_id in [0, 1]:
-        final_test_ds[mouse_id] = DataLoader(
-            MiceDataset(args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id),
-            **test_kwargs,
-        )
-        args.output_shapes[mouse_id] = (test_ds[mouse_id].dataset.num_neurons,)
+        if mouse_id in (0, 1):
+            final_test_ds[mouse_id] = DataLoader(
+                MiceDataset(
+                    args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id
+                ),
+                **test_kwargs,
+            )
 
     return test_ds, final_test_ds
 

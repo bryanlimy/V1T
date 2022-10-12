@@ -109,16 +109,20 @@ def generate_submission(
     )
 
 
+def load_ensemble(args):
+    model = load_model(args)
+    return model
+
+
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
 
     utils.load_args(args)
 
-    if 0 not in args.output_shapes:
-        print("Warning: model was on trained on Mouse 1")
-    if 1 not in args.output_shapes:
-        print("Warning: model was on trained on Mouse 2")
+    assert (
+        0 in args.output_shapes and 1 in args.output_shapes
+    ), "The saved model was not trained on Mouse 1 and 2."
 
     utils.get_device(args)
 
@@ -129,7 +133,7 @@ def main(args):
         device=args.device,
     )
 
-    model = utils.load_model(args)
+    model = load_ensemble(args)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
@@ -141,26 +145,24 @@ def main(args):
     )
 
     # Sensorium challenge
-    if 0 in test_ds:
-        generate_submission(
-            args,
-            mouse_id=0,
-            test_ds=test_ds,
-            final_test_ds=final_test_ds,
-            model=model,
-            csv_dir=os.path.join(csv_dir, "sensorium"),
-        )
+    generate_submission(
+        args,
+        mouse_id=0,
+        test_ds=test_ds,
+        final_test_ds=final_test_ds,
+        model=model,
+        csv_dir=os.path.join(csv_dir, "sensorium"),
+    )
 
     # Sensorium+ challenge
-    if 1 in test_ds:
-        generate_submission(
-            args,
-            mouse_id=1,
-            test_ds=test_ds,
-            final_test_ds=final_test_ds,
-            model=model,
-            csv_dir=os.path.join(csv_dir, "sensorium+"),
-        )
+    generate_submission(
+        args,
+        mouse_id=1,
+        test_ds=test_ds,
+        final_test_ds=final_test_ds,
+        model=model,
+        csv_dir=os.path.join(csv_dir, "sensorium+"),
+    )
 
     print(f"\nSubmission results saved to {csv_dir}.")
 
