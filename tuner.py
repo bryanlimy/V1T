@@ -199,10 +199,23 @@ def main(args):
     )
     reporter = CLIReporter(
         metric_columns=[
+            "iterations",
             "single_trial_correlation",
             "correlation_to_average",
-            "iterations",
-        ]
+        ],
+        parameter_columns=[
+            "Trial name",
+            "status",
+            "criterion",
+            "num_layers",
+            "dropout",
+            "core_lr_scale",
+            "bias_mode",
+            "crop_mode",
+            "ds_scale",
+            "use_shifter",
+            "disable_grid_predictor",
+        ],
     )
 
     results = tune.run(
