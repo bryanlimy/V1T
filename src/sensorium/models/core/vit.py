@@ -140,14 +140,11 @@ class PatchEmbedding(nn.Module):
             kernel_size=patch_size,
             stride=stride,
         )
-        self.output_shape = (output_shape[0], output_shape[1] * output_shape[2])
+        num_patches = output_shape[1] * output_shape[2] + 1
+        self.output_shape = (num_patches, output_shape[0])
 
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
-        self.positions = nn.Parameter(torch.randn((self.num_patches, emb_dim)))
-
-    @property
-    def num_patches(self):
-        return self.output_shape[1] + 1
+        self.positions = nn.Parameter(torch.randn((num_patches, emb_dim)))
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
@@ -164,6 +161,39 @@ def find_shape(num_patches: int):
         num1 -= 1
     num2 = num_patches // num1
     return num1, num2
+
+
+class UpsampleConv(nn.Module):
+    def __init__(self, input_shape: t.Tuple[int, int]):
+        super(UpsampleConv, self).__init__()
+        l_in, c = input_shape
+        l_out = self.next_perfect_square(l_in)
+        kernel_size = self.get_kernel_size(l_in=l_in, l_out=l_out)
+        self.dense = nn.Sequential(
+            Rearrange("b l c -> b c l"),
+            nn.ConvTranspose1d(
+                in_channels=c,
+                out_channels=c,
+                kernel_size=kernel_size,
+                stride=1,
+                padding=0,
+                output_padding=0,
+                dilation=1,
+            ),
+            nn.ELU(),
+            Rearrange("b c l -> b l c"),
+        )
+        self.output_shape = (l_out, c)
+
+    def next_perfect_square(self, number: int):
+        a = math.floor(math.sqrt(number)) + 1
+        return a * a
+
+    def get_kernel_size(self, l_in: int, l_out: int):
+        return l_out - l_in + 1
+
+    def forward(self, inputs: torch.Tensor):
+        return self.dense(inputs)
 
 
 @register("vit")
@@ -187,8 +217,9 @@ class ViTCore(Core):
             image_shape=input_shape,
             emb_dim=emb_dim,
             patch_size=patch_size,
-            stride=patch_size if args.crop_mode == 0 else 1,
+            stride=patch_size if max(input_shape) > 100 else 1,
         )
+        output_shape = self.patch_embedding.output_shape
 
         self.transformer = Transformer(
             dim=emb_dim,
@@ -199,9 +230,11 @@ class ViTCore(Core):
             dropout=dropout,
         )
 
+        self.upsample = UpsampleConv(input_shape=output_shape)
+        output_shape = self.upsample.output_shape
+
         # calculate latent height and width based on num_patches
-        (latent_height, latent_width) = find_shape(self.patch_embedding.num_patches)
-        self.output_shape = (emb_dim, latent_height, latent_width)
+        (latent_height, latent_width) = find_shape(output_shape[0])
 
         # reshape transformer output from (batch_size, num_patches, channels)
         # to (batch_size, channel, latent height, latent width)
@@ -211,9 +244,11 @@ class ViTCore(Core):
             lw=latent_width,
             c=emb_dim,
         )
+        self.output_shape = (emb_dim, latent_height, latent_width)
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)
         outputs = self.transformer(outputs)
+        outputs = self.upsample(outputs)
         outputs = self.output_layer(outputs)
         return outputs
