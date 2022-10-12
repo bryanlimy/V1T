@@ -1,5 +1,6 @@
 import os
 import ray
+import sys
 import torch
 import pickle
 import argparse
@@ -16,12 +17,33 @@ from ray.tune.schedulers import ASHAScheduler
 import train as trainer
 
 
+class Logger:
+    def __init__(self, filename: str):
+        self.console = sys.stdout
+        if not os.path.isdir(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
+        self.file = open(filename, "w")
+
+    def write(self, message):
+        self.console.write(message)
+        self.file.write(message)
+        self.flush()
+
+    def flush(self):
+        self.console.flush()
+        self.file.flush()
+
+
+def get_timestamp():
+    return f"{datetime.now():%Y%m%d-%Hh%Mm}"
+
+
 def trial_name_creator(trial: tune.experiment.trial.Trial):
     return f"{trial.trial_id}"
 
 
 def trial_dirname_creator(trial: tune.experiment.trial.Trial):
-    return f"{datetime.now():%Y-%m-%d-%Hh%Mm}-{trial.trial_id}"
+    return f"{get_timestamp()}-{trial.trial_id}"
 
 
 class Args:
@@ -83,6 +105,8 @@ def train_function(
 def main(args):
     if args.clear_output_dir and os.path.isdir(args.output_dir):
         rmtree(args.output_dir)
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
 
     # default search space
     search_space = {
@@ -215,24 +239,32 @@ def main(args):
         max_progress_rows=10,
         max_error_rows=3,
         max_column_length=20,
-        max_report_frequency=30,
+        max_report_frequency=60,
         metric=metric,
         mode=mode,
         sort_by_metric=True,
     )
 
+    name = (
+        os.path.basename(args.resume_dir)
+        if args.resume_dir
+        else f"{get_timestamp()}-{args.core}"
+    )
+
+    sys.stdout = Logger(filename=os.path.join(args.output_dir, name, "output.log"))
+
     results = tune.run(
         partial(
             train_function,
             data_dir=abspath(args.dataset),
-            output_dir=abspath(os.path.join(args.output_dir, "output_dir")),
+            output_dir=abspath(os.path.join(args.output_dir, name, "output_dir")),
             readout="gaussian2d",
             epochs=args.epochs,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             device=args.device,
         ),
-        name=os.path.basename(args.resume_dir) if args.resume_dir else None,
+        name=name,
         resources_per_trial={"cpu": args.num_cpus, "gpu": 1 if num_gpus else 0},
         config=search_space,
         num_samples=args.num_samples,
