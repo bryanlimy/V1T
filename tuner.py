@@ -187,7 +187,7 @@ def main(args):
         metric=metric,
         mode=mode,
         max_t=args.epochs // 10,
-        grace_period=1,
+        grace_period=2,
         reduction_factor=2,
     )
     hebo = HEBOSearch(
@@ -216,6 +216,11 @@ def main(args):
             "use_shifter",
             "disable_grid_predictor",
         ],
+        max_progress_rows=6,
+        max_column_length=6,
+        max_report_frequency=30,
+        metric=metric,
+        sort_by_metric=True,
     )
 
     results = tune.run(
