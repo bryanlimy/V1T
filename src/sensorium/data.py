@@ -5,7 +5,7 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
-from skimage.transform import rescale, resize
+from skimage.transform import rescale, resize, rotate
 from torch.utils.data import Dataset, DataLoader
 
 from sensorium.utils import utils
@@ -177,9 +177,9 @@ class MiceDataset(Dataset):
 
         image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
         self.retinotopy = self.get_retinotopy(mouse_id=mouse_id)
-        assert args.crop_mode in (0, 1, 2)
+        assert args.crop_mode in (0, 1, 2, 3)
         self.crop_mode = args.crop_mode
-        if self.crop_mode in (1, 2):
+        if self.crop_mode > 0:
             image_shape = (1, 36, 64)
         # include the 3 behaviour data as channel of the image
         if self.plus:
@@ -245,11 +245,20 @@ class MiceDataset(Dataset):
         image = self.resize_image(image)
         return image
 
+    def crop_left_half(self, image: np.ndarray, width: int = 128):
+        """Crop left half of the image then rotate s.t. longer edge is width."""
+        image = image[..., :width]
+        image = np.rot90(image, k=1, axes=(1, 2))
+        image = self.resize_image(image)
+        return image
+
     def transform_image(self, image: np.ndarray):
         if self.crop_mode == 1:
             image = self.resize_image(image)
         elif self.crop_mode == 2:
             image = self.retina_crop(image)
+        elif self.crop_mode == 3:
+            image = self.crop_left_half(image)
         stats = self.image_stats
         image = (image - stats["mean"]) / stats["std"]
         return image
