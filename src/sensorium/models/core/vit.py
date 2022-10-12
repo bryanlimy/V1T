@@ -143,11 +143,11 @@ class PatchEmbedding(nn.Module):
         self.output_shape = (output_shape[0], output_shape[1] * output_shape[2])
 
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
-        self.positions = nn.Parameter(torch.randn((self.num_patches + 1, emb_dim)))
+        self.positions = nn.Parameter(torch.randn((self.num_patches, emb_dim)))
 
     @property
     def num_patches(self):
-        return self.output_shape[1]
+        return self.output_shape[1] + 1
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
@@ -215,7 +215,5 @@ class ViTCore(Core):
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)
         outputs = self.transformer(outputs)
-        # remove cls_token
-        outputs = outputs[:, :-1, :]
         outputs = self.output_layer(outputs)
         return outputs
