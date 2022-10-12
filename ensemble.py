@@ -109,9 +109,39 @@ def generate_submission(
     )
 
 
-def load_ensemble(args):
-    model = load_model(args)
-    return model
+from sensorium.models.model import get_model, Model
+
+from collections import namedtuple
+
+
+class Args:
+    def __init__(self, args, output_dir: str):
+        self.device = args.device
+        self.output_dir = output_dir
+
+
+class EnsembleModel(nn.Module):
+    def __init__(
+        self, args, saved_models: t.Dict[str, str], ds: t.Dict[int, DataLoader]
+    ):
+        super(EnsembleModel, self).__init__()
+        self.device = args.device
+        ensemble = {}
+        model_args = {}
+        for name, output_dir in saved_models.items():
+            model_args[name] = Args(args, output_dir)
+            utils.load_args(model_args[name])
+            model = Model(args=model_args[name], ds=ds)
+            utils.load_model_state(
+                args,
+                model=model,
+                filename=os.path.join(
+                    model_args[name].output_dir, "ckpt", "best_model.pt"
+                ),
+            )
+            temp = torch.rand(2, 1, 36, 64)
+            outputs = model(temp, mouse_id=0, pupil_center=None)
+        self.ensemble = nn.ModuleDict(ensemble)
 
 
 def main(args):
@@ -119,10 +149,6 @@ def main(args):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
 
     utils.load_args(args)
-
-    assert (
-        0 in args.output_shapes and 1 in args.output_shapes
-    ), "The saved model was not trained on Mouse 1 and 2."
 
     utils.get_device(args)
 
@@ -133,7 +159,11 @@ def main(args):
         device=args.device,
     )
 
-    model = load_ensemble(args)
+    model = EnsembleModel(
+        args,
+        saved_models={"stacked2d": "runs/sensorium/077_stacked2d_gaussian2d_1cm/"},
+        ds=test_ds,
+    )
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
