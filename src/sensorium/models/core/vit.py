@@ -167,8 +167,10 @@ class UpsampleConv(nn.Module):
     def __init__(self, input_shape: t.Tuple[int, int]):
         super(UpsampleConv, self).__init__()
         l_in, c = input_shape
-        l_out = self.next_perfect_square(l_in)
+        latent_dim = self.next_perfect_square(l_in)
+        l_out = latent_dim * latent_dim
         kernel_size = self.get_kernel_size(l_in=l_in, l_out=l_out)
+
         self.upsample = nn.Sequential(
             Rearrange("b l c -> b c l"),
             nn.ConvTranspose1d(
@@ -180,14 +182,13 @@ class UpsampleConv(nn.Module):
                 output_padding=0,
                 dilation=1,
             ),
+            Rearrange("b c (lh lw) -> b c lh lw", lh=latent_dim, lw=latent_dim),
             nn.ELU(),
-            Rearrange("b c l -> b l c"),
         )
-        self.output_shape = (l_out, c)
+        self.output_shape = (c, latent_dim, latent_dim)
 
     def next_perfect_square(self, number: int):
-        a = math.floor(math.sqrt(number)) + 1
-        return a * a
+        return math.floor(math.sqrt(number)) + 1
 
     def get_kernel_size(self, l_in: int, l_out: int):
         return l_out - l_in + 1
@@ -231,24 +232,10 @@ class ViTCore(Core):
         )
 
         self.upsample = UpsampleConv(input_shape=output_shape)
-        output_shape = self.upsample.output_shape
-
-        # calculate latent height and width based on num_patches
-        (latent_height, latent_width) = find_shape(output_shape[0])
-
-        # reshape transformer output from (batch_size, num_patches, channels)
-        # to (batch_size, channel, latent height, latent width)
-        self.output_layer = Rearrange(
-            "b (lh lw) c -> b c lh lw",
-            lh=latent_height,
-            lw=latent_width,
-            c=emb_dim,
-        )
-        self.output_shape = (emb_dim, latent_height, latent_width)
+        self.output_shape = self.upsample.output_shape
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)
         outputs = self.transformer(outputs)
         outputs = self.upsample(outputs)
-        outputs = self.output_layer(outputs)
         return outputs
