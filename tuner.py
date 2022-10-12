@@ -146,7 +146,7 @@ def main(args):
         tuner = tune.Tuner.restore(abspath(args.resume_dir))
         tuner._local_tuner._is_restored = True
         tuner._local_tuner._param_space = search_space
-        # tuner._local_tuner._tune_config.num_samples = args.num_samples
+        tuner._local_tuner._tune_config.num_samples = args.num_samples
         # del tuner._local_tuner._resume_config
     else:
         metric, mode = "single_trial_correlation", "max"
