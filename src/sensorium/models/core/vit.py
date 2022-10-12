@@ -8,6 +8,8 @@ from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
+from sensorium.models import utils as model_utils
+
 
 class PreNorm(nn.Module):
     def __init__(self, dim: int, fn: nn.Module):
@@ -27,7 +29,6 @@ class FeedForward(nn.Module):
             nn.GELU(),
             nn.Dropout(p=dropout),
             nn.Linear(in_features=hidden_dim, out_features=dim),
-            nn.Dropout(p=dropout),
         )
 
     def forward(self, inputs: torch.Tensor):
@@ -85,7 +86,7 @@ class Transformer(nn.Module):
     ):
         super(Transformer, self).__init__()
         layers = []
-        for _ in range(num_layers):
+        for i in range(num_layers):
             layers.append(
                 nn.ModuleList(
                     [
@@ -114,32 +115,47 @@ class Transformer(nn.Module):
         return outputs
 
 
-class Image2Patches(nn.Module):
+class PatchEmbedding(nn.Module):
     def __init__(
         self,
         image_shape: t.Tuple[int, int, int],
+        emb_dim: int,
         patch_size: int,
         stride: int = 1,
+        dropout: float = 0.0,
     ):
-        super(Image2Patches, self).__init__()
-        self.patch_size = patch_size
-        self.stride = stride
-        new_h = int(((image_shape[1] - (patch_size - 1) - 1) / stride) + 1)
-        new_w = int(((image_shape[2] - (patch_size - 1) - 1) / stride) + 1)
-        self.rearrange = Rearrange(
-            "b c h w p1 p2 -> b (h w) (p1 p2 c)",
-            h=new_h,
-            w=new_w,
-            p1=patch_size,
-            p2=patch_size,
+        super(PatchEmbedding, self).__init__()
+        c, h, w = image_shape
+        self.projection = nn.Sequential(
+            nn.Conv2d(
+                in_channels=c,
+                out_channels=emb_dim,
+                kernel_size=patch_size,
+                stride=stride,
+            ),
+            Rearrange("b c lh lw -> b (lh lw) c"),
         )
-        self.num_patches = new_h * new_w
+        output_shape = model_utils.conv2d_shape(
+            input_shape=image_shape,
+            num_filters=emb_dim,
+            kernel_size=patch_size,
+            stride=stride,
+        )
+        num_patches = output_shape[1] * output_shape[2] + 1  # cls token
+
+        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
+        self.positions = nn.Parameter(torch.randn((num_patches, emb_dim)))
+        self.dropout = nn.Dropout(p=dropout)
+
+        self.output_shape = (num_patches, output_shape[0])
 
     def forward(self, inputs: torch.Tensor):
-        patches = inputs.unfold(
-            dimension=2, size=self.patch_size, step=self.stride
-        ).unfold(dimension=3, size=self.patch_size, step=self.stride)
-        patches = self.rearrange(patches)
+        batch_size = inputs.size(0)
+        patches = self.projection(inputs)
+        cls_tokens = repeat(self.cls_token, "1 1 c -> b 1 c", b=batch_size)
+        patches = torch.cat([cls_tokens, patches], dim=1)
+        patches += self.positions
+        patches = self.dropout(patches)
         return patches
 
 
@@ -160,7 +176,6 @@ class ViTCore(Core):
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
-        (c, h, w) = input_shape
         patch_size = args.patch_size
         emb_dim = args.emb_dim
         heads = args.num_heads
@@ -168,21 +183,15 @@ class ViTCore(Core):
         num_layers = args.num_layers
         dim_head = args.dim_head
         dropout = args.dropout
-        emb_dropout = args.dropout
 
-        patch_dim = patch_size * patch_size * c
-        self.image2patches = Image2Patches(
+        self.patch_embedding = PatchEmbedding(
             image_shape=input_shape,
+            emb_dim=emb_dim,
             patch_size=patch_size,
-            stride=1 if args.crop_mode else patch_size,
+            stride=patch_size if max(input_shape) > 100 else 1,
+            dropout=dropout,
         )
-        num_patches = self.image2patches.num_patches
-        self.patches2emb = nn.Linear(in_features=patch_dim, out_features=emb_dim)
-
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
-        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
-        self.emb_dropout = nn.Dropout(p=emb_dropout)
-        num_patches += 1
+        output_shape = self.patch_embedding.output_shape
 
         self.transformer = Transformer(
             dim=emb_dim,
@@ -194,28 +203,23 @@ class ViTCore(Core):
         )
 
         # calculate latent height and width based on num_patches
-        (latent_height, latent_width) = find_shape(num_patches)
-        self.output_shape = (emb_dim, latent_height, latent_width)
-
+        latent_height, latent_width = find_shape(output_shape[0])
         # reshape transformer output from (batch_size, num_patches, channels)
         # to (batch_size, channel, latent height, latent width)
-        self.rearrange = Rearrange(
-            "b (lh lw) c -> b c lh lw",
-            lh=latent_height,
-            lw=latent_width,
-            c=emb_dim,
+        self.output_layer = nn.Sequential(
+            Rearrange(
+                "b (lh lw) c -> b c lh lw",
+                lh=latent_height,
+                lw=latent_width,
+                c=emb_dim,
+            ),
+            nn.ELU(),
         )
-        self.activation = nn.ELU()
+
+        self.output_shape = (emb_dim, latent_height, latent_width)
 
     def forward(self, inputs: torch.Tensor):
-        batch_size = inputs.size(0)
-        outputs = self.image2patches(inputs)
-        outputs = self.patches2emb(outputs)
-        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
-        outputs = torch.cat((cls_tokens, outputs), dim=1)
-        outputs += self.pos_embedding
-        outputs = self.emb_dropout(outputs)
+        outputs = self.patch_embedding(inputs)
         outputs = self.transformer(outputs)
-        outputs = self.rearrange(outputs)
-        outputs = self.activation(outputs)
+        outputs = self.output_layer(outputs)
         return outputs
