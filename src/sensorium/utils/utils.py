@@ -325,8 +325,13 @@ def get_batch_size(args):
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         criterion = losses.get_criterion(args, ds=train_ds)
 
+        ds_size = len(train_ds[mouse_id].dataset)
+
         batch_size, terminate = 1, False
         while not terminate:
+            if batch_size > ds_size:
+                batch_size //= 2
+                break
             try:
                 model.train(True)
                 for _ in range(5):
