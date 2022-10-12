@@ -182,9 +182,9 @@ class MiceDataset(Dataset):
         if self.crop_mode == 1:
             image_shape = (1, 36, 64)
         elif self.crop_mode == 2:
-            image_shape = (1, 101, 179)
+            image_shape = (1, 36, 64)
         elif self.crop_mode == 3:
-            image_shape = (1, 144, 128)
+            image_shape = (1, 36, 64)
         # include the 3 behaviour data as channel of the image
         if self.plus:
             image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
@@ -246,13 +246,14 @@ class MiceDataset(Dataset):
         """Crop image based on the retinotopy of the mouse"""
         left, top = self.retinotopy
         image = image[..., top : top + height, left : left + width]
-        # image = self.resize_image(image)
+        image = self.resize_image(image)
         return image
 
     def crop_left_half(self, image: np.ndarray, width: int = 128):
         """Crop left half of the image then rotate s.t. longer edge is width."""
         image = image[..., :width]
-        # image = self.resize_image(image, height=36, width=32)
+        image = np.rot90(image, k=1, axes=(1, 2))
+        image = self.resize_image(image)
         return image
 
     def transform_image(self, image: np.ndarray):

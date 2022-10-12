@@ -169,7 +169,7 @@ class UpsampleConv(nn.Module):
         l_in, c = input_shape
         l_out = self.next_perfect_square(l_in)
         kernel_size = self.get_kernel_size(l_in=l_in, l_out=l_out)
-        self.dense = nn.Sequential(
+        self.upsample = nn.Sequential(
             Rearrange("b l c -> b c l"),
             nn.ConvTranspose1d(
                 in_channels=c,
@@ -193,7 +193,7 @@ class UpsampleConv(nn.Module):
         return l_out - l_in + 1
 
     def forward(self, inputs: torch.Tensor):
-        return self.dense(inputs)
+        return self.upsample(inputs)
 
 
 @register("vit")
