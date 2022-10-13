@@ -209,6 +209,7 @@ def main(args):
         },
         ds=train_ds,
     )
+    model.to(args.device)
 
     filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
 
