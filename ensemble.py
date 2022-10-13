@@ -319,7 +319,7 @@ if __name__ == "__main__":
         help="path to directory where the compressed dataset is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", default=4, type=int)
     parser.add_argument(
         "--device",
         type=str,
@@ -367,7 +367,7 @@ if __name__ == "__main__":
         "1: initialize bias with the mean responses"
         "2: initialize bias with the mean responses divide by standard deviation",
     )
-    parser.add_argument("--epochs", type=int, default=200)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--reg_scale", type=float, default=0)
     parser.add_argument("--train", action="store_true")
