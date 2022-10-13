@@ -86,6 +86,7 @@ class EnsembleModel(nn.Module):
                 ),
             )
             model.requires_grad_(False)
+            model.train(False)
             ensemble[name] = model
         self.ensemble = nn.ModuleDict(ensemble)
         self.output_module = OutputModule(args, in_features=len(saved_models))
