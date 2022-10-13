@@ -148,7 +148,7 @@ class Scheduler:
             if self.verbose >= 2:
                 print(f'Reduce learning rate of {param_group["name"]} to {new_lr}.')
 
-    def step(self, value: t.Union[float, torch.Tensor], epoch: int):
+    def step(self, value: t.Union[float, np.ndarray, torch.Tensor], epoch: int):
         terminate = False
         if self.is_better(value):
             self.best_value = value

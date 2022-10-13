@@ -243,17 +243,16 @@ def main(args):
                 f"Elapse: {elapse:.02f}s"
             )
 
-        if epoch % 10 == 0 or epoch == args.epochs:
-            utils.evaluate(
-                args,
-                ds=test_ds,
-                model=model,
-                epoch=epoch,
-                summary=summary,
-                mode=2,
-            )
+        eval_result = utils.evaluate(
+            args,
+            ds=test_ds,
+            model=model,
+            epoch=epoch,
+            summary=summary,
+            mode=2,
+        )
 
-        if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
+        if scheduler.step(eval_result["single_trial_correlation"], epoch=epoch):
             break
 
     scheduler.restore()
