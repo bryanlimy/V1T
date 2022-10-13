@@ -229,7 +229,8 @@ def main(args):
     #     max_concurrent=max_concurrent,
     # )
     scheduler = HyperBandForBOHB(
-        time_attr=metric,
+        time_attr="iterations",
+        metric=metric,
         mode=mode,
         max_t=args.epochs // 10,
         reduction_factor=4,
