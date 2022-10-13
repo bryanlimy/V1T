@@ -211,93 +211,93 @@ def main(args):
     )
     model.to(args.device)
 
-    # filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
-    # ckpt = torch.load(filename, map_location=model.device)
-    # ckpt_dict = ckpt["model_state_dict"]
-    # model_dict = model.state_dict()
-    # model_dict.update({f"output_module.{k}": v for k, v in ckpt_dict.items()})
-    # model.load_state_dict(model_dict)
+    filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
+    ckpt = torch.load(filename, map_location=model.device)
+    ckpt_dict = ckpt["model_state_dict"]
+    model_dict = model.state_dict()
+    model_dict.update({f"output_module.{k}": v for k, v in ckpt_dict.items()})
+    model.load_state_dict(model_dict)
 
-    # get model summary for the first rodent
-    model_info = torchinfo.summary(
-        model,
-        input_size=(args.batch_size, *args.input_shape),
-        device=args.device,
-        verbose=0,
-        mouse_id=list(args.output_shapes.keys())[0],
-        pupil_center=torch.rand(size=(args.batch_size, 2)),
-    )
-    with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
-        file.write(str(model_info))
-    if args.verbose == 3:
-        print(str(model_info))
-    if summary is not None:
-        summary.scalar("model/trainable_parameters", model_info.trainable_params)
-
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)
-    scheduler = Scheduler(
-        args, mode="max", model=model.output_module, optimizer=optimizer
-    )
-    criterion = losses.get_criterion(args, ds=train_ds)
-
-    utils.save_args(args)
-
-    utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
-
-    epoch = 0
-    while (epoch := epoch + 1) < args.epochs + 1:
-        if args.verbose:
-            print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
-
-        start = time()
-        train_result = trainer.train(
-            args,
-            ds=train_ds,
-            model=model,
-            optimizer=optimizer,
-            criterion=criterion,
-            epoch=epoch,
-            summary=summary,
-        )
-        val_result = trainer.validate(
-            args,
-            ds=val_ds,
-            model=model,
-            criterion=criterion,
-            epoch=epoch,
-            summary=summary,
-        )
-        elapse = time() - start
-
-        summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
-        summary.scalar(
-            "model/learning_rate",
-            value=optimizer.param_groups[0]["lr"],
-            step=epoch,
-            mode=0,
-        )
-        if args.verbose:
-            print(
-                f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
-                f"Elapse: {elapse:.02f}s"
-            )
-
-        eval_result = utils.evaluate(
-            args,
-            ds=test_ds,
-            model=model,
-            epoch=epoch,
-            summary=summary,
-            mode=2,
-        )
-
-        if scheduler.step(eval_result["single_trial_correlation"], epoch=epoch):
-            break
-
-    scheduler.restore()
+    # # get model summary for the first rodent
+    # model_info = torchinfo.summary(
+    #     model,
+    #     input_size=(args.batch_size, *args.input_shape),
+    #     device=args.device,
+    #     verbose=0,
+    #     mouse_id=list(args.output_shapes.keys())[0],
+    #     pupil_center=torch.rand(size=(args.batch_size, 2)),
+    # )
+    # with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
+    #     file.write(str(model_info))
+    # if args.verbose == 3:
+    #     print(str(model_info))
+    # if summary is not None:
+    #     summary.scalar("model/trainable_parameters", model_info.trainable_params)
+    #
+    # optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)
+    # scheduler = Scheduler(
+    #     args, mode="max", model=model.output_module, optimizer=optimizer
+    # )
+    # criterion = losses.get_criterion(args, ds=train_ds)
+    #
+    # utils.save_args(args)
+    #
+    # utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
+    #
+    # epoch = 0
+    # while (epoch := epoch + 1) < args.epochs + 1:
+    #     if args.verbose:
+    #         print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
+    #
+    #     start = time()
+    #     train_result = trainer.train(
+    #         args,
+    #         ds=train_ds,
+    #         model=model,
+    #         optimizer=optimizer,
+    #         criterion=criterion,
+    #         epoch=epoch,
+    #         summary=summary,
+    #     )
+    #     val_result = trainer.validate(
+    #         args,
+    #         ds=val_ds,
+    #         model=model,
+    #         criterion=criterion,
+    #         epoch=epoch,
+    #         summary=summary,
+    #     )
+    #     elapse = time() - start
+    #
+    #     summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
+    #     summary.scalar(
+    #         "model/learning_rate",
+    #         value=optimizer.param_groups[0]["lr"],
+    #         step=epoch,
+    #         mode=0,
+    #     )
+    #     if args.verbose:
+    #         print(
+    #             f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
+    #             f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
+    #             f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
+    #             f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
+    #             f"Elapse: {elapse:.02f}s"
+    #         )
+    #
+    #     eval_result = utils.evaluate(
+    #         args,
+    #         ds=test_ds,
+    #         model=model,
+    #         epoch=epoch,
+    #         summary=summary,
+    #         mode=2,
+    #     )
+    #
+    #     if scheduler.step(eval_result["single_trial_correlation"], epoch=epoch):
+    #         break
+    #
+    # scheduler.restore()
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
