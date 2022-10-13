@@ -8,9 +8,20 @@ from torch import nn
 from tqdm import tqdm
 from datetime import datetime
 from torch.utils.data import DataLoader
-
+from shutil import rmtree
 from sensorium import data
 from sensorium.utils import utils
+import torchinfo
+from time import time
+from einops.layers.torch import Rearrange
+
+from sensorium import losses, metrics, data
+from sensorium.models import get_model, Model
+from sensorium.utils import utils, tensorboard
+from sensorium.utils.scheduler import Scheduler
+
+
+import train as trainer
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
@@ -109,15 +120,21 @@ def generate_submission(
     )
 
 
-from sensorium.models.model import get_model, Model
-
-from collections import namedtuple
-
-
 class Args:
     def __init__(self, args, output_dir: str):
         self.device = args.device
         self.output_dir = output_dir
+
+
+class ELU1(nn.Module):
+    """ELU activation + 1 to output standardized responses"""
+
+    def __init__(self):
+        super(ELU1, self).__init__()
+        self.elu = nn.ELU()
+
+    def forward(self, inputs: torch.Tensor):
+        return self.elu(inputs) + 1
 
 
 class EnsembleModel(nn.Module):
@@ -139,18 +156,147 @@ class EnsembleModel(nn.Module):
                     model_args[name].output_dir, "ckpt", "best_model.pt"
                 ),
             )
-            temp = torch.rand(2, 1, 36, 64)
-            outputs = model(temp, mouse_id=0, pupil_center=None)
+            model.requires_grad_(False)
+            ensemble[name] = model
         self.ensemble = nn.ModuleDict(ensemble)
+        self.output_module = nn.Sequential(
+            nn.Linear(in_features=len(saved_models), out_features=1),
+            Rearrange("b n 1 -> b n"),
+            ELU1(),
+        )
+
+    def forward(self, inputs: torch.Tensor, mouse_id: int, pupil_center: torch.Tensor):
+        outputs = [
+            self.ensemble[name](
+                inputs,
+                mouse_id=mouse_id,
+                pupil_center=pupil_center,
+                activate=False,
+            ).unsqueeze(dim=-1)
+            for name in self.ensemble.keys()
+        ]
+        outputs = torch.cat(outputs, dim=-1)
+        outputs = self.output_module(outputs)
+        return outputs
 
 
 def main(args):
+    if args.clear_output_dir and os.path.isdir(args.output_dir):
+        rmtree(args.output_dir)
     if not os.path.isdir(args.output_dir):
-        raise FileNotFoundError(f"Cannot find {args.output_dir}.")
-
-    utils.load_args(args)
-
+        os.makedirs(args.output_dir)
     utils.get_device(args)
+
+    summary = tensorboard.Summary(args)
+
+    train_ds, val_ds, test_ds = data.get_training_ds(
+        args,
+        data_dir=args.dataset,
+        mouse_ids=None,
+        batch_size=args.batch_size,
+        device=args.device,
+    )
+
+    model = EnsembleModel(
+        args,
+        saved_models={
+            "stacked2d": "runs/sensorium/077_stacked2d_gaussian2d_1cm/",
+            "vit": "runs/sensorium/100_vit_gaussian2d_0.2dropout_convEMB/",
+            "stn": "runs/tuner/stn/output_dir/97fd64d2/",
+        },
+        ds=train_ds,
+    )
+    # get model summary for the first rodent
+    model_info = torchinfo.summary(
+        model,
+        input_size=(args.batch_size, *args.input_shape),
+        device=args.device,
+        verbose=0,
+        mouse_id=list(args.output_shapes.keys())[0],
+        pupil_center=torch.rand(size=(args.batch_size, 2)),
+    )
+    with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
+        file.write(str(model_info))
+    if args.verbose == 3:
+        print(str(model_info))
+    if summary is not None:
+        summary.scalar("model/trainable_parameters", model_info.trainable_params)
+
+    optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)
+    scheduler = Scheduler(
+        args, mode="max", model=model.output_module, optimizer=optimizer
+    )
+    criterion = losses.get_criterion(args, ds=train_ds)
+
+    utils.save_args(args)
+
+    utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
+
+    epoch = 0
+    while (epoch := epoch + 1) < args.epochs + 1:
+        if args.verbose:
+            print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
+
+        start = time()
+        train_result = trainer.train(
+            args,
+            ds=train_ds,
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            epoch=epoch,
+            summary=summary,
+        )
+        val_result = trainer.validate(
+            args,
+            ds=val_ds,
+            model=model,
+            criterion=criterion,
+            epoch=epoch,
+            summary=summary,
+        )
+        elapse = time() - start
+
+        summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
+        summary.scalar(
+            "model/learning_rate/core",
+            value=optimizer.param_groups[0]["lr"],
+            step=epoch,
+            mode=0,
+        )
+        summary.scalar(
+            "model/learning_rate/readouts",
+            value=optimizer.param_groups[1]["lr"],
+            step=epoch,
+            mode=0,
+        )
+        if args.verbose:
+            print(
+                f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
+                f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
+                f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
+                f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
+                f"Elapse: {elapse:.02f}s"
+            )
+
+        if epoch % 10 == 0 or epoch == args.epochs:
+            utils.evaluate(
+                args,
+                ds=test_ds,
+                model=model,
+                epoch=epoch,
+                summary=summary,
+                mode=2,
+            )
+
+        if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
+            break
+
+    scheduler.restore()
+
+    # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
+    timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
+    csv_dir = os.path.join(args.output_dir, "submissions", timestamp)
 
     test_ds, final_test_ds = data.get_submission_ds(
         args,
@@ -158,16 +304,6 @@ def main(args):
         batch_size=args.batch_size,
         device=args.device,
     )
-
-    model = EnsembleModel(
-        args,
-        saved_models={"stacked2d": "runs/sensorium/077_stacked2d_gaussian2d_1cm/"},
-        ds=test_ds,
-    )
-
-    # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
-    timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
-    csv_dir = os.path.join(args.output_dir, "submissions", timestamp)
 
     # run evaluation on test set for all mouse
     utils.evaluate(
@@ -215,7 +351,55 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
 
-    params = parser.parse_args()
-    main(params)
+    parser.add_argument("--criterion", type=str, default="poisson")
+    parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
+    parser.add_argument(
+        "--num_workers", default=2, type=int, help="number of works for DataLoader."
+    )
+    parser.add_argument(
+        "--depth_scale",
+        default=1.0,
+        type=float,
+        help="the coefficient to scale loss for neurons in depth of 240 to 260.",
+    )
+    parser.add_argument(
+        "--ds_scale",
+        action="store_true",
+        help="scale loss by the size of the dataset",
+    )
+    parser.add_argument(
+        "--crop_mode",
+        default=1,
+        type=int,
+        choices=[0, 1, 2, 3],
+        help="image crop mode:"
+        "0: no cropping and return full image (1, 144, 256)"
+        "1: rescale image by 0.25 in both width and height (1, 36, 64)"
+        "2: crop image based on retinotopy and rescale to (1, 36, 64)"
+        "3: crop left half of the image and rotate.",
+    )
+    parser.add_argument("--epochs", type=int, default=200)
+    parser.add_argument("--lr", type=float, default=1e-4)
+
+    # plot settings
+    parser.add_argument(
+        "--save_plots", action="store_true", help="save plots to --output_dir"
+    )
+    parser.add_argument("--dpi", type=int, default=120, help="matplotlib figure DPI")
+    parser.add_argument(
+        "--format",
+        type=str,
+        default="svg",
+        choices=["pdf", "svg", "png"],
+        help="file format when --save_plots",
+    )
+
+    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
+    parser.add_argument(
+        "--clear_output_dir",
+        action="store_true",
+        help="overwrite content in --output_dir",
+    )
+
+    main(parser.parse_args())

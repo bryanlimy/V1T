@@ -85,13 +85,15 @@ class Model(nn.Module):
         inputs: torch.Tensor,
         mouse_id: torch.Union[int, torch.Tensor],
         pupil_center: torch.Tensor,
+        activate: bool = True,
     ):
         outputs = self.core(inputs)
         shift = None
         if self.shifter is not None:
             shift = self.shifter(mouse_id=mouse_id, pupil_center=pupil_center)
         outputs = self.readouts(outputs, mouse_id=mouse_id, shift=shift)
-        outputs = self.activation(outputs)
+        if activate:
+            outputs = self.activation(outputs)
         return outputs
 
 

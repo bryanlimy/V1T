@@ -2,8 +2,8 @@ import os
 import torch
 import typing as t
 import numpy as np
+from torch import nn
 from torch.optim import Optimizer
-from sensorium.models import Model
 
 
 class Scheduler:
@@ -11,7 +11,7 @@ class Scheduler:
         self,
         args,
         mode: t.Literal["min", "max"],
-        model: Model,
+        model: nn.Module,
         optimizer: Optimizer,
         max_reduce: int = 2,
         min_lr: float = 1e-6,
