@@ -195,8 +195,12 @@ def check_output(command: list):
 def save_args(args):
     """Save args object as dictionary to args.output_dir/args.json"""
     arguments = copy.deepcopy(args.__dict__)
-    arguments["git_hash"] = check_output(["git", "describe", "--always"])
-    arguments["hostname"] = check_output(["hostname"])
+    try:
+        arguments["git_hash"] = check_output(["git", "describe", "--always"])
+        arguments["hostname"] = check_output(["hostname"])
+    except subprocess.CalledProcessError as e:
+        if args.verbose > 0:
+            print(f"Unable to call subprocess: {e}")
     yaml.save(filename=os.path.join(args.output_dir, "args.yaml"), data=arguments)
 
 
