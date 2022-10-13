@@ -61,11 +61,26 @@ class EnsembleModel(nn.Module):
             model.requires_grad_(False)
             ensemble[name] = model
         self.ensemble = nn.ModuleDict(ensemble)
-        self.output_module = nn.Sequential(
-            nn.Linear(in_features=len(saved_models), out_features=1),
-            Rearrange("b n 1 -> b n"),
-            ELU1(),
-        )
+        if args.output_module == "dense":
+            self.output_module = nn.Sequential(
+                nn.Linear(in_features=len(saved_models), out_features=1),
+                Rearrange("b n 1 -> b n"),
+                ELU1(),
+            )
+        else:
+            self.output_module = nn.Sequential(
+                Rearrange("b n c -> b c n"),
+                nn.Conv1d(
+                    in_channels=len(saved_models),
+                    out_channels=1,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    dilation=1,
+                ),
+                Rearrange("b 1 n -> b n"),
+                ELU1(),
+            )
 
     def regularizer(self, mouse_id: int):
         return torch.tensor(0)
@@ -109,7 +124,7 @@ def main(args):
     }
     model = EnsembleModel(
         args,
-        saved_models=args.save_models,
+        saved_models=args.saved_models,
         ds=train_ds,
     )
     # get model summary for the first rodent
@@ -256,6 +271,9 @@ if __name__ == "__main__":
         default="",
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
+    )
+    parser.add_argument(
+        "--output_module", default="dense", type=str, choices=["dense", "conv"]
     )
 
     parser.add_argument("--criterion", type=str, default="poisson")
