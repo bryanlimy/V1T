@@ -88,7 +88,7 @@ class EnsembleModel(nn.Module):
             model.requires_grad_(False)
             ensemble[name] = model
         self.ensemble = nn.ModuleDict(ensemble)
-        self.output_module = OutputModule(args, in_features=len(saved_models), ds=ds)
+        self.output_module = OutputModule(args, in_features=len(saved_models))
 
     def regularizer(self, mouse_id: int):
         return self.output_module.regularizer(mouse_id=mouse_id)
