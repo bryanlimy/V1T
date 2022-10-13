@@ -51,7 +51,7 @@ class OutputModule(nn.Module):
                     nn.Linear(in_features=self.in_features, out_features=1),
                     Rearrange("b n 1 -> b n"),
                 )
-                for mouse_id in self.output_shape.keys()
+                for mouse_id in self.output_shapes.keys()
             }
         )
         self.activation = ELU1()
