@@ -40,69 +40,28 @@ class ELU1(nn.Module):
 
 
 class OutputModule(nn.Module):
-    def __init__(self, args, num_models: int, ds: t.Dict[int, DataLoader]):
+    def __init__(self, args, in_features: int):
         super(OutputModule, self).__init__()
-        self.mixer = args.mixer
-        self.num_models = num_models
-        self.ds_stats = {
-            mouse_id: ds[mouse_id].dataset.response_stats for mouse_id in ds.keys()
-        }
+        self.in_features = in_features
         self.output_shapes = args.output_shapes
-        self.bias_mode = args.bias_mode
         self.reg_scale = torch.tensor(args.reg_scale, device=args.device)
-        self.initialize_mixer()
-        self.initialize_bias()
+        self.networks = nn.ModuleDict(
+            {
+                str(mouse_id): nn.Sequential(
+                    nn.Linear(in_features=self.in_features, out_features=1),
+                    Rearrange("b n 1 -> b n"),
+                )
+                for mouse_id in self.output_shape.keys()
+            }
+        )
         self.activation = ELU1()
 
-    def response_stats(self, mouse_id: int):
-        return self.ds_stats[mouse_id]
-
-    def initialize_mixer(self):
-        # assume input is in shape (batch_size, num. neurons, num. ensemble)
-        if self.mixer == "dense":
-            self.layer = nn.Sequential(
-                nn.Linear(in_features=self.num_models, out_features=1, bias=False),
-                Rearrange("b n 1 -> b n"),
-            )
-        elif self.mixer == "conv":
-            self.layer = nn.Sequential(
-                Rearrange("b n c -> b c n"),
-                nn.Conv1d(
-                    in_channels=self.num_models,
-                    out_channels=1,
-                    kernel_size=1,
-                    stride=1,
-                    padding=0,
-                    dilation=1,
-                    bias=False,
-                ),
-                Rearrange("b 1 n -> b n"),
-            )
-
-    def initialize_bias(self):
-        self.biases = nn.ParameterDict({})
-        for mouse_id in self.ds_stats.keys():
-            stats = self.response_stats(mouse_id=mouse_id)
-            if self.bias_mode == 0:
-                bias = torch.zeros(size=self.output_shapes[mouse_id])
-            elif self.bias_mode == 1:
-                bias = torch.from_numpy(stats["mean"])
-            elif self.bias_mode == 2:
-                bias = torch.from_numpy(stats["mean"] / stats["std"])
-            else:
-                raise NotImplementedError(
-                    f"bias mode {self.bias_mode} has not been implemented."
-                )
-            self.biases[str(mouse_id)] = nn.Parameter(bias)
-
     def regularizer(self, mouse_id: int):
-        reg = sum(p.abs().sum() for p in self.layer.parameters())
-        reg += self.biases[str(mouse_id)].abs().sum()
+        reg = sum(p.abs().sum() for p in self.networks[str(mouse_id)].parameters())
         return self.reg_scale * reg
 
     def forward(self, inputs: torch.Tensor, mouse_id: int):
-        outputs = self.layer(inputs)
-        outputs = outputs + self.biases[str(mouse_id)]
+        outputs = self.networks[str(mouse_id)](inputs)
         outputs = self.activation(outputs)
         return outputs
 
@@ -129,7 +88,7 @@ class EnsembleModel(nn.Module):
             model.requires_grad_(False)
             ensemble[name] = model
         self.ensemble = nn.ModuleDict(ensemble)
-        self.output_module = OutputModule(args, num_models=len(saved_models), ds=ds)
+        self.output_module = OutputModule(args, in_features=len(saved_models), ds=ds)
 
     def regularizer(self, mouse_id: int):
         return self.output_module.regularizer(mouse_id=mouse_id)
