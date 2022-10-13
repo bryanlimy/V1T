@@ -171,91 +171,100 @@ def main(args):
         ds=train_ds,
     )
     model.to(args.device)
-    # get model summary for the first rodent
-    model_info = torchinfo.summary(
-        model,
-        input_size=(args.batch_size, *args.input_shape),
-        device=args.device,
-        verbose=0,
-        mouse_id=list(args.output_shapes.keys())[0],
-        pupil_center=torch.rand(size=(args.batch_size, 2)),
-    )
-    with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
-        file.write(str(model_info))
-    if args.verbose == 3:
-        print(str(model_info))
-    if summary is not None:
-        summary.scalar("model/trainable_parameters", model_info.trainable_params)
 
-    optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)
-    scheduler = Scheduler(
-        args,
-        mode="max",
-        model=model,
-        optimizer=optimizer,
-        save_modules=["output_module"],
-    )
-    criterion = losses.get_criterion(args, ds=train_ds)
+    if args.train:
+        # get model summary for the first rodent
+        model_info = torchinfo.summary(
+            model,
+            input_size=(args.batch_size, *args.input_shape),
+            device=args.device,
+            verbose=0,
+            mouse_id=list(args.output_shapes.keys())[0],
+            pupil_center=torch.rand(size=(args.batch_size, 2)),
+        )
+        with open(os.path.join(args.output_dir, "model.txt"), "w") as file:
+            file.write(str(model_info))
+        if args.verbose == 3:
+            print(str(model_info))
+        if summary is not None:
+            summary.scalar("model/trainable_parameters", model_info.trainable_params)
 
-    utils.save_args(args)
-
-    epoch = scheduler.restore()
-
-    utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
-
-    while (epoch := epoch + 1) < args.epochs + 1:
-        if args.verbose:
-            print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
-
-        start = time()
-        train_result = trainer.train(
+        optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)
+        scheduler = Scheduler(
             args,
-            ds=train_ds,
+            mode="max",
             model=model,
             optimizer=optimizer,
-            criterion=criterion,
-            epoch=epoch,
-            summary=summary,
+            save_modules=["output_module"],
         )
-        val_result = trainer.validate(
-            args,
-            ds=val_ds,
-            model=model,
-            criterion=criterion,
-            epoch=epoch,
-            summary=summary,
-        )
-        elapse = time() - start
+        criterion = losses.get_criterion(args, ds=train_ds)
 
-        summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
-        summary.scalar(
-            "model/learning_rate",
-            value=optimizer.param_groups[0]["lr"],
-            step=epoch,
-            mode=0,
-        )
-        if args.verbose:
-            print(
-                f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
-                f"Elapse: {elapse:.02f}s"
+        utils.save_args(args)
+
+        epoch = scheduler.restore()
+
+        utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
+
+        while (epoch := epoch + 1) < args.epochs + 1:
+            if args.verbose:
+                print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
+
+            start = time()
+            train_result = trainer.train(
+                args,
+                ds=train_ds,
+                model=model,
+                optimizer=optimizer,
+                criterion=criterion,
+                epoch=epoch,
+                summary=summary,
+            )
+            val_result = trainer.validate(
+                args,
+                ds=val_ds,
+                model=model,
+                criterion=criterion,
+                epoch=epoch,
+                summary=summary,
+            )
+            elapse = time() - start
+
+            summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
+            summary.scalar(
+                "model/learning_rate",
+                value=optimizer.param_groups[0]["lr"],
+                step=epoch,
+                mode=0,
+            )
+            if args.verbose:
+                print(
+                    f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
+                    f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
+                    f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
+                    f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
+                    f"Elapse: {elapse:.02f}s"
+                )
+
+            eval_result = utils.evaluate(
+                args,
+                ds=test_ds,
+                model=model,
+                epoch=epoch,
+                summary=summary,
+                mode=2,
             )
 
-        eval_result = utils.evaluate(
-            args,
-            ds=test_ds,
-            model=model,
-            epoch=epoch,
-            summary=summary,
-            mode=2,
-        )
+            if scheduler.step(eval_result["single_trial_correlation"], epoch=epoch):
+                break
 
-        if scheduler.step(eval_result["single_trial_correlation"], epoch=epoch):
-            break
-
-    scheduler.restore()
+        scheduler.restore()
+    else:
+        filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
+        ckpt = torch.load(filename, map_location=model.device)
+        ckpt_dict = ckpt["model_state_dict"]
+        model_dict = model.state_dict()
+        model_dict.update({f"output_module.{k}": v for k, v in ckpt_dict.items()})
+        model.load_state_dict(model_dict)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
@@ -356,6 +365,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--train", action="store_true")
 
     # plot settings
     parser.add_argument(
