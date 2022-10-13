@@ -12,7 +12,7 @@ from shutil import rmtree
 from datetime import datetime
 from torch.utils.data import DataLoader
 from einops.layers.torch import Rearrange
-
+from collections import OrderedDict
 from sensorium import losses, data
 from sensorium.models import Model
 from sensorium.utils import utils, tensorboard
@@ -39,6 +39,68 @@ class ELU1(nn.Module):
         return self.elu(inputs) + 1
 
 
+class OutputModule(nn.Module):
+    def __init__(self, args, num_models: int, ds: t.Dict[int, DataLoader]):
+        super(OutputModule, self).__init__()
+        self.mixer = args.mixer
+        self.num_models = num_models
+        self.ds_stats = {
+            mouse_id: ds[mouse_id].dataset.response_stats for mouse_id in ds.keys()
+        }
+        self.output_shapes = args.output_shapes
+        self.bias_mode = args.bias_mode
+        self.initialize_mixer()
+        self.initialize_bias()
+        self.activation = ELU1()
+
+    def response_stats(self, mouse_id: int):
+        return self.ds_stats[mouse_id]
+
+    def initialize_mixer(self):
+        # assume input is in shape (batch_size, num. neurons, num. ensemble)
+        if self.mixer == "dense":
+            self.layer = nn.Sequential(
+                nn.Linear(in_features=self.num_models, out_features=1, bias=False),
+                Rearrange("b n 1 -> b n"),
+            )
+        elif self.mixer == "conv":
+            self.layer = nn.Sequential(
+                Rearrange("b n c -> b c n"),
+                nn.Conv1d(
+                    in_channels=self.num_models,
+                    out_channels=1,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    dilation=1,
+                    bias=False,
+                ),
+                Rearrange("b 1 n -> b n"),
+            )
+
+    def initialize_bias(self):
+        self.biases = nn.ParameterDict({})
+        for mouse_id in self.ds_stats.keys():
+            stats = self.response_stats(mouse_id=mouse_id)
+            if self.bias_mode == 0:
+                bias = torch.zeros(size=self.output_shapes[mouse_id])
+            elif self.bias_mode == 1:
+                bias = torch.from_numpy(stats["mean"])
+            elif self.bias_mode == 2:
+                bias = torch.from_numpy(stats["mean"] / stats["std"])
+            else:
+                raise NotImplementedError(
+                    f"bias mode {self.bias_mode} has not been implemented."
+                )
+            self.biases[str(mouse_id)] = nn.Parameter(bias)
+
+    def forward(self, inputs: torch.Tensor, mouse_id: int):
+        outputs = self.layer(inputs)
+        outputs = outputs + self.biases[str(mouse_id)]
+        outputs = self.activation(outputs)
+        return outputs
+
+
 class EnsembleModel(nn.Module):
     def __init__(
         self, args, saved_models: t.Dict[str, str], ds: t.Dict[int, DataLoader]
@@ -61,26 +123,7 @@ class EnsembleModel(nn.Module):
             model.requires_grad_(False)
             ensemble[name] = model
         self.ensemble = nn.ModuleDict(ensemble)
-        if args.output_module == "dense":
-            self.output_module = nn.Sequential(
-                nn.Linear(in_features=len(saved_models), out_features=1),
-                Rearrange("b n 1 -> b n"),
-                ELU1(),
-            )
-        else:
-            self.output_module = nn.Sequential(
-                Rearrange("b n c -> b c n"),
-                nn.Conv1d(
-                    in_channels=len(saved_models),
-                    out_channels=1,
-                    kernel_size=1,
-                    stride=1,
-                    padding=0,
-                    dilation=1,
-                ),
-                Rearrange("b 1 n -> b n"),
-                ELU1(),
-            )
+        self.output_module = OutputModule(args, num_models=len(saved_models), ds=ds)
 
     def regularizer(self, mouse_id: int):
         return torch.tensor(0)
@@ -96,7 +139,7 @@ class EnsembleModel(nn.Module):
             for name in self.ensemble.keys()
         ]
         outputs = torch.cat(outputs, dim=-1)
-        outputs = self.output_module(outputs)
+        outputs = self.output_module(outputs, mouse_id=mouse_id)
         return outputs
 
 
@@ -127,6 +170,7 @@ def main(args):
         saved_models=args.saved_models,
         ds=train_ds,
     )
+    model.to(args.device)
     # get model summary for the first rodent
     model_info = torchinfo.summary(
         model,
@@ -272,9 +316,7 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument(
-        "--output_module", default="dense", type=str, choices=["dense", "conv"]
-    )
+    parser.add_argument("--mixer", default="dense", type=str, choices=["dense", "conv"])
 
     parser.add_argument("--criterion", type=str, default="poisson")
     parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
@@ -302,6 +344,16 @@ if __name__ == "__main__":
         "1: rescale image by 0.25 in both width and height (1, 36, 64)"
         "2: crop image based on retinotopy and rescale to (1, 36, 64)"
         "3: crop left half of the image and rotate.",
+    )
+    parser.add_argument(
+        "--bias_mode",
+        type=int,
+        default=0,
+        choices=[0, 1, 2],
+        help="Gaussian2d readout bias mode:"
+        "0: initialize bias with zeros"
+        "1: initialize bias with the mean responses"
+        "2: initialize bias with the mean responses divide by standard deviation",
     )
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=1e-4)
