@@ -23,9 +23,9 @@ class Logger:
         self.console = sys.stdout
         if not os.path.isdir(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
-        self.file = open(filename, "w")
+        self.file = open(filename, "a")
 
-    def write(self, message):
+    def write(self, message: str):
         self.console.write(message)
         self.file.write(message)
         self.flush()
