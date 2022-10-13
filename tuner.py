@@ -105,7 +105,7 @@ def train_function(
 def get_search_space(args):
     # default search space
     search_space = {
-        "plus": False,
+        "plus": args.plus,
         "disable_grid_predictor": tune.choice([True, False]),
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
@@ -309,7 +309,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_workers", default=2, type=int, help="number of works for DataLoader."
     )
-    parser.add_argument("--plus", actiion="store_true")
+    parser.add_argument("--plus", action="store_true")
 
     # model settings
     parser.add_argument(
