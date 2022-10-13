@@ -11,8 +11,9 @@ from ray.air import session
 from functools import partial
 from datetime import datetime
 from ray.tune import CLIReporter
+from ray.tune.search.bohb import TuneBOHB
 from ray.tune.search.hebo import HEBOSearch
-from ray.tune.schedulers import ASHAScheduler
+from ray.tune.schedulers import ASHAScheduler, HyperBandForBOHB
 
 import train as trainer
 
@@ -213,18 +214,30 @@ def main(args):
     num_gpus = torch.cuda.device_count()
     max_concurrent = max(1, num_gpus)
 
-    scheduler = ASHAScheduler(
-        metric=metric,
+    # scheduler = ASHAScheduler(
+    #     metric=metric,
+    #     mode=mode,
+    #     max_t=args.epochs // 10,
+    #     grace_period=2,
+    #     reduction_factor=2,
+    # )
+    # hebo = HEBOSearch(
+    #     metric=metric,
+    #     mode=mode,
+    #     points_to_evaluate=points_to_evaluate,
+    #     evaluated_rewards=evaluated_rewards,
+    #     max_concurrent=max_concurrent,
+    # )
+    scheduler = HyperBandForBOHB(
+        time_attr=metric,
         mode=mode,
         max_t=args.epochs // 10,
-        grace_period=2,
-        reduction_factor=2,
+        reduction_factor=4,
     )
-    hebo = HEBOSearch(
+    search_algorithm = TuneBOHB(
         metric=metric,
         mode=mode,
         points_to_evaluate=points_to_evaluate,
-        evaluated_rewards=evaluated_rewards,
         max_concurrent=max_concurrent,
     )
     reporter = CLIReporter(
@@ -275,7 +288,7 @@ def main(args):
         config=search_space,
         num_samples=args.num_samples,
         local_dir=args.output_dir,
-        search_alg=hebo,
+        search_alg=search_algorithm,
         scheduler=scheduler,
         progress_reporter=reporter,
         checkpoint_score_attr="single_trial_correlation",
