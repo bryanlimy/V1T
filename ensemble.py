@@ -102,13 +102,14 @@ def main(args):
         device=args.device,
     )
 
+    args.saved_models = {
+        "stacked2d": "runs/sensorium/077_stacked2d_gaussian2d_1cm/",
+        "vit": "runs/sensorium/082_vit_gaussian2d_0.25dropout_1cm_pretrain/",
+        "stn": "runs/tuner/stn/output_dir/97fd64d2/",
+    }
     model = EnsembleModel(
         args,
-        saved_models={
-            "stacked2d": "runs/sensorium/077_stacked2d_gaussian2d_1cm/",
-            "vit": "runs/sensorium/082_vit_gaussian2d_0.25dropout_1cm_pretrain/",
-            "stn": "runs/tuner/stn/output_dir/97fd64d2/",
-        },
+        saved_models=args.save_models,
         ds=train_ds,
     )
     # get model summary for the first rodent
