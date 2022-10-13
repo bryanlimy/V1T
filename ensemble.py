@@ -165,7 +165,7 @@ class EnsembleModel(nn.Module):
             ELU1(),
         )
 
-    def regularizer(self):
+    def regularizer(self, mouse_id: int):
         return 0
 
     def forward(self, inputs: torch.Tensor, mouse_id: int, pupil_center: torch.Tensor):
