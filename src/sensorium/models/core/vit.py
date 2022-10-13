@@ -48,7 +48,7 @@ class Attention(nn.Module):
         self.attend = nn.Softmax(dim=-1)
         self.dropout = nn.Dropout(p=dropout)
 
-        self.to_qkv = nn.Linear(in_features=dim, out_features=inner_dim * 3, bias=False)
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
         self.to_out = (
             nn.Sequential(
@@ -83,40 +83,35 @@ class Transformer(nn.Module):
         mlp_dim: int,
         dropout: float = 0.0,
     ):
-        super(Transformer, self).__init__()
-        layers = []
+        super().__init__()
+        self.layers = nn.ModuleList([])
         for _ in range(num_layers):
-            layers.append(
+            self.layers.append(
                 nn.ModuleList(
                     [
                         PreNorm(
                             dim=dim,
                             fn=Attention(
-                                dim=dim, heads=heads, dim_head=dim_head, dropout=dropout
+                                dim, heads=heads, dim_head=dim_head, dropout=dropout
                             ),
                         ),
-                        PreNorm(
-                            dim=dim,
-                            fn=FeedForward(
-                                dim=dim, hidden_dim=mlp_dim, dropout=dropout
-                            ),
-                        ),
+                        PreNorm(dim=dim, fn=FeedForward(dim, mlp_dim, dropout=dropout)),
                     ]
                 )
             )
-        self.layers = nn.ModuleList(layers)
 
     def forward(self, inputs: torch.Tensor):
         outputs = inputs
-        for attention, feedforward in self.layers:
-            outputs = attention(outputs) + outputs
-            outputs = feedforward(outputs) + outputs
+        for attn, ff in self.layers:
+            outputs = attn(outputs) + outputs
+            outputs = ff(outputs) + outputs
         return outputs
 
 
 class Image2Patches(nn.Module):
     def __init__(
         self,
+        model,
         image_shape: t.Tuple[int, int, int],
         patch_size: int,
         stride: int = 1,
@@ -133,7 +128,7 @@ class Image2Patches(nn.Module):
             p1=patch_size,
             p2=patch_size,
         )
-        self.num_patches = new_h * new_w
+        model.num_patches = new_h * new_w
 
     def forward(self, inputs: torch.Tensor):
         patches = inputs.unfold(
@@ -144,11 +139,11 @@ class Image2Patches(nn.Module):
 
 
 def find_shape(num_patches: int):
-    num1 = math.floor(math.sqrt(num_patches))
-    while num_patches % num1 != 0:
-        num1 -= 1
-    num2 = num_patches // num1
-    return num1, num2
+    dim1 = math.ceil(math.sqrt(num_patches))
+    while num_patches % dim1 != 0 and dim1 > 0:
+        dim1 -= 1
+    dim2 = num_patches // dim1
+    return (dim1, dim2)
 
 
 @register("vit")
@@ -162,6 +157,7 @@ class ViTCore(Core):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         (c, h, w) = input_shape
         patch_size = args.patch_size
+        patch_stride = patch_size if args.patch_stride is None else args.patch_stride
         emb_dim = args.emb_dim
         heads = args.num_heads
         mlp_dim = args.mlp_dim
@@ -170,19 +166,26 @@ class ViTCore(Core):
         dropout = args.dropout
         emb_dropout = args.dropout
 
-        patch_dim = patch_size * patch_size * c
-        self.image2patches = Image2Patches(
-            image_shape=input_shape,
-            patch_size=patch_size,
-            stride=1 if args.crop_mode else patch_size,
+        if isinstance(patch_size, int):
+            patch_height, patch_width = patch_size, patch_size
+        else:
+            patch_height, patch_width = patch_size[0], patch_size[1]
+
+        patch_dim = patch_height * patch_width * c
+        self.patch_embedding = nn.Sequential(
+            Image2Patches(
+                self,
+                image_shape=input_shape,
+                patch_size=patch_size,
+                stride=patch_stride,
+            ),
+            nn.Linear(in_features=patch_dim, out_features=emb_dim),
         )
-        num_patches = self.image2patches.num_patches
-        self.patches2emb = nn.Linear(in_features=patch_dim, out_features=emb_dim)
+        num_patches = self.num_patches
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         self.emb_dropout = nn.Dropout(p=emb_dropout)
-        num_patches += 1  # cls token
 
         self.transformer = Transformer(
             dim=emb_dim,
@@ -194,31 +197,27 @@ class ViTCore(Core):
         )
 
         # calculate latent height and width based on num_patches
-        (latent_height, latent_width) = find_shape(num_patches)
-        self.output_shape = (emb_dim, latent_height, latent_width)
-
-        # reshape transformer output from (batch_size, num_patches, channels)
-        # to (batch_size, channel, latent height, latent width)
-        self.output_layer = Rearrange(
-            "b (lh lw) c -> b c lh lw",
-            lh=latent_height,
-            lw=latent_width,
-            c=emb_dim,
-        )
+        (new_h, new_w) = find_shape(num_patches)
+        self.latent_dim = (new_h, new_w, emb_dim)
+        self.output_shape = (emb_dim, new_h, new_w)
 
     def forward(self, inputs: torch.Tensor):
-        outputs = self.image2patches(inputs)
-        outputs = self.patches2emb(outputs)
+        outputs = self.patch_embedding(inputs)
+        b, n, _ = outputs.shape
 
-        batch_size, num_patches, _ = outputs.shape
-
-        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
+        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
-        outputs += self.pos_embedding[:, : num_patches + 1]
+        outputs += self.pos_embedding[:, : n + 1]
         outputs = self.emb_dropout(outputs)
 
         outputs = self.transformer(outputs)
 
-        outputs = self.output_layer(outputs)
+        # remove cls_token
+        outputs = outputs[:, :-1, :]
+
+        # reshape from (num patches, patch_dim) to (HWC)
+        outputs = outputs.view(*(b, *self.latent_dim))
+        # reorder outputs to (CHW)
+        outputs = torch.permute(outputs, dims=[0, 3, 1, 2])
 
         return outputs

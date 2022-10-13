@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 
 from sensorium import data
 from sensorium.utils import utils
+from sensorium.models import Model
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
@@ -129,7 +130,16 @@ def main(args):
         device=args.device,
     )
 
-    model = utils.load_model(args)
+    if os.path.exists(os.path.join(args.output_dir, "ckpt", "model.pt")):
+        model = utils.load_model(args)
+    else:
+        model = Model(args, ds=test_ds)
+        utils.load_model_state(
+            args,
+            model=model,
+            filename=os.path.join(args.output_dir, "ckpt", "best_model.pt"),
+        )
+        model.to(args.device)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
