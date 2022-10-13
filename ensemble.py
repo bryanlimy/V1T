@@ -49,6 +49,7 @@ class OutputModule(nn.Module):
         }
         self.output_shapes = args.output_shapes
         self.bias_mode = args.bias_mode
+        self.reg_scale = torch.tensor(args.reg_scale, device=args.device)
         self.initialize_mixer()
         self.initialize_bias()
         self.activation = ELU1()
@@ -94,6 +95,11 @@ class OutputModule(nn.Module):
                 )
             self.biases[str(mouse_id)] = nn.Parameter(bias)
 
+    def regularizer(self, mouse_id: int):
+        reg = sum(p.abs().sum() for p in self.layer.parameters())
+        reg += self.biases[str(mouse_id)].abs().sum()
+        return self.reg_scale * reg
+
     def forward(self, inputs: torch.Tensor, mouse_id: int):
         outputs = self.layer(inputs)
         outputs = outputs + self.biases[str(mouse_id)]
@@ -126,7 +132,7 @@ class EnsembleModel(nn.Module):
         self.output_module = OutputModule(args, num_models=len(saved_models), ds=ds)
 
     def regularizer(self, mouse_id: int):
-        return torch.tensor(0)
+        return self.output_module.regularizer(mouse_id=mouse_id)
 
     def forward(self, inputs: torch.Tensor, mouse_id: int, pupil_center: torch.Tensor):
         outputs = [
@@ -202,8 +208,6 @@ def main(args):
         utils.save_args(args)
 
         epoch = scheduler.restore()
-
-        utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
 
         while (epoch := epoch + 1) < args.epochs + 1:
             if args.verbose:
@@ -365,6 +369,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--reg_scale", type=float, default=0)
     parser.add_argument("--train", action="store_true")
 
     # plot settings
