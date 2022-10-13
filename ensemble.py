@@ -106,7 +106,7 @@ def main(args):
         args,
         saved_models={
             "stacked2d": "runs/sensorium/077_stacked2d_gaussian2d_1cm/",
-            "vit": "runs/sensorium/100_vit_gaussian2d_0.2dropout_convEMB/",
+            "vit": "runs/sensorium/082_vit_gaussian2d_0.25dropout_1cm_pretrain/",
             "stn": "runs/tuner/stn/output_dir/97fd64d2/",
         },
         ds=train_ds,
