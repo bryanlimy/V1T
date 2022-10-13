@@ -259,14 +259,8 @@ def main(args):
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
         summary.scalar(
-            "model/learning_rate/core",
+            "model/learning_rate",
             value=optimizer.param_groups[0]["lr"],
-            step=epoch,
-            mode=0,
-        )
-        summary.scalar(
-            "model/learning_rate/readouts",
-            value=optimizer.param_groups[1]["lr"],
             step=epoch,
             mode=0,
         )
@@ -311,24 +305,26 @@ def main(args):
     )
 
     # Sensorium challenge
-    generate_submission(
-        args,
-        mouse_id=0,
-        test_ds=test_ds,
-        final_test_ds=final_test_ds,
-        model=model,
-        csv_dir=os.path.join(csv_dir, "sensorium"),
-    )
+    if 0 in test_ds:
+        generate_submission(
+            args,
+            mouse_id=0,
+            test_ds=test_ds,
+            final_test_ds=final_test_ds,
+            model=model,
+            csv_dir=os.path.join(csv_dir, "sensorium"),
+        )
 
     # Sensorium+ challenge
-    generate_submission(
-        args,
-        mouse_id=1,
-        test_ds=test_ds,
-        final_test_ds=final_test_ds,
-        model=model,
-        csv_dir=os.path.join(csv_dir, "sensorium+"),
-    )
+    if 1 in test_ds:
+        generate_submission(
+            args,
+            mouse_id=1,
+            test_ds=test_ds,
+            final_test_ds=final_test_ds,
+            model=model,
+            csv_dir=os.path.join(csv_dir, "sensorium+"),
+        )
 
     print(f"\nSubmission results saved to {csv_dir}.")
 
