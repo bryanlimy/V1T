@@ -259,6 +259,7 @@ def main(args):
         print_result=True,
         save_result=args.output_dir,
     )
+    eval_result["iterations"] = epoch // 10
 
     summary.close()
 
