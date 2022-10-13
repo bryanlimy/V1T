@@ -10,8 +10,8 @@ from shutil import rmtree
 from ray.air import session
 from torch.utils.data import DataLoader
 
+from sensorium.models import get_model
 from sensorium import losses, metrics, data
-from sensorium.models import get_model, Model
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
@@ -29,7 +29,7 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 def train_step(
     mouse_id: int,
     data: t.Dict[str, torch.Tensor],
-    model: Model,
+    model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
     update: bool,
@@ -58,7 +58,7 @@ def train_step(
 def train(
     args,
     ds: t.Dict[int, DataLoader],
-    model: Model,
+    model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
     epoch: int,
