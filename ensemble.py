@@ -139,9 +139,10 @@ def main(args):
 
     utils.save_args(args)
 
+    epoch = scheduler.restore()
+
     utils.evaluate(args, ds=val_ds, model=model, epoch=0, summary=summary, mode=1)
 
-    epoch = 0
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")

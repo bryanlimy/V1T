@@ -186,10 +186,11 @@ def main(args):
     scheduler = Scheduler(
         args,
         mode="min",
-        model=model.core,  # only save core module
+        model=model,  # only save core module
         optimizer=optimizer,
         save_optimizer=False,
         save_scheduler=False,
+        save_modules=["core"],
     )
 
     utils.save_args(args)
