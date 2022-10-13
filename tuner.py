@@ -105,7 +105,7 @@ def train_function(
 def get_search_space(args):
     # default search space
     search_space = {
-        "plus": args.plus,
+        "plus": False,
         "disable_grid_predictor": tune.choice([True, False]),
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
