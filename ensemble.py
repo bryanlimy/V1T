@@ -166,7 +166,7 @@ def main(args):
                 {
                     "params": model.output_module.parameters(),
                     "lr": args.lr,
-                    "name": model,
+                    "name": "output_module",
                 }
             ],
             lr=args.lr,
