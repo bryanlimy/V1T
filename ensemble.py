@@ -167,8 +167,8 @@ def main(args):
             mode="max",
             model=model,
             optimizer=optimizer,
-            lr_patience=1,
-            min_epochs=3,
+            lr_patience=2,
+            min_epochs=4,
         )
         criterion = losses.get_criterion(args, ds=train_ds)
 
