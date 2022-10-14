@@ -90,8 +90,8 @@ class EnsembleModel(nn.Module):
                     model_args[name].output_dir, "ckpt", "best_model.pt"
                 ),
             )
-            model.requires_grad_(False)
             model.train(False)
+            model.requires_grad_(False)
             ensemble[name] = model
         self.ensemble = nn.ModuleDict(ensemble)
         self.output_module = OutputModule(args, in_features=len(saved_models))
@@ -110,8 +110,7 @@ class EnsembleModel(nn.Module):
             for name in self.ensemble.keys()
         ]
         outputs = torch.cat(outputs, dim=-1)
-        # outputs = self.output_module(outputs, mouse_id=mouse_id)
-        outputs = torch.mean(outputs, dim=-1)
+        outputs = self.output_module(outputs, mouse_id=mouse_id)
         return outputs
 
 
