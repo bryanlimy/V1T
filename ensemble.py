@@ -120,6 +120,7 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
     utils.get_device(args)
+    utils.set_random_seed(seed=args.seed)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
         args,
@@ -304,6 +305,7 @@ if __name__ == "__main__":
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--mixer", default="dense", type=str, choices=["dense", "conv"])
+    parser.add_argument("--seed", type=int, default=1234)
 
     parser.add_argument("--criterion", type=str, default="poisson")
     parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
