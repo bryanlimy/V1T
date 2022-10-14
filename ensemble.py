@@ -304,7 +304,6 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument("--mixer", default="dense", type=str, choices=["dense", "conv"])
     parser.add_argument("--seed", type=int, default=1234)
 
     parser.add_argument("--criterion", type=str, default="poisson")
@@ -333,16 +332,6 @@ if __name__ == "__main__":
         "1: rescale image by 0.25 in both width and height (1, 36, 64)"
         "2: crop image based on retinotopy and rescale to (1, 36, 64)"
         "3: crop left half of the image and rotate.",
-    )
-    parser.add_argument(
-        "--bias_mode",
-        type=int,
-        default=0,
-        choices=[0, 1, 2],
-        help="Gaussian2d readout bias mode:"
-        "0: initialize bias with zeros"
-        "1: initialize bias with the mean responses"
-        "2: initialize bias with the mean responses divide by standard deviation",
     )
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-4)
