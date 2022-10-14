@@ -227,6 +227,8 @@ def main(args):
                 break
 
         scheduler.restore()
+
+        utils.save_model(args, model=model, epoch=epoch)
     else:
         filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
         ckpt = torch.load(filename, map_location=model.device)

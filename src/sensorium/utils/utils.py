@@ -288,7 +288,7 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def save_model(args, model: Model, epoch: int):
+def save_model(args, model: nn.Module, epoch: int):
     filename = os.path.join(args.output_dir, "ckpt", "model.pt")
     torch.save({"epoch": epoch, "model": model}, f=filename)
     if args.verbose:
