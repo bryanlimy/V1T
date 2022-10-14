@@ -133,7 +133,7 @@ def main(args):
 
     args.saved_models = {
         "stacked2d1": "runs/sensorium/077_stacked2d_gaussian2d_1cm/",
-        "stacked2d2": "92_stacked2d_gaussian2d_1cm",
+        "stacked2d2": "runs/sensorium/92_stacked2d_gaussian2d_1cm",
         "vit": "runs/sensorium/071_vit_4ps_gaussian2d_0.25si/",
         "stn": "runs/tuner/stn/output_dir/97fd64d2/",
     }
