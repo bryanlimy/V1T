@@ -110,7 +110,8 @@ class EnsembleModel(nn.Module):
             for name in self.ensemble.keys()
         ]
         outputs = torch.cat(outputs, dim=-1)
-        outputs = self.output_module(outputs, mouse_id=mouse_id)
+        # outputs = self.output_module(outputs, mouse_id=mouse_id)
+        outputs = torch.mean(outputs, dim=-1)
         return outputs
 
 
@@ -243,10 +244,11 @@ def main(args):
         utils.save_model(args, model=model, epoch=epoch)
     else:
         filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
-        ckpt = torch.load(filename, map_location=args.device)
-        ckpt_dict = ckpt["model_state_dict"]
-        model.load_state_dict(ckpt_dict)
-        print(f'\nLoaded model (epoch {ckpt["epoch"]}) from {filename}.')
+        if os.path.exists(filename):
+            ckpt = torch.load(filename, map_location=args.device)
+            ckpt_dict = ckpt["model_state_dict"]
+            model.load_state_dict(ckpt_dict)
+            print(f'\nLoaded model (epoch {ckpt["epoch"]}) from {filename}.')
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
