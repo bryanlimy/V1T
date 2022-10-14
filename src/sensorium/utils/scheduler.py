@@ -166,6 +166,7 @@ class Scheduler:
                             f"LR reductions."
                         )
                 else:
+                    self.restore()
                     self.reduce_lr()
                     self.num_reduce += 1
                     self.lr_wait = 0
