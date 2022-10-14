@@ -164,9 +164,9 @@ def main(args):
         optimizer = torch.optim.Adam(
             params=[
                 {
-                    "params": model.output_module.parameters(),
+                    "params": model.parameters(),
                     "lr": args.lr,
-                    "name": "output_module",
+                    "name": "model",
                 }
             ],
             lr=args.lr,
@@ -241,7 +241,7 @@ def main(args):
         utils.save_model(args, model=model, epoch=epoch)
     else:
         filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
-        ckpt = torch.load(filename, map_location=model.device)
+        ckpt = torch.load(filename, map_location=args.device)
         ckpt_dict = ckpt["model_state_dict"]
         model.load_state_dict(ckpt_dict)
         print(f'\nLoaded model (epoch {ckpt["epoch"]}) from {filename}.')
