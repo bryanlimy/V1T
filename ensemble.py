@@ -160,7 +160,16 @@ def main(args):
         if summary is not None:
             summary.scalar("model/trainable_parameters", model_info.trainable_params)
 
-        optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr)
+        optimizer = torch.optim.Adam(
+            params=[
+                {
+                    "output_module": model.output_module.parameters(),
+                    "lr": args.lr,
+                    "name": model,
+                }
+            ],
+            lr=args.lr,
+        )
         scheduler = Scheduler(
             args,
             mode="max",
