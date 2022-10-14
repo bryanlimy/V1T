@@ -157,7 +157,7 @@ class ViTCore(Core):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         (c, h, w) = input_shape
         patch_size = args.patch_size
-        patch_stride = patch_size if args.patch_stride is None else args.patch_stride
+        patch_stride = 1 if max(input_shape) < 100 else patch_size
         emb_dim = args.emb_dim
         heads = args.num_heads
         mlp_dim = args.mlp_dim

@@ -133,8 +133,10 @@ def main(args):
     args.saved_models = {
         "stacked2d1": "runs/sensorium/077_stacked2d_gaussian2d_1cm/",
         "stacked2d2": "runs/sensorium/092_stacked2d_gaussian2d_1cm",
-        "vit": "runs/sensorium/071_vit_4ps_gaussian2d_0.25si/",
-        "stn": "runs/tuner/stn/output_dir/97fd64d2/",
+        "stacked2d3": "runs/sensorium/097_stacked2d_5nl_gaussian2d",
+        "vit1": "runs/sensorium/071_vit_4ps_gaussian2d_0.25si/",
+        "stn1": "runs/tuner/stn/output_dir/97fd64d2/",
+        "stn2": "runs/tuner/stn/output_dir/16431fa0/",
     }
     model = EnsembleModel(
         args,
