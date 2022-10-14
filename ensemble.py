@@ -45,23 +45,28 @@ class OutputModule(nn.Module):
         self.in_features = in_features
         self.output_shapes = args.output_shapes
         self.reg_scale = torch.tensor(args.reg_scale, device=args.device)
-        self.networks = nn.ModuleDict(
-            {
-                str(mouse_id): nn.Sequential(
-                    nn.Linear(in_features=self.in_features, out_features=1),
-                    Rearrange("b n 1 -> b n"),
-                )
-                for mouse_id in self.output_shapes.keys()
-            }
+        # input shape (batch_size, num_neurons, num. models)
+        # self.networks = nn.ModuleDict(
+        #     {
+        #         str(mouse_id): nn.Sequential(
+        #             nn.Linear(in_features=self.in_features, out_features=1),
+        #             Rearrange("b n 1 -> b n"),
+        #         )
+        #         for mouse_id in self.output_shapes.keys()
+        #     }
+        # )
+        self.networks = nn.Sequential(
+            nn.Linear(in_features=in_features, out_features=1),
+            Rearrange("b n 1 -> b n"),
         )
         self.activation = ELU1()
 
     def regularizer(self, mouse_id: int):
-        reg = sum(p.abs().sum() for p in self.networks[str(mouse_id)].parameters())
+        reg = sum(p.abs().sum() for p in self.networks.parameters())
         return self.reg_scale * reg
 
     def forward(self, inputs: torch.Tensor, mouse_id: int):
-        outputs = self.networks[str(mouse_id)](inputs)
+        outputs = self.networks(inputs)
         outputs = self.activation(outputs)
         return outputs
 
