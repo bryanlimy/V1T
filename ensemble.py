@@ -238,13 +238,13 @@ def main(args):
                 break
 
         scheduler.restore()
-
         utils.save_model(args, model=model, epoch=epoch)
     else:
         filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
         ckpt = torch.load(filename, map_location=model.device)
         ckpt_dict = ckpt["model_state_dict"]
         model.load_state_dict(ckpt_dict)
+        print(f'\nLoaded model (epoch {ckpt["epoch"]}) from {filename}.')
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
