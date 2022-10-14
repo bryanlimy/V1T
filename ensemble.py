@@ -56,7 +56,9 @@ class OutputModule(nn.Module):
         #     }
         # )
         self.networks = nn.Sequential(
-            nn.Linear(in_features=in_features, out_features=1),
+            nn.Linear(in_features=in_features, out_features=30),
+            nn.GELU(),
+            nn.Linear(in_features=30, out_features=1),
             Rearrange("b n 1 -> b n"),
         )
         self.activation = ELU1()
