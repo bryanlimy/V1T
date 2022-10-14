@@ -235,9 +235,7 @@ def main(args):
         filename = os.path.join(args.output_dir, "ckpt", "best_model.pt")
         ckpt = torch.load(filename, map_location=model.device)
         ckpt_dict = ckpt["model_state_dict"]
-        model_dict = model.state_dict()
-        model_dict.update({f"output_module.{k}": v for k, v in ckpt_dict.items()})
-        model.load_state_dict(model_dict)
+        model.load_state_dict(ckpt_dict)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
