@@ -163,7 +163,7 @@ def main(args):
         optimizer = torch.optim.Adam(
             params=[
                 {
-                    "output_module": model.output_module.parameters(),
+                    "params": model.output_module.parameters(),
                     "lr": args.lr,
                     "name": model,
                 }
