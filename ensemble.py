@@ -121,8 +121,6 @@ def main(args):
         os.makedirs(args.output_dir)
     utils.get_device(args)
 
-    summary = tensorboard.Summary(args)
-
     train_ds, val_ds, test_ds = data.get_training_ds(
         args,
         data_dir=args.dataset,
@@ -145,6 +143,7 @@ def main(args):
     model.to(args.device)
 
     if args.train:
+        summary = tensorboard.Summary(args)
         # get model summary for the first rodent
         model_info = torchinfo.summary(
             model,
