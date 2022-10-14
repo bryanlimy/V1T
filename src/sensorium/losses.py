@@ -1,11 +1,11 @@
 import torch
 import typing as t
+import numpy as np
 from torch import nn
 from torch.nn.modules.loss import _Loss
 from torch.utils.data import DataLoader
 
 _CRITERION = dict()
-import numpy as np
 
 
 def register(name):
@@ -74,7 +74,6 @@ class RMSSE(Loss):
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         loss = torch.square(y_true - y_pred)
-        loss = self.scale_neurons(loss, mouse_id=mouse_id)
         loss = torch.sqrt(torch.mean(torch.sum(loss, dim=-1)))
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
@@ -110,7 +109,6 @@ class PoissonLoss(Loss):
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         loss = y_pred - y_true * torch.log(y_pred + self.eps)
-        loss = self.scale_neurons(loss, mouse_id=mouse_id)
         loss = torch.mean(torch.sum(loss, dim=-1))
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
