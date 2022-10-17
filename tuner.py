@@ -242,7 +242,7 @@ def main(args):
 
     search_space, points_to_evaluate, evaluated_rewards = get_search_space(args)
 
-    metric, mode = "metric/single_trial_correlation", "max"
+    metric, mode = "metrics/single_trial_correlation", "max"
     num_gpus = torch.cuda.device_count()
     max_concurrent = max(1, num_gpus)
 

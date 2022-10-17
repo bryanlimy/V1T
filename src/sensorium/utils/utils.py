@@ -160,7 +160,7 @@ def evaluate(
         values = list(results[metric].values())
         if values:
             average = np.mean(values)
-            overall_result[f"metric/{metric}"] = average
+            overall_result[f"metrics/{metric}"] = average
             results[metric]["average"] = average
             if summary is not None:
                 summary.scalar(
