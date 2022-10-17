@@ -101,7 +101,9 @@ def train_function(
         device=device,
         mouse_ids=mouse_ids,
     )
-    return trainer.main(args)
+    result = trainer.main(args)
+    print(f"\n\n{session.get_trial_id()} completed\n\n")
+    return result
 
 
 def get_search_space(args):
