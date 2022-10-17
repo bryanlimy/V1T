@@ -89,6 +89,7 @@ def train_function(
     batch_size: int,
     num_workers: int,
     device: str,
+    mouse_ids: t.List[int],
 ):
     args = Args(
         config,
@@ -99,6 +100,7 @@ def train_function(
         batch_size=batch_size,
         num_workers=num_workers,
         device=device,
+        mouse_ids=mouse_ids,
     )
     return trainer.main(args)
 
@@ -240,7 +242,7 @@ def main(args):
 
     search_space, points_to_evaluate, evaluated_rewards = get_search_space(args)
 
-    metric, mode = "single_trial_correlation", "max"
+    metric, mode = "metric/single_trial_correlation", "max"
     num_gpus = torch.cuda.device_count()
     max_concurrent = max(1, num_gpus)
 
@@ -248,7 +250,7 @@ def main(args):
         time_attr="training_iteration",
         metric=metric,
         mode=mode,
-        max_t=args.epochs // 10,
+        max_t=max(1, args.epochs // 10),
         reduction_factor=3,
     )
     search_algorithm = TuneBOHB(
@@ -259,7 +261,7 @@ def main(args):
     )
     reporter = CLIReporter(
         metric_columns=[
-            "iterations",
+            "training_iteration",
             "single_trial_correlation",
             "correlation_to_average",
         ],
@@ -274,7 +276,7 @@ def main(args):
         ],
         max_progress_rows=10,
         max_error_rows=3,
-        max_column_length=20,
+        max_column_length=10,
         max_report_frequency=60,
         metric=metric,
         mode=mode,
@@ -303,6 +305,7 @@ def main(args):
             batch_size=args.batch_size,
             num_workers=args.num_workers,
             device=args.device,
+            mouse_ids=args.mouse_ids,
         ),
         name=experiment_name,
         resources_per_trial={"cpu": args.num_cpus, "gpu": 1 if num_gpus else 0},
@@ -323,7 +326,6 @@ def main(args):
     )
 
     best_trial = results.get_best_trial()
-
     print(
         f"\nBest result\n"
         f'\tsingle trial correlation: {best_trial.last_result["single_trial_correlation"]:0.6f}\n'

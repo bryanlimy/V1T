@@ -160,7 +160,7 @@ def evaluate(
         values = list(results[metric].values())
         if values:
             average = np.mean(values)
-            overall_result[metric] = average
+            overall_result[f"metric/{metric}"] = average
             results[metric]["average"] = average
             if summary is not None:
                 summary.scalar(
@@ -247,12 +247,10 @@ def log_metrics(
         epoch: int, the current epoch number.
         mode: int, Summary logging mode.
         summary: tensorboard.Summary, Summary class
-        mouse_id: int, the mouse_id of the result dictionary, None if the
-            dictionary represents results from multiple mice.
     """
-    keys = list(results.keys())
-    metrics = list(results[keys[0]].keys())
-    for mouse_id in keys:
+    mouse_ids = list(results.keys())
+    metrics = list(results[mouse_ids[0]].keys())
+    for mouse_id in mouse_ids:
         for metric in metrics:
             results[mouse_id][metric] = np.mean(results[mouse_id][metric])
             summary.scalar(
@@ -262,8 +260,10 @@ def log_metrics(
                 mode=mode,
             )
     for metric in metrics:
-        results[metric] = np.mean([results[mouse_id][metric] for mouse_id in keys])
+        results[metric] = np.mean([results[mouse_id][metric] for mouse_id in mouse_ids])
         summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
+    for mouse_id in mouse_ids:
+        del results[mouse_id]
 
 
 def num_steps(ds: t.Dict[int, DataLoader]):

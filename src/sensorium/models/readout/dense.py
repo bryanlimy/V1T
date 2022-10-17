@@ -17,7 +17,11 @@ class DenseReadout(Readout):
         name: str = "DenseReadout",
     ):
         super(DenseReadout, self).__init__(
-            args, input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
+            args,
+            input_shape=input_shape,
+            output_shape=output_shape,
+            ds=ds,
+            name=name,
         )
 
         out_features = int(np.prod(output_shape))
@@ -32,6 +36,6 @@ class DenseReadout(Readout):
             nn.Linear(in_features=out_features // 2, out_features=out_features),
         )
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, shift: torch.Tensor = None):
         outputs = self.dense(inputs)
         return outputs

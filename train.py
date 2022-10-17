@@ -18,12 +18,9 @@ from sensorium.utils.scheduler import Scheduler
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    y_true, y_pred = y_true.cpu().numpy(), y_pred.cpu().numpy()
-    return {
-        "metrics/trial_correlation": metrics.correlation(
-            y1=y_pred, y2=y_true, axis=None
-        )
-    }
+    rmsse = torch.sqrt(torch.mean(torch.sum(torch.square(y_true - y_pred), dim=1)))
+    correlation = metrics.correlation(y1=y_pred, y2=y_true, axis=None)
+    return {"metrics/rmsee": rmsse, "metrics/single_trial_correlation": correlation}
 
 
 def train_step(
@@ -176,7 +173,6 @@ def main(args):
         eps=args.adam_eps,
     )
     scheduler = Scheduler(args, mode="max", model=model, optimizer=optimizer)
-
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
@@ -225,30 +221,19 @@ def main(args):
         if args.verbose:
             print(
                 f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
+                f'correlation: {train_result["metrics/single_trial_correlation"]:.04f}\n'
                 f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
+                f'correlation: {val_result["metrics/single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
 
-        if epoch % 10 == 0 or epoch == args.epochs:
-            eval_result = utils.evaluate(
-                args,
-                ds=test_ds,
-                model=model,
-                epoch=epoch,
-                summary=summary,
-                mode=2,
-            )
-            if tune.is_session_enabled():
-                session.report(metrics=eval_result)
+        if tune.is_session_enabled() and (epoch % 10 == 0 or epoch == args.epochs):
+            session.report(metrics=val_result)
 
         if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
             break
 
     scheduler.restore()
-
-    utils.save_model(args, model=model, epoch=epoch)
 
     eval_result = utils.evaluate(
         args,
@@ -260,7 +245,6 @@ def main(args):
         print_result=True,
         save_result=args.output_dir,
     )
-    eval_result["iterations"] = epoch // 10
 
     summary.close()
 

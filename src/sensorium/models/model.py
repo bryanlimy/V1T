@@ -26,13 +26,14 @@ class ELU1(nn.Module):
 class Model(nn.Module):
     def __init__(self, args, ds: t.Dict[int, DataLoader]):
         super(Model, self).__init__()
-        self.use_shifter = args.plus or args.use_shifter
+        assert isinstance(
+            args.output_shapes, dict
+        ), "output_shapes must be a dictionary of mouse_id and output_shape"
+
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
-        assert isinstance(
-            self.output_shapes, dict
-        ), "output_shapes must be a dictionary of mouse_id and output_shape"
+        self.use_shifter = args.plus or args.use_shifter
 
         self.initialize_core(args)
         self.initialize_readouts(args, ds=ds)

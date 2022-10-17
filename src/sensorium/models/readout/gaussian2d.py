@@ -25,7 +25,11 @@ class Gaussian2DReadout(Readout):
         name: str = "Gaussian2DReadout",
     ):
         super(Gaussian2DReadout, self).__init__(
-            args, input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
+            args,
+            input_shape=input_shape,
+            output_shape=output_shape,
+            ds=ds,
+            name=name,
         )
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:

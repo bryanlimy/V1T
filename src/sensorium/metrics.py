@@ -17,7 +17,7 @@ def correlation(
     """
     is_tensor = isinstance(y1, torch.Tensor)
     if is_tensor:
-        y1, y2 = y1.numpy(), y2.numpy()
+        y1, y2 = y1.cpu().numpy(), y2.cpu().numpy()
     y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (
         y1.std(axis=axis, keepdims=True, ddof=0) + eps
     )

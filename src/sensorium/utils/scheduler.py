@@ -21,7 +21,7 @@ class Scheduler:
         min_epochs: int = 50,
         save_optimizer: bool = True,
         save_scheduler: bool = True,
-        save_modules: t.List[str] = None,
+        module_names: t.List[str] = None,
     ):
         """
         Args:
@@ -44,7 +44,7 @@ class Scheduler:
         self.mode = mode
         self.model = model
         self.optimizer = optimizer
-        self.save_modules = save_modules
+        self.module_names = module_names
         self.max_reduce = max_reduce
         self.num_reduce = 0
         self.lr_patience = lr_patience
@@ -55,7 +55,6 @@ class Scheduler:
         self.factor = factor
         self.min_epochs = min_epochs
         self.best_value = torch.inf if mode == "min" else -torch.inf
-
         self.checkpoint_dir = os.path.join(args.output_dir, "ckpt")
         if not os.path.isdir(self.checkpoint_dir):
             os.makedirs(self.checkpoint_dir)
@@ -67,11 +66,11 @@ class Scheduler:
     def _parameters2save(self):
         state_dict = self.model.state_dict()
         parameters = OrderedDict()
-        if self.save_modules is None:
+        if self.module_names is None:
             parameters = state_dict
         else:
             for parameter in state_dict.keys():
-                if parameter.split(".")[0] in self.save_modules:
+                if parameter.split(".")[0] in self.module_names:
                     parameters[parameter] = state_dict[parameter]
         return parameters
 
