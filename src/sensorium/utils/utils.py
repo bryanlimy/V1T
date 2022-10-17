@@ -11,8 +11,8 @@ from tqdm import tqdm
 from torch.utils.data import DataLoader
 
 
-from sensorium import losses, data
 from sensorium.models import Model
+from sensorium import losses, data
 from sensorium.metrics import Metrics
 from sensorium.utils import yaml, tensorboard
 

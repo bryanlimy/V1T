@@ -17,6 +17,55 @@ def register(name):
     return add_to_dict
 
 
+def _t_correlation(
+    y1: torch.Tensor,
+    y2: torch.Tensor,
+    dim: t.Union[None, int, t.Tuple[int]] = -1,
+    eps: float = 1e-8,
+):
+    if dim is None:
+        dim = tuple(range(y1.dim()))
+    y1 = (y1 - y1.mean(dim=dim, keepdim=True)) / (
+        y1.std(dim=dim, unbiased=False, keepdim=True) + eps
+    )
+    y2 = (y2 - y2.mean(dim=dim, keepdim=True)) / (
+        y2.std(dim=dim, unbiased=False, keepdim=True) + eps
+    )
+    corr = (y1 * y2).mean(dim=dim)
+    return corr
+
+
+def _np_correlation(
+    y1: np.ndarray,
+    y2: np.ndarray,
+    axis: t.Union[None, int, t.Tuple[int]] = -1,
+    eps: float = 1e-8,
+    **kwargs,
+):
+    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (
+        y1.std(axis=axis, ddof=0, keepdims=True) + eps
+    )
+    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (
+        y2.std(axis=axis, ddof=0, keepdims=True) + eps
+    )
+    corr = (y1 * y2).mean(axis=axis, **kwargs)
+    return corr
+
+
+def correlation(
+    y1: t.Union[torch.Tensor, np.ndarray],
+    y2: t.Union[torch.Tensor, np.ndarray],
+    dim: t.Union[None, int, t.Tuple[int]] = -1,
+    eps: float = 1e-8,
+    **kwargs,
+):
+    return (
+        _t_correlation(y1=y1, y2=y2, dim=dim, eps=eps)
+        if isinstance(y1, torch.Tensor)
+        else _np_correlation(y1=y1, y2=y2, axis=dim, eps=eps, **kwargs)
+    )
+
+
 class Loss(_Loss):
     """Basic Criterion class"""
 
@@ -87,14 +136,7 @@ class Correlation(Loss):
         eps: float = 1e-8,
     ):
         num_neurons = y_true.size(1)
-        dim = 0  # compute correlation over batch dimension
-        y1 = (y_true - y_true.mean(dim=dim)) / (
-            y_true.std(dim=dim, unbiased=False) + eps
-        )
-        y2 = (y_pred - y_pred.mean(dim=dim)) / (
-            y_pred.std(dim=dim, unbiased=False) + eps
-        )
-        corr = (y1 * y2).mean(dim=dim)
+        corr = correlation(y1=y_true, y2=y_pred, dim=0, eps=eps)
         loss = num_neurons - torch.sum(corr)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss

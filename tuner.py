@@ -245,7 +245,7 @@ def main(args):
     scheduler = HyperBandForBOHB(
         time_attr="training_iteration",
         max_t=args.epochs,
-        reduction_factor=3,
+        reduction_factor=2,
         stop_last_trials=False,
     )
     search_algorithm = TuneBOHB(
