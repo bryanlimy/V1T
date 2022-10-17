@@ -246,6 +246,7 @@ def main(args):
         time_attr="training_iteration",
         max_t=args.epochs,
         reduction_factor=3,
+        stop_last_trials=False,
     )
     search_algorithm = TuneBOHB(
         points_to_evaluate=points_to_evaluate,
