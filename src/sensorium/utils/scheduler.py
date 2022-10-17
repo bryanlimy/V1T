@@ -78,7 +78,7 @@ class Scheduler:
         self, value: t.Union[float, np.ndarray, torch.Tensor], epoch: int
     ):
         """Save current model as best_model.pt"""
-        filename = os.path.join(self.checkpoint_dir, "best_model.pt")
+        filename = os.path.join(self.checkpoint_dir, "model_state.pt")
         ckpt = {
             "epoch": epoch,
             "value": float(value),
@@ -102,7 +102,7 @@ class Scheduler:
                 return 0 if no checkpoint was found.
         """
         epoch = 0
-        filename = os.path.join(self.checkpoint_dir, "best_model.pt")
+        filename = os.path.join(self.checkpoint_dir, "model_state.pt")
         if os.path.exists(filename):
             ckpt = torch.load(filename, map_location=self.device)
             epoch = ckpt["epoch"]
