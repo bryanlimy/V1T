@@ -99,8 +99,14 @@ def validation_step(
     pupil_center = data["pupil_center"].to(device)
     outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-    result["loss/loss"] = loss.item()
-    result.update(compute_metrics(y_true=responses, y_pred=outputs))
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = loss + reg_loss
+    result = {
+        "loss/loss": loss.item(),
+        "loss/reg_loss": reg_loss.item(),
+        "loss/total_loss": total_loss.item(),
+        **compute_metrics(y_true=responses, y_pred=outputs),
+    }
     return result
 
 
@@ -223,9 +229,9 @@ def main(args):
         )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
+                f'Train\t\t\tloss: {train_result["loss/total_loss"]:.04f}\t\t'
                 f'correlation: {train_result["metrics/single_trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
+                f'Validation\t\tloss: {val_result["loss/total_loss"]:.04f}\t\t'
                 f'correlation: {val_result["metrics/single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
