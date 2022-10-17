@@ -227,7 +227,7 @@ def main(args):
                 f"Elapse: {elapse:.02f}s"
             )
 
-        if tune.is_session_enabled() and (epoch % 10 == 0 or epoch == args.epochs):
+        if tune.is_session_enabled():
             session.report(metrics=val_result)
 
         if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):

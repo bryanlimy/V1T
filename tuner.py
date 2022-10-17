@@ -250,7 +250,7 @@ def main(args):
         time_attr="training_iteration",
         metric=metric,
         mode=mode,
-        max_t=max(1, args.epochs // 10),
+        max_t=args.epochs,
         reduction_factor=3,
     )
     search_algorithm = TuneBOHB(
