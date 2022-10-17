@@ -320,7 +320,9 @@ def main(args):
 
     best_trial = results.get_best_trial()
     print(
-        f"\nBest result: {best_trial.last_result}\n"
+        f"\nBest result\n"
+        f"\tsingle trial correlation: {best_trial.last_result['single_trial_correlation']:.06f}\n"
+        f"\tcorrelation to average: {best_trial.last_result['correlation_to_average']:.06f}\n"
         f"Configuration:\n{best_trial.config}\n\n"
         f"Results saved to {os.path.join(args.output_dir, experiment_name)}"
     )
