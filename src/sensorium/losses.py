@@ -32,22 +32,8 @@ class Loss(_Loss):
             size_average=size_average, reduce=reduce, reduction=reduction
         )
         self._device = args.device
-        self._depth_scale = args.depth_scale
         self._ds_scale = args.ds_scale
-        self._compute_depth_masks(ds)
         self._get_ds_sizes(ds)
-
-    def _compute_depth_masks(self, ds: t.Dict[int, DataLoader]):
-        """Extract the weighted loss mask based on the depth (z-axis) of neurons
-
-        Neurons between the depth of 240 to 260 are masked by self._depth_scale,
-        otherwise 1.
-        """
-        self._depth_masks = {}
-        for mouse_id, mouse_ds in ds.items():
-            depth = torch.from_numpy(mouse_ds.dataset.coordinates[:, -1])
-            mask = torch.where((depth >= 240) & (depth <= 260), self._depth_scale, 1)
-            self._depth_masks[mouse_id] = mask.to(self._device)
 
     def _get_ds_sizes(self, ds: t.Dict[int, DataLoader]):
         self._ds_sizes = {
@@ -56,9 +42,6 @@ class Loss(_Loss):
             )
             for mouse_id, mouse_ds in ds.items()
         }
-
-    def scale_neurons(self, loss: torch.Tensor, mouse_id: int):
-        return loss * self._depth_masks[mouse_id]
 
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
@@ -81,28 +64,6 @@ class RMSSE(Loss):
 
 @register("poisson")
 class PoissonLoss(Loss):
-    """
-    Poisson Loss
-
-    Computes Poisson loss between the output and target.
-    Loss is evaluated by computing log likelihood (up to a constant offset
-    dependent on the target) that output prescribes the mean of the
-    Poisson distribution and target is a sample from the distribution.
-
-    Args:
-        eps (float, optional): Value used to numerically stabilize
-            evaluation of the log-likelihood. This value is effectively
-            added to the output during evaluation.
-            Defaults to 1e-12.
-        per_neuron (bool, optional): If set to True, the average/total
-            Poisson loss is returned for each entry of the last dimension
-            (assumed to be enumeration neurons) separately.
-            Defaults to False.
-        return_average (bool, optional): If set to True, return mean loss.
-            Otherwise, returns the sum of loss.
-            Defaults to False.
-    """
-
     def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-8):
         super(PoissonLoss, self).__init__(args, ds=ds)
         self.eps = eps

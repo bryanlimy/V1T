@@ -278,9 +278,16 @@ if __name__ == "__main__":
         default=None,
         help="Mouse to use for training.",
     )
-    parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
     parser.add_argument(
-        "--num_workers", default=2, type=int, help="number of works for DataLoader."
+        "--include_behaviour",
+        action="store_true",
+        help="include behaviour data into input as additional channels.",
+    )
+    parser.add_argument(
+        "--num_workers",
+        default=2,
+        type=int,
+        help="number of works for DataLoader.",
     )
 
     # model settings
@@ -350,24 +357,7 @@ if __name__ == "__main__":
         help="If batch_size == 0 and CUDA is available, then dynamically test "
         "batch size. Otherwise use the provided value.",
     )
-    parser.add_argument(
-        "--criterion",
-        default="poisson",
-        type=str,
-        help="criterion (loss function) to use.",
-    )
-    parser.add_argument("--lr", default=1e-3, type=float, help="initial learning rate")
-    parser.add_argument(
-        "--depth_scale",
-        default=1.0,
-        type=float,
-        help="the coefficient to scale loss for neurons in depth of 240 to 260.",
-    )
-    parser.add_argument(
-        "--ds_scale",
-        action="store_true",
-        help="scale loss by the size of the dataset",
-    )
+
     parser.add_argument(
         "--crop_mode",
         default=1,
@@ -375,9 +365,7 @@ if __name__ == "__main__":
         choices=[0, 1, 2, 3],
         help="image crop mode:"
         "0: no cropping and return full image (1, 144, 256)"
-        "1: rescale image by 0.25 in both width and height (1, 36, 64)"
-        "2: crop image based on retinotopy and rescale to (1, 36, 64)"
-        "3: crop left half of the image and rotate.",
+        "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(
         "--device",
@@ -393,6 +381,23 @@ if __name__ == "__main__":
     parser.add_argument("--adam_beta1", type=float, default=0.9)
     parser.add_argument("--adam_beta2", type=float, default=0.9999)
     parser.add_argument("--adam_eps", type=float, default=1e-8)
+    parser.add_argument(
+        "--criterion",
+        default="poisson",
+        type=str,
+        help="criterion (loss function) to use.",
+    )
+    parser.add_argument(
+        "--lr",
+        default=1e-3,
+        type=float,
+        help="initial learning rate",
+    )
+    parser.add_argument(
+        "--ds_scale",
+        action="store_true",
+        help="scale loss by the size of the dataset",
+    )
 
     # pre-trained Core
     parser.add_argument(

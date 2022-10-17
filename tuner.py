@@ -68,7 +68,6 @@ class Args:
         self.device = device
         self.mouse_ids = mouse_ids
         self.pretrain_core = ""
-        self.depth_scale = 1
         self.seed = 1234
         self.save_plots = False
         self.dpi = 120
@@ -108,7 +107,7 @@ def train_function(
 def get_search_space(args):
     # default search space
     search_space = {
-        "plus": args.plus,
+        "include_behaviour": args.include_behaviour,
         "disable_grid_predictor": tune.choice([True, False]),
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
@@ -118,7 +117,7 @@ def get_search_space(args):
         "readout_reg_scale": tune.uniform(0, 1),
         "shifter_reg_scale": tune.uniform(0, 1),
         "ds_scale": tune.choice([True, False]),
-        "crop_mode": tune.choice([1, 2]),
+        "crop_mode": 1,
         "adam_beta1": tune.loguniform(1e-10, 1.0),
         "adam_beta2": tune.loguniform(1e-10, 1.0),
         "adam_eps": tune.loguniform(1e-10, 1),
@@ -256,20 +255,19 @@ def main(args):
         max_concurrent=max_concurrent,
     )
     reporter = CLIReporter(
-        metric_columns=[
-            "training_iteration",
-            "single_trial_correlation",
-            "correlation_to_average",
-        ],
-        parameter_columns=[
-            "criterion",
-            "num_layers",
-            "dropout",
-            "bias_mode",
-            "crop_mode",
-            "use_shifter",
-            "disable_grid_predictor",
-        ],
+        metric_columns={
+            "training_iteration": "epoch",
+            "single_trial_correlation": "correlation",
+        },
+        parameter_columns={
+            "criterion": "criterion",
+            "num_layers": "layers",
+            "dropout": "dropout",
+            "bias_mode": "bias_mode",
+            "use_shifter": "shifter",
+            "disable_grid_predictor": "grid_predictor",
+            "grid_predictor_dim": "grid_dim",
+        },
         max_progress_rows=10,
         max_error_rows=3,
         max_column_length=10,
@@ -349,7 +347,11 @@ if __name__ == "__main__":
         default=None,
         help="Mouse to use for training.",
     )
-    parser.add_argument("--plus", action="store_true")
+    parser.add_argument(
+        "--include_behaviour",
+        action="store_true",
+        help="include behaviour data into input as additional channels.",
+    )
 
     # search settings
     parser.add_argument("--num_cpus", type=int, default=3)

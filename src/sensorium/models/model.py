@@ -33,7 +33,7 @@ class Model(nn.Module):
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
-        self.use_shifter = args.plus or args.use_shifter
+        self.use_shifter = args.include_behaviour or args.use_shifter
 
         self.initialize_core(args)
         self.initialize_readouts(args, ds=ds)
