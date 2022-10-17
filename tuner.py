@@ -252,8 +252,6 @@ def main(args):
         reduction_factor=3,
     )
     search_algorithm = TuneBOHB(
-        metric=metric,
-        mode=mode,
         points_to_evaluate=points_to_evaluate,
         max_concurrent=max_concurrent,
     )
