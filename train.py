@@ -362,7 +362,7 @@ if __name__ == "__main__":
         "--crop_mode",
         default=1,
         type=int,
-        choices=[0, 1, 2, 3],
+        choices=[0, 1],
         help="image crop mode:"
         "0: no cropping and return full image (1, 144, 256)"
         "1: resize image to (1, 36, 64)",
