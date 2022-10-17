@@ -20,7 +20,10 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     rmsse = torch.sqrt(torch.mean(torch.sum(torch.square(y_true - y_pred), dim=1)))
     correlation = metrics.correlation(y1=y_pred, y2=y_true, axis=None)
-    return {"metrics/rmsee": rmsse, "metrics/single_trial_correlation": correlation}
+    return {
+        "metrics/rmsee": rmsse.item(),
+        "metrics/single_trial_correlation": correlation.item(),
+    }
 
 
 def train_step(
