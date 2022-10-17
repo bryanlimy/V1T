@@ -102,7 +102,7 @@ def train_function(
         mouse_ids=mouse_ids,
     )
     result = trainer.main(args)
-    print(f"\n\n{session.get_trial_id()} completed\n\n")
+    print(f"\n\n{session.get_trial_id()} completed\n{result}\n")
     return result
 
 
