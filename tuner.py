@@ -101,9 +101,7 @@ def train_function(
         device=device,
         mouse_ids=mouse_ids,
     )
-    result = trainer.main(args)
-    print(f"\n\n{session.get_trial_id()} completed\n{result}\n")
-    return result
+    return trainer.main(args)
 
 
 def get_search_space(args):
@@ -321,8 +319,7 @@ def main(args):
 
     best_trial = results.get_best_trial()
     print(
-        f"\nBest result\n"
-        f'\tsingle trial correlation: {best_trial.last_result["single_trial_correlation"]:0.6f}\n'
+        f"\nBest result: {best_trial.last_result}\n"
         f"Configuration:\n{best_trial.config}\n\n"
         f"Results saved to {os.path.join(args.output_dir, experiment_name)}"
     )
