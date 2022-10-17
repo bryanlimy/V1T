@@ -318,7 +318,7 @@ def load_model_state(args, model: Model, filename: str):
             print(f"\nLoaded model state (epoch {ckpt['epoch']}) from {filename}.")
 
 
-def get_batch_size(args):
+def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     device = args.device.type
 
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
@@ -336,19 +336,22 @@ def get_batch_size(args):
         output_shape = (train_ds[mouse_id].dataset.num_neurons,)
         model = Model(args, ds=train_ds)
         model.to(device)
+        model.train(True)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         criterion = losses.get_criterion(args, ds=train_ds)
 
         ds_size = len(train_ds[mouse_id].dataset)
 
-        batch_size, terminate = 1, False
-        while not terminate:
-            if batch_size > ds_size:
+        batch_size = 1
+        while True:
+            if max_batch_size is not None and batch_size >= max_batch_size:
+                batch_size = max_batch_size
+                break
+            if batch_size >= ds_size:
                 batch_size //= 2
                 break
             try:
-                model.train(True)
-                for _ in range(5):
+                for _ in range(num_iterations):
                     inputs = torch.rand(*(batch_size, *args.input_shape), device=device)
                     targets = torch.rand(*(batch_size, *output_shape), device=device)
                     pupil_center = torch.rand(batch_size, 2, device=device)
@@ -362,8 +365,9 @@ def get_batch_size(args):
                 batch_size *= 2
             except RuntimeError:
                 if args.verbose > 1:
-                    print(f"Dynamic batch size: {batch_size}")
+                    print(f"OOM at batch size: {batch_size}")
                 batch_size //= 2
-                terminate = True
+                break
         del train_ds, model, optimizer, criterion
+        torch.cuda.empty_cache()
         args.batch_size = batch_size

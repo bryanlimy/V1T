@@ -172,6 +172,8 @@ def main(args):
             },
         ],
         lr=args.lr,
+        betas=(args.adam_beta1, args.adam_beta2),
+        eps=args.adam_eps,
     )
     scheduler = Scheduler(args, mode="max", model=model, optimizer=optimizer)
 
@@ -239,7 +241,6 @@ def main(args):
                 mode=2,
             )
             if tune.is_session_enabled():
-                eval_result["iterations"] = epoch // 10
                 session.report(metrics=eval_result)
 
         if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
@@ -396,6 +397,11 @@ if __name__ == "__main__":
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--seed", type=int, default=1234)
+
+    # optimizer settings
+    parser.add_argument("--adam_beta1", type=float, default=0.9)
+    parser.add_argument("--adam_beta2", type=float, default=0.9999)
+    parser.add_argument("--adam_eps", type=float, default=1e-8)
 
     # pre-trained Core
     parser.add_argument(
