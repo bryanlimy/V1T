@@ -66,6 +66,11 @@ def correlation(
     )
 
 
+def rmsse(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """Root mean sum squared error"""
+    return torch.sqrt(torch.mean(torch.sum(torch.square(y_true - y_pred), dim=-1)))
+
+
 class Loss(_Loss):
     """Basic Criterion class"""
 
@@ -105,8 +110,7 @@ class RMSSE(Loss):
     """Root-mean-sum-squared-error"""
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        loss = torch.square(y_true - y_pred)
-        loss = torch.sqrt(torch.mean(torch.sum(loss, dim=-1)))
+        loss = rmsse(y_true=y_true, y_pred=y_pred)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
