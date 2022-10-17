@@ -259,11 +259,12 @@ def log_metrics(
                 step=epoch,
                 mode=mode,
             )
+    overall_result = {}
     for metric in metrics:
-        results[metric] = np.mean([results[mouse_id][metric] for mouse_id in mouse_ids])
-        summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
-    for mouse_id in mouse_ids:
-        del results[mouse_id]
+        average = np.mean([results[mouse_id][metric] for mouse_id in mouse_ids])
+        overall_result[metric[metric.find("/") + 1 :]] = average
+        summary.scalar(metric, value=average, step=epoch, mode=mode)
+    return overall_result
 
 
 def num_steps(ds: t.Dict[int, DataLoader]):

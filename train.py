@@ -83,8 +83,7 @@ def train(
             update=(i + 1) % update_frequency == 0,
         )
         utils.update_dict(results[mouse_id], result)
-    utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
-    return results
+    return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
 
 def validation_step(
@@ -134,8 +133,7 @@ def validate(
                     utils.update_dict(mouse_result, result)
                     pbar.update(1)
                 results[mouse_id] = mouse_result
-    utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
-    return results
+    return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
 
 
 def main(args):
@@ -229,17 +227,17 @@ def main(args):
         )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_result["loss/total_loss"]:.04f}\t\t'
-                f'correlation: {train_result["metrics/single_trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["loss/total_loss"]:.04f}\t\t'
-                f'correlation: {val_result["metrics/single_trial_correlation"]:.04f}\n'
+                f'Train\t\t\tloss: {train_result["total_loss"]:.04f}\t\t'
+                f'correlation: {train_result["single_trial_correlation"]:.04f}\n'
+                f'Validation\t\tloss: {val_result["total_loss"]:.04f}\t\t'
+                f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
 
         if tune.is_session_enabled():
             session.report(metrics=val_result)
 
-        if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
+        if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
     scheduler.restore()
