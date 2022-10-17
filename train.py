@@ -258,6 +258,8 @@ def main(args):
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
 
+    print("RETURN EVAL_RESULT")
+
     return eval_result
 
 
