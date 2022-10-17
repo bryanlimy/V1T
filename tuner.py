@@ -248,8 +248,6 @@ def main(args):
 
     scheduler = HyperBandForBOHB(
         time_attr="training_iteration",
-        metric=metric,
-        mode=mode,
         max_t=args.epochs,
         reduction_factor=3,
     )
