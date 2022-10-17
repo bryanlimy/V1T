@@ -323,8 +323,6 @@ def main(args):
     print(
         f"\nBest result\n"
         f'\tsingle trial correlation: {best_trial.last_result["single_trial_correlation"]:0.6f}\n'
-        f'\tcorrelation to average: {best_trial.last_result["correlation_to_average"]:.06f}\n'
-        f'\tFEVE: {best_trial.last_result["feve"]:.6f}\n'
         f"Configuration:\n{best_trial.config}\n\n"
         f"Results saved to {os.path.join(args.output_dir, experiment_name)}"
     )
