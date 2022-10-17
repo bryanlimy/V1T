@@ -267,7 +267,7 @@ def main(args):
         },
         max_progress_rows=10,
         max_error_rows=3,
-        max_column_length=10,
+        max_column_length=15,
         max_report_frequency=60,
         sort_by_metric=True,
     )
