@@ -23,7 +23,7 @@ class Core(nn.Module):
         self.name = name
         self.device = args.device
         self.reg_scale = torch.tensor(
-            args.reg_scale, dtype=torch.float32, device=self.device
+            args.core_reg_scale, dtype=torch.float32, device=self.device
         )
 
     def initialize(self):

@@ -5,6 +5,7 @@ import typing as t
 import numpy as np
 from torch import nn
 import torch.nn.functional as F
+from collections import OrderedDict
 
 from sensorium.models import utils
 
@@ -26,9 +27,11 @@ class SpatialTransformerCore(Core):
             args, input_shape=input_shape, name=name
         )
 
+        c, h, w = input_shape
+
         # Spatial transformer localization network
         self.localization = nn.Sequential(
-            nn.Conv2d(in_channels=1, out_channels=8, kernel_size=7),
+            nn.Conv2d(in_channels=c, out_channels=8, kernel_size=7),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=8, out_channels=10, kernel_size=5),
@@ -66,51 +69,48 @@ class SpatialTransformerCore(Core):
         )
         output_shape = utils.conv2d_shape(
             output_shape,
-            num_filters=args.num_filters * 2,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-        )
-        output_shape = utils.conv2d_shape(
-            output_shape,
-            num_filters=args.num_filters * 4,
+            num_filters=args.num_filters,
             kernel_size=3,
             stride=1,
             padding=1,
         )
         self.output_shape = output_shape
 
-        self.cnn = nn.Sequential(
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=args.num_filters,
-                kernel_size=9,
-                stride=1,
-                padding=0,
-            ),
-            nn.BatchNorm2d(num_features=args.num_filters),
-            nn.GELU(),
-            nn.Dropout2d(p=args.dropout),
-            nn.Conv2d(
-                in_channels=args.num_filters,
-                out_channels=args.num_filters * 2,
-                kernel_size=3,
-                stride=1,
-                padding=1,
-            ),
-            nn.BatchNorm2d(num_features=args.num_filters * 2),
-            nn.GELU(),
-            nn.Dropout2d(p=args.dropout),
-            nn.Conv2d(
-                in_channels=args.num_filters * 2,
-                out_channels=args.num_filters * 4,
-                kernel_size=3,
-                stride=1,
-                padding=1,
-            ),
-            nn.BatchNorm2d(num_features=args.num_filters * 4),
-            nn.GELU(),
+        self.cnn = nn.Sequential()
+
+        # first layer
+        layer = OrderedDict(
+            {
+                "conv": nn.Conv2d(
+                    in_channels=c,
+                    out_channels=args.num_filters,
+                    kernel_size=9,
+                    stride=1,
+                    padding=0,
+                ),
+                "batchnorm": nn.BatchNorm2d(num_features=args.num_filters),
+                "gelu": nn.GELU(),
+                "dropout": nn.Dropout2d(p=args.dropout),
+            }
         )
+        self.cnn.add_module("block1", nn.Sequential(layer))
+        for i in range(1, args.num_layers):
+            layer = OrderedDict(
+                {
+                    "conv": nn.Conv2d(
+                        in_channels=args.num_filters,
+                        out_channels=args.num_filters,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                    ),
+                    "batchnorm": nn.BatchNorm2d(num_features=args.num_filters),
+                    "gelu": nn.GELU(),
+                }
+            )
+            if i < args.num_layers - 1:
+                layer["dropout"] = nn.Dropout2d(p=args.dropout)
+            self.cnn.add_module(f"block{i+1}", nn.Sequential(layer))
 
     def stn(self, inputs: torch.Tensor, align_corners: bool = True):
         """Spatial transformer network forward function"""
@@ -123,5 +123,6 @@ class SpatialTransformerCore(Core):
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.stn(inputs)
-        outputs = self.cnn(outputs)
+        for i, block in enumerate(self.cnn):
+            outputs = block(outputs) if i == 0 else block(outputs) + outputs
         return outputs

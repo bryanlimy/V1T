@@ -2,17 +2,18 @@ import os
 import torch
 import argparse
 import typing as t
+from ray import tune
 from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
+from ray.air import session
 from torch.utils.data import DataLoader
 
-from sensorium import losses, metrics
-from sensorium.models import get_model, Model
+from sensorium.models import get_model
+from sensorium import losses, metrics, data
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
-from sensorium.data import get_training_ds, CycleDataloaders
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
@@ -28,14 +29,16 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 def train_step(
     mouse_id: int,
     data: t.Dict[str, torch.Tensor],
-    model: Model,
+    model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
-    images = data["image"].to(model.device)
-    responses = data["response"].to(model.device)
-    outputs = model(images, mouse_id=mouse_id)
+    device = model.device
+    images = data["image"].to(device)
+    responses = data["response"].to(device)
+    pupil_center = data["pupil_center"].to(device)
+    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
@@ -55,7 +58,7 @@ def train_step(
 def train(
     args,
     ds: t.Dict[int, DataLoader],
-    model: Model,
+    model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
     epoch: int,
@@ -63,13 +66,13 @@ def train(
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     mouse_ids = list(ds.keys())
     results = {mouse_id: {} for mouse_id in mouse_ids}
-    ds = CycleDataloaders(ds)
+    ds = data.CycleDataloaders(ds)
     # call optimizer.step() after iterate one batch from each mouse
     update_frequency = len(mouse_ids)
     model.train(True)
     model.requires_grad_(True)
     for i, (mouse_id, mouse_data) in tqdm(
-        enumerate(ds), desc="Train", total=len(ds), disable=args.verbose == 0
+        enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
         result = train_step(
             mouse_id=mouse_id,
@@ -90,10 +93,11 @@ def validation_step(
     model: nn.Module,
     criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
-    result = {}
-    images = data["image"].to(model.device)
-    responses = data["response"].to(model.device)
-    outputs = model(images, mouse_id=mouse_id)
+    result, device = {}, model.device
+    images = data["image"].to(device)
+    responses = data["response"].to(device)
+    pupil_center = data["pupil_center"].to(device)
+    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
@@ -110,7 +114,7 @@ def validate(
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
     results = {}
-    with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose == 0) as pbar:
+    with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose < 2) as pbar:
         with torch.no_grad():
             for mouse_id, mouse_ds in ds.items():
                 mouse_result = {}
@@ -135,10 +139,11 @@ def main(args):
         os.makedirs(args.output_dir)
 
     utils.set_random_seed(args.seed)
-
     utils.get_device(args)
 
-    train_ds, val_ds, test_ds = get_training_ds(
+    utils.get_batch_size(args)
+
+    train_ds, val_ds, test_ds = data.get_training_ds(
         args,
         data_dir=args.dataset,
         mouse_ids=args.mouse_ids,
@@ -179,10 +184,11 @@ def main(args):
     utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
-        print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
+        if args.verbose:
+            print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        train_results = train(
+        train_result = train(
             args,
             ds=train_ds,
             model=model,
@@ -191,7 +197,7 @@ def main(args):
             epoch=epoch,
             summary=summary,
         )
-        val_results = validate(
+        val_result = validate(
             args,
             ds=val_ds,
             model=model,
@@ -214,25 +220,36 @@ def main(args):
             step=epoch,
             mode=0,
         )
-        print(
-            f'Train\t\t\tloss: {train_results["loss/loss"]:.04f}\t\t'
-            f'correlation: {train_results["metrics/trial_correlation"]:.04f}\n'
-            f'Validation\t\tloss: {val_results["loss/loss"]:.04f}\t\t'
-            f'correlation: {val_results["metrics/trial_correlation"]:.04f}\n'
-            f"Elapse: {elapse:.02f}s"
-        )
+        if args.verbose:
+            print(
+                f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
+                f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
+                f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
+                f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
+                f"Elapse: {elapse:.02f}s"
+            )
 
         if epoch % 10 == 0 or epoch == args.epochs:
-            utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary)
+            eval_result = utils.evaluate(
+                args,
+                ds=test_ds,
+                model=model,
+                epoch=epoch,
+                summary=summary,
+                mode=2,
+            )
+            if tune.is_session_enabled():
+                eval_result["iterations"] = epoch // 10
+                session.report(metrics=eval_result)
 
-        if scheduler.step(val_results["metrics/trial_correlation"], epoch=epoch):
+        if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
             break
 
     scheduler.restore()
 
     utils.save_model(args, model=model, epoch=epoch)
 
-    utils.evaluate(
+    eval_result = utils.evaluate(
         args,
         ds=test_ds,
         model=model,
@@ -242,10 +259,14 @@ def main(args):
         print_result=True,
         save_result=args.output_dir,
     )
+    eval_result["iterations"] = epoch // 10
 
     summary.close()
 
-    print(f"\nResults saved to {args.output_dir}.")
+    if args.verbose:
+        print(f"\nResults saved to {args.output_dir}.")
+
+    return eval_result
 
 
 if __name__ == "__main__":
@@ -263,8 +284,9 @@ if __name__ == "__main__":
         nargs="+",
         type=int,
         default=None,
-        help="Mouse to use for training, use Mouse 2-7 if None.",
+        help="Mouse to use for training.",
     )
+    parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
     parser.add_argument(
         "--num_workers", default=2, type=int, help="number of works for DataLoader."
     )
@@ -278,27 +300,64 @@ if __name__ == "__main__":
     )
 
     # ConvCore
+    parser.add_argument("--num_layers", type=int, default=4)
     parser.add_argument("--num_filters", type=int, default=8)
-    parser.add_argument("--dropout", type=float, default=0.2)
-    parser.add_argument("--activation", type=str, default="gelu")
+    parser.add_argument("--dropout", type=float, default=0.0)
 
     # ViTCore
     parser.add_argument("--patch_size", type=int, default=4)
     parser.add_argument("--emb_dim", type=int, default=64)
     parser.add_argument("--num_heads", type=int, default=3)
     parser.add_argument("--mlp_dim", type=int, default=64)
-    parser.add_argument("--num_layers", type=int, default=3)
     parser.add_argument("--dim_head", type=int, default=64)
+
+    parser.add_argument(
+        "--core_reg_scale",
+        default=0,
+        type=float,
+        help="weight regularization coefficient for core module.",
+    )
 
     # Gaussian2DReadout
     parser.add_argument("--disable_grid_predictor", action="store_true")
     parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
+    parser.add_argument(
+        "--bias_mode",
+        type=int,
+        default=0,
+        choices=[0, 1, 2],
+        help="Gaussian2d readout bias mode:"
+        "0: initialize bias with zeros"
+        "1: initialize bias with the mean responses"
+        "2: initialize bias with the mean responses divide by standard deviation",
+    )
+    parser.add_argument(
+        "--readout_reg_scale",
+        default=0.0076,
+        type=float,
+        help="weight regularization coefficient for readout module.",
+    )
+
+    # Shifter
+    parser.add_argument("--use_shifter", action="store_true")
+    parser.add_argument(
+        "--shifter_reg_scale",
+        default=0.0,
+        type=float,
+        help="weight regularization coefficient for shifter module.",
+    )
 
     # training settings
     parser.add_argument(
         "--epochs", default=200, type=int, help="maximum epochs to train the model."
     )
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument(
+        "--batch_size",
+        default=16,
+        type=int,
+        help="If batch_size == 0 and CUDA is available, then dynamically test "
+        "batch size. Otherwise use the provided value.",
+    )
     parser.add_argument(
         "--criterion",
         default="poisson",
@@ -313,12 +372,6 @@ if __name__ == "__main__":
         help="the coefficient to scale loss for neurons in depth of 240 to 260.",
     )
     parser.add_argument(
-        "--reg_scale",
-        default=0,
-        type=float,
-        help="weight regularization coefficient.",
-    )
-    parser.add_argument(
         "--ds_scale",
         action="store_true",
         help="scale loss by the size of the dataset",
@@ -327,11 +380,12 @@ if __name__ == "__main__":
         "--crop_mode",
         default=1,
         type=int,
-        choices=[0, 1, 2],
+        choices=[0, 1, 2, 3],
         help="image crop mode:"
         "0: no cropping and return full image (1, 144, 256)"
         "1: rescale image by 0.25 in both width and height (1, 36, 64)"
-        "2: crop image based on retinotopy and rescale to (1, 36, 64)",
+        "2: crop image based on retinotopy and rescale to (1, 36, 64)"
+        "3: crop left half of the image and rotate.",
     )
     parser.add_argument(
         "--device",
@@ -376,7 +430,7 @@ if __name__ == "__main__":
         action="store_true",
         help="overwrite content in --output_dir",
     )
-    parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
+    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
 
     params = parser.parse_args()
     main(params)

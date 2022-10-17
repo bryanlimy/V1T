@@ -2,8 +2,9 @@ import os
 import torch
 import typing as t
 import numpy as np
+from torch import nn
 from torch.optim import Optimizer
-from sensorium.models import Model
+from collections import OrderedDict
 
 
 class Scheduler:
@@ -11,7 +12,7 @@ class Scheduler:
         self,
         args,
         mode: t.Literal["min", "max"],
-        model: Model,
+        model: nn.Module,
         optimizer: Optimizer,
         max_reduce: int = 2,
         min_lr: float = 1e-6,
@@ -20,6 +21,7 @@ class Scheduler:
         min_epochs: int = 50,
         save_optimizer: bool = True,
         save_scheduler: bool = True,
+        save_modules: t.List[str] = None,
     ):
         """
         Args:
@@ -42,6 +44,7 @@ class Scheduler:
         self.mode = mode
         self.model = model
         self.optimizer = optimizer
+        self.save_modules = save_modules
         self.max_reduce = max_reduce
         self.num_reduce = 0
         self.lr_patience = lr_patience
@@ -61,6 +64,17 @@ class Scheduler:
         self.device = args.device
         self.verbose = args.verbose
 
+    def _parameters2save(self):
+        state_dict = self.model.state_dict()
+        parameters = OrderedDict()
+        if self.save_modules is None:
+            parameters = state_dict
+        else:
+            for parameter in state_dict.keys():
+                if parameter.split(".")[0] in self.save_modules:
+                    parameters[parameter] = state_dict[parameter]
+        return parameters
+
     def save_checkpoint(
         self, value: t.Union[float, np.ndarray, torch.Tensor], epoch: int
     ):
@@ -69,14 +83,15 @@ class Scheduler:
         ckpt = {
             "epoch": epoch,
             "value": float(value),
-            "model_state_dict": self.model.state_dict(),
+            "model_state_dict": self._parameters2save(),
         }
         if self.save_optimizer:
             ckpt["optimizer_state_dict"] = self.optimizer.state_dict()
         if self.save_scheduler:
             ckpt["scheduler_state_dict"] = self.state_dict()
         torch.save(ckpt, f=filename)
-        print(f"\nCheckpoint saved to {filename}.")
+        if self.verbose:
+            print(f"\nCheckpoint saved to {filename}.")
 
     def restore(self, force: bool = False) -> int:
         """
@@ -92,7 +107,12 @@ class Scheduler:
         if os.path.exists(filename):
             ckpt = torch.load(filename, map_location=self.device)
             epoch = ckpt["epoch"]
-            self.model.load_state_dict(ckpt["model_state_dict"])
+            # it is possible that the checkpoint only contains part of a model
+            # hence we update the current state_dict of the model instead of
+            # directly calling model.load_state_dict(ckpt['model_state_dict'])
+            state_dict = self.model.state_dict()
+            state_dict.update(ckpt["model_state_dict"])
+            self.model.load_state_dict(state_dict)
             if "optimizer_state_dict" in ckpt:
                 self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
             if "scheduler_state_dict" in ckpt:
@@ -125,10 +145,10 @@ class Scheduler:
             old_lr = float(param_group["lr"])
             new_lr = max(old_lr * self.factor, self.min_lr)
             param_group["lr"] = new_lr
-            if self.verbose == 2:
+            if self.verbose >= 2:
                 print(f'Reduce learning rate of {param_group["name"]} to {new_lr}.')
 
-    def step(self, value: t.Union[float, torch.Tensor], epoch: int):
+    def step(self, value: t.Union[float, np.ndarray, torch.Tensor], epoch: int):
         terminate = False
         if self.is_better(value):
             self.best_value = value
@@ -140,10 +160,13 @@ class Scheduler:
             if self.lr_wait >= self.lr_patience:
                 if self.num_reduce >= self.max_reduce:
                     terminate = True
-                    print(
-                        f"Model has not improved after {self.num_reduce} LR reductions."
-                    )
+                    if self.verbose:
+                        print(
+                            f"Model has not improved after {self.num_reduce} "
+                            f"LR reductions."
+                        )
                 else:
+                    self.restore()
                     self.reduce_lr()
                     self.num_reduce += 1
                     self.lr_wait = 0

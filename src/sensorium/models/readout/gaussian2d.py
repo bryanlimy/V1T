@@ -35,9 +35,9 @@ class Gaussian2DReadout(Readout):
             )
         self.init_mu_range = init_mu_range
 
-        self.gamma_readout = torch.tensor(
-            0.0076, dtype=torch.float32, device=self.device
-        )
+        # self.gamma_readout = torch.tensor(
+        #     0.0076, dtype=torch.float32, device=self.device
+        # )
 
         # position grid shape
         self.grid_shape = (1, self.num_neurons, 1, 2)
@@ -71,12 +71,11 @@ class Gaussian2DReadout(Readout):
 
         self.initialize_features()
 
-        bias = None
-        if use_bias:
-            bias = nn.Parameter(torch.Tensor(self.num_neurons))
-        self.register_parameter("bias", bias)
+        self.use_bias = use_bias
+        self.bias_mode = args.bias_mode
+        self.initialize_bias(stats=ds.dataset.response_stats)
 
-        self.initialize(bias_init=self._response_stat["mean"])
+        self.initialize()
 
     def feature_l1(self, reduction: REDUCTIONS = "sum"):
         """
@@ -95,7 +94,7 @@ class Gaussian2DReadout(Readout):
         return l1
 
     def regularizer(self, reduction: REDUCTIONS = "sum"):
-        return self.gamma_readout * self.feature_l1(reduction=reduction)
+        return self.reg_scale * self.feature_l1(reduction=reduction)
 
     def init_grid_predictor(
         self,
@@ -148,7 +147,24 @@ class Gaussian2DReadout(Readout):
         self.features = nn.Parameter(torch.Tensor(1, c, 1, self.num_neurons))
         self._shared_features = False
 
-    def initialize(self, bias_init: t.Union[float, np.ndarray, torch.Tensor] = None):
+    def initialize_bias(self, stats: t.Dict[str, np.ndarray]):
+        if self.use_bias:
+            if self.bias_mode == 0:
+                bias = torch.zeros(size=(len(stats["mean"]),))
+            elif self.bias_mode == 1:
+                bias = torch.from_numpy(stats["mean"])
+            elif self.bias_mode == 2:
+                bias = stats["mean"] / stats["std"]
+                bias = torch.from_numpy(bias)
+            else:
+                raise NotImplementedError(
+                    f"Gaussian2dReadout: bias mode {self.bias_mode} has not been implemented."
+                )
+            self.bias = nn.Parameter(bias)
+        else:
+            self.bias = None
+
+    def initialize(self):
         """
         Initializes the mean, and sigma of the Gaussian readout along with
         the features weights
@@ -163,20 +179,6 @@ class Gaussian2DReadout(Readout):
         self.features.data.fill_(1 / self.input_shape[0])
         if self._shared_features:
             self.scales.data.fill_(1.0)
-
-        if self.bias is not None:
-            self.initialize_bias(value=bias_init)
-
-    def initialize_bias(self, value: t.Union[float, np.ndarray, torch.Tensor] = None):
-        """Initialize the biases in readout"""
-        if value is None:
-            self.bias.data.fill_(0.0)
-        else:
-            if isinstance(value, float):
-                value = torch.Tensor(value, dtype=torch.float32)
-            elif isinstance(value, np.ndarray):
-                value = torch.from_numpy(value)
-            self.bias.data = value
 
     @property
     def mu(self):
@@ -227,7 +229,9 @@ class Gaussian2DReadout(Readout):
                 max=1,
             )
 
-    def forward(self, inputs: torch.Tensor, sample: bool = None, shift: bool = None):
+    def forward(
+        self, inputs: torch.Tensor, sample: bool = None, shift: torch.Tensor = None
+    ):
         """
         Propagates the input forwards through the readout
         Args:
@@ -242,10 +246,8 @@ class Gaussian2DReadout(Readout):
                                 If sample is True/False, overrides the
                                 model_state (i.e. training or eval) and does
                                 as instructed
-            shift (bool): shifts the location of the grid (from eye-tracking data)
-
-        Returns:
-            y: neuronal activity
+            shift (torch.Tensor): shifts the location of the grid from
+                eye-tracking data
         """
         batch_size, c, w, h = inputs.size()
         c_in, w_in, h_in = self.input_shape
@@ -268,7 +270,7 @@ class Gaussian2DReadout(Readout):
         outputs = torch.sum(outputs, dim=1)
         outputs = outputs.view(batch_size, self.num_neurons)
 
-        if self.bias is not None:
+        if bias is not None:
             outputs = outputs + bias
 
         return outputs

@@ -113,23 +113,20 @@ class AttentionConv(nn.Module):
         )
 
 
-def adaptive_elu(x, xshift, yshift):
-    return F.elu(x - xshift, inplace=True) + yshift
-
-
 class AdaptiveELU(nn.Module):
     """
     ELU shifted by user specified values. This helps to ensure the output to stay positive.
     """
 
-    def __init__(self, xshift, yshift, **kwargs):
+    def __init__(self, xshift: int, yshift: int, **kwargs):
         super(AdaptiveELU, self).__init__(**kwargs)
 
-        self.xshift = xshift
-        self.yshift = yshift
+        self.x_shift = torch.tensor(xshift, dtype=torch.float)
+        self.y_shift = torch.tensor(yshift, dtype=torch.float)
+        self.elu = nn.ELU()
 
-    def forward(self, x):
-        return adaptive_elu(x, self.xshift, self.yshift)
+    def forward(self, inputs: torch.Tensor):
+        return self.elu(inputs - self.x_shift) + self.y_shift
 
 
 def laplace():
@@ -326,7 +323,6 @@ class Stacked2dCore(Core, nn.Module):
         hidden_channels: int = 64,
         input_kern: int = 9,
         hidden_kern: int = 7,
-        layers: int = 4,
         gamma_hidden: int = 0,
         gamma_input: float = 6.3831,
         skip: int = 0,
@@ -365,7 +361,7 @@ class Stacked2dCore(Core, nn.Module):
         )
         regularizer_config = dict(padding=laplace_padding)
         self._input_weights_regularizer = LaplaceL2norm(**regularizer_config)
-        self.num_layers = layers
+        self.num_layers = args.num_layers
         self.gamma_input = gamma_input
         self.gamma_hidden = gamma_hidden
         self.input_channels = self.input_shape[0]
@@ -377,7 +373,7 @@ class Stacked2dCore(Core, nn.Module):
         self.hidden_channels = (
             hidden_channels
             if isinstance(hidden_channels, Iterable)
-            else [hidden_channels] * layers
+            else [hidden_channels] * self.num_layers
         )
         self.skip = skip
 
@@ -561,7 +557,8 @@ class Stacked2dCore(Core, nn.Module):
 
     def group_sparsity(self):
         """
-        Sparsity regularization on the filters of all the conv2d layers except the first one.
+        Sparsity regularization on the filters of all the Conv2d layers except
+        the first one.
         """
         ret = 0
         if self.ignore_group_sparsity:
@@ -579,10 +576,9 @@ class Stacked2dCore(Core, nn.Module):
         return ret / ((self.num_layers - 1) if self.num_layers > 1 else 1)
 
     def regularizer(self):
-        return (
-            self.group_sparsity() * self.gamma_hidden
-            + self.gamma_input * self.laplace()
-        )
+        term1 = self.group_sparsity() * self.gamma_hidden
+        term2 = self.gamma_input * self.laplace()
+        return self.reg_scale * (term1 + term2)
 
     @property
     def outchannels(self):

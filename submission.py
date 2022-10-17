@@ -9,8 +9,9 @@ from tqdm import tqdm
 from datetime import datetime
 from torch.utils.data import DataLoader
 
+from sensorium import data
 from sensorium.utils import utils
-from sensorium.data import get_submission_ds
+from sensorium.models import Model
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
@@ -56,8 +57,10 @@ def inference(
     }
     model.train(False)
     model.requires_grad_(False)
-    for data in tqdm(ds, desc=desc, disable=args.verbose == 0):
-        predictions = model(data["image"].to(device), mouse_id=mouse_id)
+    for data in tqdm(ds, desc=desc, disable=args.verbose < 2):
+        images = data["image"].to(device)
+        pupil_center = data["pupil_center"].to(device)
+        predictions = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
         results["predictions"].extend(predictions.cpu().numpy().tolist())
         results["image_ids"].extend(data["image_id"].numpy().tolist())
         results["trial_ids"].extend(data["trial_id"])
@@ -113,20 +116,30 @@ def main(args):
 
     utils.load_args(args)
 
-    assert (
-        0 in args.output_shapes and 1 in args.output_shapes
-    ), "The saved model was not trained on Mouse 1 and 2."
+    if 0 not in args.output_shapes:
+        print("Warning: model was on trained on Mouse 1")
+    if 1 not in args.output_shapes:
+        print("Warning: model was on trained on Mouse 2")
 
     utils.get_device(args)
 
-    test_ds, final_test_ds = get_submission_ds(
+    test_ds, final_test_ds = data.get_submission_ds(
         args,
         data_dir=args.dataset,
         batch_size=args.batch_size,
         device=args.device,
     )
 
-    model = utils.load_model(args)
+    if os.path.exists(os.path.join(args.output_dir, "ckpt", "model.pt")):
+        model = utils.load_model(args)
+    else:
+        model = Model(args, ds=test_ds)
+        utils.load_model_state(
+            args,
+            model=model,
+            filename=os.path.join(args.output_dir, "ckpt", "best_model.pt"),
+        )
+        model.to(args.device)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
@@ -138,24 +151,26 @@ def main(args):
     )
 
     # Sensorium challenge
-    generate_submission(
-        args,
-        mouse_id=0,
-        test_ds=test_ds,
-        final_test_ds=final_test_ds,
-        model=model,
-        csv_dir=os.path.join(csv_dir, "sensorium"),
-    )
+    if 0 in test_ds:
+        generate_submission(
+            args,
+            mouse_id=0,
+            test_ds=test_ds,
+            final_test_ds=final_test_ds,
+            model=model,
+            csv_dir=os.path.join(csv_dir, "sensorium"),
+        )
 
     # Sensorium+ challenge
-    generate_submission(
-        args,
-        mouse_id=1,
-        test_ds=test_ds,
-        final_test_ds=final_test_ds,
-        model=model,
-        csv_dir=os.path.join(csv_dir, "sensorium+"),
-    )
+    if 1 in test_ds:
+        generate_submission(
+            args,
+            mouse_id=1,
+            test_ds=test_ds,
+            final_test_ds=final_test_ds,
+            model=model,
+            csv_dir=os.path.join(csv_dir, "sensorium+"),
+        )
 
     print(f"\nSubmission results saved to {csv_dir}.")
 
@@ -178,7 +193,7 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
+    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
 
     params = parser.parse_args()
     main(params)

@@ -5,7 +5,7 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
-from skimage.transform import rescale
+from skimage.transform import rescale, resize, rotate
 from torch.utils.data import Dataset, DataLoader
 
 from sensorium.utils import utils
@@ -158,6 +158,9 @@ class MiceDataset(Dataset):
         self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
+        self.plus = args.plus
+        if self.plus and mouse_id == 0:
+            raise ValueError("Mouse 0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
         self.coordinates = metadata["coordinates"]
@@ -168,15 +171,24 @@ class MiceDataset(Dataset):
         self.trial_ids = metadata["trial_id"][self.indexes]
         # standardizer for responses
         self._response_precision = self.compute_response_precision()
+
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
-        self.image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
+        image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
         self.retinotopy = self.get_retinotopy(mouse_id=mouse_id)
-        assert args.crop_mode in (0, 1, 2)
+        assert args.crop_mode in (0, 1, 2, 3)
         self.crop_mode = args.crop_mode
-        if self.crop_mode in (1, 2):
-            self.image_shape = (1, 36, 64)
+        if self.crop_mode == 1:
+            image_shape = (1, 36, 64)
+        elif self.crop_mode == 2:
+            image_shape = (1, 36, 64)
+        elif self.crop_mode == 3:
+            image_shape = (1, 36, 64)
+        # include the 3 behaviour data as channel of the image
+        if self.plus:
+            image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
+        self.image_shape = image_shape
 
     def __len__(self):
         return len(self.indexes)
@@ -190,50 +202,67 @@ class MiceDataset(Dataset):
         return self.stats["response"]
 
     @property
+    def behavior_stats(self):
+        return self.stats["behavior"]
+
+    @property
+    def pupil_stats(self):
+        return self.stats["pupil_center"]
+
+    @property
     def num_neurons(self):
         return len(self.neuron_ids)
 
     def get_retinotopy(self, mouse_id: int):
         if mouse_id == 0:
-            return (4, 68)
+            return (0, 43)
         elif mouse_id == 1:
-            return (42, 68)
+            return (26, 43)
         elif mouse_id == 2:
-            return (64, 36)
+            return (46, 14)
         elif mouse_id == 3:
-            return (64, 2)
+            return (38, 0)
         elif mouse_id == 4:
-            return (110, 36)
+            return (77, 14)
         elif mouse_id == 5:
-            return (128, 24)
+            return (77, 0)
         elif mouse_id == 6:
-            return (64, 62)
+            return (62, 43)
         else:
             raise KeyError(f"No retinotopy for mouse {mouse_id}.")
 
     @staticmethod
-    def resize_image(image: t.Union[np.ndarray, torch.Tensor], scale: float = 0.25):
-        image = rescale(
+    def resize_image(image: np.ndarray, height: int = 36, width: int = 64):
+        image = resize(
             image,
-            scale=scale,
-            anti_aliasing=False,
+            output_shape=(image.shape[0], height, width),
             clip=True,
             preserve_range=True,
-            channel_axis=0,
+            anti_aliasing=False,
         )
         return image
 
-    def retina_crop(self, image: t.Union[np.ndarray, torch.Tensor]):
+    def retina_crop(self, image: np.ndarray, width: int = 179, height: int = 101):
+        """Crop image based on the retinotopy of the mouse"""
         left, top = self.retinotopy
-        image = image[..., top : top + 72, left : left + 128]
-        image = self.resize_image(image, scale=0.5)
+        image = image[..., top : top + height, left : left + width]
+        image = self.resize_image(image)
         return image
 
-    def transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
+    def crop_left_half(self, image: np.ndarray, width: int = 128):
+        """Crop left half of the image then rotate s.t. longer edge is width."""
+        image = image[..., :width]
+        image = np.rot90(image, k=1, axes=(1, 2))
+        image = self.resize_image(image)
+        return image
+
+    def transform_image(self, image: np.ndarray):
         if self.crop_mode == 1:
-            image = self.resize_image(image, scale=0.25)
+            image = self.resize_image(image)
         elif self.crop_mode == 2:
             image = self.retina_crop(image)
+        elif self.crop_mode == 3:
+            image = self.crop_left_half(image)
         stats = self.image_stats
         image = (image - stats["mean"]) / stats["std"]
         return image
@@ -241,7 +270,24 @@ class MiceDataset(Dataset):
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
         stats = self.image_stats
-        return (image * stats["std"]) + stats["mean"]
+        image = (image * stats["std"]) + stats["mean"]
+        if self.plus:
+            image = (
+                torch.unsqueeze(image[0], dim=0)
+                if len(image.shape) == 3
+                else torch.unsqueeze(image[:, 0, :, :], dim=1)
+            )
+        return image
+
+    def transform_pupil_center(self, pupil_center: np.ndarray):
+        """standardize pupil center"""
+        stats = self.pupil_stats
+        return (pupil_center - stats["mean"]) / stats["std"]
+
+    def transform_behavior(self, behavior: np.ndarray):
+        """standardize behaviour"""
+        stats = self.behavior_stats
+        return behavior / stats["std"]
 
     def compute_response_precision(self):
         """
@@ -261,6 +307,14 @@ class MiceDataset(Dataset):
     def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response / self._response_precision
 
+    def add_behavior_to_image(self, image: np.ndarray, behavior: np.ndarray):
+        # broadcast each behavior variable to (height, width)
+        behaviour = np.tile(behavior, reps=(image.shape[1], image.shape[2], 1))
+        # transpose to (channel, height, width)
+        behaviour = np.transpose(behaviour, axes=[2, 0, 1])
+        image = np.concatenate((image, behaviour), axis=0)
+        return image
+
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
 
@@ -278,6 +332,12 @@ class MiceDataset(Dataset):
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
         data["image"] = self.transform_image(data["image"])
         data["response"] = self.transform_response(data["response"])
+        data["behavior"] = self.transform_behavior(data["behavior"])
+        data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
+        if self.plus:
+            data["image"] = self.add_behavior_to_image(
+                image=data["image"], behavior=data["behavior"]
+            )
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
@@ -308,7 +368,7 @@ def get_training_ds(
             sets where keys are the mouse IDs.
     """
     if mouse_ids is None:
-        mouse_ids = list(range(0, 7))
+        mouse_ids = list(range(1, 7)) if args.plus else list(range(0, 7))
 
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}
@@ -342,7 +402,10 @@ def get_training_ds(
 
 
 def get_submission_ds(
-    args, data_dir: str, batch_size: int, device: torch.device = torch.device("cpu")
+    args,
+    data_dir: str,
+    batch_size: int,
+    device: torch.device = torch.device("cpu"),
 ):
     """
     Get DataLoaders for submission to Sensorium and Sensorium+
@@ -371,12 +434,13 @@ def get_submission_ds(
             MiceDataset(args, tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
-    for mouse_id in [0, 1]:
-        final_test_ds[mouse_id] = DataLoader(
-            MiceDataset(args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id),
-            **test_kwargs,
-        )
-        args.output_shapes[mouse_id] = (test_ds[mouse_id].dataset.num_neurons,)
+        if mouse_id in (0, 1):
+            final_test_ds[mouse_id] = DataLoader(
+                MiceDataset(
+                    args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id
+                ),
+                **test_kwargs,
+            )
 
     return test_ds, final_test_ds
 

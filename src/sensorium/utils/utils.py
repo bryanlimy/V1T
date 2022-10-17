@@ -10,6 +10,8 @@ from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
+
+from sensorium import losses, data
 from sensorium.models import Model
 from sensorium.metrics import Metrics
 from sensorium.utils import yaml, tensorboard
@@ -47,11 +49,15 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         "trial_ids": [],
         "image_ids": [],
     }
-    mouse_id = ds.dataset.mouse_id
+    mouse_id, device = ds.dataset.mouse_id, model.device
     model.train(False)
     with torch.no_grad():
         for data in ds:
-            predictions = model(data["image"].to(model.device), mouse_id=mouse_id)
+            predictions = model(
+                data["image"].to(device),
+                mouse_id=mouse_id,
+                pupil_center=data["pupil_center"].to(device),
+            )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
             results["images"].append(data["image"])
@@ -75,7 +81,7 @@ def evaluate(
     mode: int = 1,
     print_result: bool = False,
     save_result: str = None,
-):
+) -> t.Dict[str, np.ndarray]:
     """
     Evaluate DataLoaders ds on the 3 challenge metrics
 
@@ -93,7 +99,7 @@ def evaluate(
     outputs, results = {}, {k: {} for k in metrics}
 
     for mouse_id, mouse_ds in tqdm(
-        ds.items(), desc="Evaluation", disable=args.verbose == 0
+        ds.items(), desc="Evaluation", disable=args.verbose < 2
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
@@ -138,7 +144,7 @@ def evaluate(
                     mode=mode,
                 )
 
-    if print_result:
+    if args.verbose and print_result:
         _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
         statement = ""
         for metric in metrics:
@@ -149,21 +155,25 @@ def evaluate(
             print(statement)
 
     # compute overall average for each metric
+    overall_result = {}
     for metric in metrics:
         values = list(results[metric].values())
         if values:
-            results[metric]["average"] = np.mean(values)
+            average = np.mean(values)
+            overall_result[metric] = average
+            results[metric]["average"] = average
             if summary is not None:
                 summary.scalar(
                     f"{metric}/average",
-                    value=results[metric]["average"],
+                    value=average,
                     step=epoch,
                     mode=mode,
                 )
 
     if save_result is not None:
         yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
-    return results
+
+    return overall_result
 
 
 def update_dict(target: dict, source: dict, replace: bool = False):
@@ -185,8 +195,12 @@ def check_output(command: list):
 def save_args(args):
     """Save args object as dictionary to args.output_dir/args.json"""
     arguments = copy.deepcopy(args.__dict__)
-    arguments["git_hash"] = check_output(["git", "describe", "--always"])
-    arguments["hostname"] = check_output(["hostname"])
+    try:
+        arguments["git_hash"] = check_output(["git", "describe", "--always"])
+        arguments["hostname"] = check_output(["hostname"])
+    except subprocess.CalledProcessError as e:
+        if args.verbose > 0:
+            print(f"Unable to call subprocess: {e}")
     yaml.save(filename=os.path.join(args.output_dir, "args.yaml"), data=arguments)
 
 
@@ -274,10 +288,11 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def save_model(args, model: Model, epoch: int):
+def save_model(args, model: nn.Module, epoch: int):
     filename = os.path.join(args.output_dir, "ckpt", "model.pt")
     torch.save({"epoch": epoch, "model": model}, f=filename)
-    print(f"\nModel saved to {filename}.")
+    if args.verbose:
+        print(f"\nModel saved to {filename}.")
 
 
 def load_model(args) -> Model:
@@ -285,8 +300,70 @@ def load_model(args) -> Model:
     if not os.path.exists(filename):
         raise FileNotFoundError(f"checkpoint {filename} not found.")
     ckpt = torch.load(filename, map_location=args.device)
-    print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
+    if args.verbose:
+        print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
     model = ckpt["model"]
     model.to(args.device)
     model.device = args.device
     return model
+
+
+def load_model_state(args, model: Model, filename: str):
+    ckpt = torch.load(filename, map_location=args.device)
+    if not os.path.exists(filename):
+        raise FileNotFoundError(f"checkpoint {filename} not found.")
+    model.load_state_dict(ckpt["model_state_dict"])
+    if args.verbose:
+        if args.verbose:
+            print(f"\nLoaded model state (epoch {ckpt['epoch']}) from {filename}.")
+
+
+def get_batch_size(args):
+    device = args.device.type
+
+    if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
+        assert args.batch_size > 1
+    else:
+        device, mouse_id = args.device, 2
+        train_ds, _, _ = data.get_training_ds(
+            args,
+            data_dir=args.dataset,
+            mouse_ids=[mouse_id],
+            batch_size=1,
+            device=device,
+        )
+
+        output_shape = (train_ds[mouse_id].dataset.num_neurons,)
+        model = Model(args, ds=train_ds)
+        model.to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+        criterion = losses.get_criterion(args, ds=train_ds)
+
+        ds_size = len(train_ds[mouse_id].dataset)
+
+        batch_size, terminate = 1, False
+        while not terminate:
+            if batch_size > ds_size:
+                batch_size //= 2
+                break
+            try:
+                model.train(True)
+                for _ in range(5):
+                    inputs = torch.rand(*(batch_size, *args.input_shape), device=device)
+                    targets = torch.rand(*(batch_size, *output_shape), device=device)
+                    pupil_center = torch.rand(batch_size, 2, device=device)
+                    outputs = model(
+                        inputs, mouse_id=mouse_id, pupil_center=pupil_center
+                    )
+                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
+                    loss.backward()
+                    optimizer.step()
+                    optimizer.zero_grad()
+                batch_size *= 2
+            except RuntimeError:
+                if args.verbose > 1:
+                    print(f"Dynamic batch size: {batch_size}")
+                batch_size //= 2
+                terminate = True
+        del train_ds, model, optimizer, criterion
+        args.batch_size = batch_size
