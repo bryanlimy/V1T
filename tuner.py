@@ -274,8 +274,6 @@ def main(args):
         max_error_rows=3,
         max_column_length=10,
         max_report_frequency=60,
-        metric=metric,
-        mode=mode,
         sort_by_metric=True,
     )
 
