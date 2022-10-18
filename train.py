@@ -168,18 +168,19 @@ def main(args):
         utils.load_pretrain_core(args, model=model)
 
     # separate learning rates for core and readout modules
-    params = [
-        {
-            "params": model.core.parameters(),
-            "lr": args.core_lr_scale * args.lr,
-            "name": "core",
-        },
-        {"params": model.readouts.parameters(), "name": "readouts"},
-    ]
-    if args.use_shifter:
-        params.append({"params": model.shifter.parameters(), "name": "shifter"})
+    # params = [
+    #     {
+    #         "params": model.core.parameters(),
+    #         "lr": args.core_lr_scale * args.lr,
+    #         "name": "core",
+    #     },
+    #     {"params": model.readouts.parameters(), "name": "readouts"},
+    # ]
+    # if args.use_shifter:
+    #     params.append({"params": model.shifter.parameters(), "name": "shifter"})
+
     optimizer = torch.optim.Adam(
-        params=params,
+        params=model.parameters(),
         lr=args.lr,
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
