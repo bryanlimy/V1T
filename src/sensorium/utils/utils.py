@@ -266,8 +266,8 @@ def log_metrics(
             )
     overall_result = {}
     for metric in metrics:
-        value = [results[mouse_id][metric] for mouse_id in mouse_ids]
-        overall_result[metric[metric.find("/") + 1 :]] = np.mean(value)
+        value = np.mean([results[mouse_id][metric] for mouse_id in mouse_ids])
+        overall_result[metric[metric.find("/") + 1 :]] = value
         summary.scalar(metric, value=value, step=epoch, mode=mode)
     return overall_result
 
