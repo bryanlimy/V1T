@@ -239,6 +239,10 @@ def main(args):
                 f"Elapse: {elapse:.02f}s"
             )
 
+        if epoch > 10 and val_result["single_trial_correlation"] < 0.29:
+            print("Model is not working")
+            exit()
+
         if tune.is_session_enabled():
             session.report(metrics=val_result)
 
