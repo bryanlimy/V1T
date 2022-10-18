@@ -23,7 +23,7 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
     correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
     return {
-        "metrics/msse_loss": msse.item(),
+        "metrics/msse": msse.item(),
         "metrics/poisson_loss": poisson_loss.item(),
         "metrics/single_trial_correlation": correlation.item(),
     }
@@ -50,7 +50,7 @@ def train_step(
         "loss/loss": loss.item(),
         "loss/reg_loss": reg_loss.item(),
         "loss/total_loss": total_loss.item(),
-        # **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+        **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
     }
     if update:
         optimizer.step()
@@ -104,14 +104,13 @@ def validate(
             for mouse_id, mouse_ds in ds.items():
                 mouse_result = {"responses": [], "outputs": []}
                 for data in mouse_ds:
-                    images = data["image"].to(device)
-                    responses = data["response"].to(device)
-                    pupil_center = data["pupil_center"].to(device)
                     outputs = model(
-                        images, mouse_id=mouse_id, pupil_center=pupil_center
+                        data["image"].to(device),
+                        mouse_id=mouse_id,
+                        pupil_center=data["pupil_center"].to(device),
                     )
-                    mouse_result["responses"].append(responses)
-                    mouse_result["outputs"].append(outputs)
+                    mouse_result["responses"].append(data["responses"])
+                    mouse_result["outputs"].append(outputs.cpu())
                     pbar.update(1)
                 mouse_result = {k: torch.cat(v) for k, v in mouse_result.items()}
                 results[mouse_id] = {
@@ -188,15 +187,15 @@ def main(args):
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        # train_result = train(
-        #     args,
-        #     ds=train_ds,
-        #     model=model,
-        #     optimizer=optimizer,
-        #     criterion=criterion,
-        #     epoch=epoch,
-        #     summary=summary,
-        # )
+        train_result = train(
+            args,
+            ds=train_ds,
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            epoch=epoch,
+            summary=summary,
+        )
         val_result = validate(
             args,
             ds=val_ds,
@@ -217,7 +216,7 @@ def main(args):
             )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_result["total_loss"]:.04f}\t\t'
+                f'Train\t\t\tloss: {train_result["loss"]:.04f}\t\t'
                 f'correlation: {train_result["single_trial_correlation"]:.04f}\n'
                 f'Validation\t\tloss: {val_result["loss"]:.04f}\t\t'
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'

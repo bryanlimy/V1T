@@ -253,11 +253,11 @@ def log_metrics(
     metrics = list(results[mouse_ids[0]].keys())
     for mouse_id in mouse_ids:
         for metric in metrics:
-            results[mouse_id][metric] = (
-                np.sum(results[mouse_id][metric])
-                if "loss" in metric
-                else np.mean(results[mouse_id][metric])
-            )
+            value = results[mouse_id][metric]
+            if not isinstance(value, float):
+                results[mouse_id][metric] = (
+                    np.mean(value) if "correlation" in metric else np.sum(value)
+                )
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
                 value=results[mouse_id][metric],
@@ -266,10 +266,9 @@ def log_metrics(
             )
     overall_result = {}
     for metric in metrics:
-        values = [results[mouse_id][metric] for mouse_id in mouse_ids]
-        average = np.sum(values) if "loss" in metric else np.mean(values)
-        overall_result[metric[metric.find("/") + 1 :]] = average
-        summary.scalar(metric, value=average, step=epoch, mode=mode)
+        value = [results[mouse_id][metric] for mouse_id in mouse_ids]
+        overall_result[metric[metric.find("/") + 1 :]] = np.mean(value)
+        summary.scalar(metric, value=value, step=epoch, mode=mode)
     return overall_result
 
 
