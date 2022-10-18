@@ -256,7 +256,7 @@ def log_metrics(
             results[mouse_id][metric] = (
                 np.sum(results[mouse_id][metric])
                 if "loss" in metric
-                else np.mean(results[mouse_id][metrics])
+                else np.mean(results[mouse_id][metric])
             )
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
