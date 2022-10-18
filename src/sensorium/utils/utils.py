@@ -234,7 +234,7 @@ def metrics2df(results: t.Dict[int, torch.Tensor]):
 
 
 def log_metrics(
-    results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
+    results: t.Dict[t.Union[int, str], t.Dict[str, t.Any]],
     epoch: int,
     mode: int,
     summary: tensorboard.Summary,
@@ -253,7 +253,11 @@ def log_metrics(
     metrics = list(results[mouse_ids[0]].keys())
     for mouse_id in mouse_ids:
         for metric in metrics:
-            results[mouse_id][metric] = np.mean(results[mouse_id][metric])
+            results[mouse_id][metric] = (
+                np.sum(results[mouse_id][metric])
+                if "loss" in metric
+                else np.mean(results[mouse_id][metrics])
+            )
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
                 value=results[mouse_id][metric],
@@ -262,7 +266,8 @@ def log_metrics(
             )
     overall_result = {}
     for metric in metrics:
-        average = np.mean([results[mouse_id][metric] for mouse_id in mouse_ids])
+        values = [results[mouse_id][metric] for mouse_id in mouse_ids]
+        average = np.sum(values) if "loss" in metric else np.mean(values)
         overall_result[metric[metric.find("/") + 1 :]] = average
         summary.scalar(metric, value=average, step=epoch, mode=mode)
     return overall_result

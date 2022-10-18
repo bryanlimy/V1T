@@ -23,8 +23,8 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
     correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
     return {
-        "metrics/msse": msse.item(),
-        "metrics/poisson": poisson_loss.item(),
+        "metrics/msse_loss": msse.item(),
+        "metrics/poisson_loss": poisson_loss.item(),
         "metrics/single_trial_correlation": correlation.item(),
     }
 
