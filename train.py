@@ -109,7 +109,7 @@ def validate(
                         mouse_id=mouse_id,
                         pupil_center=data["pupil_center"].to(device),
                     )
-                    mouse_result["responses"].append(data["responses"])
+                    mouse_result["responses"].append(data["response"])
                     mouse_result["outputs"].append(outputs.cpu())
                     pbar.update(1)
                 mouse_result = {k: torch.cat(v) for k, v in mouse_result.items()}
