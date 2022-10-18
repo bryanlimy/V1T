@@ -20,9 +20,11 @@ from sensorium.utils.scheduler import Scheduler
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     msse = losses.msse(y_true=y_true, y_pred=y_pred)
+    poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
     correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
     return {
         "metrics/msse": msse.item(),
+        "metrics/poisson": poisson_loss.item(),
         "metrics/single_trial_correlation": correlation.item(),
     }
 

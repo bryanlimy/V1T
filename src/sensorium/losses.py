@@ -17,6 +17,17 @@ def register(name):
     return add_to_dict
 
 
+def msse(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """Mean sum squared error"""
+    loss = torch.square(y_true - y_pred)
+    return torch.mean(torch.sum(loss, dim=-1))
+
+
+def poisson_loss(y_true: torch.Tensor, y_pred: torch.Tensor, eps: float = 1e-8):
+    loss = y_pred - y_true * torch.log(y_pred + eps)
+    return torch.mean(torch.sum(loss, dim=-1))
+
+
 def _t_correlation(
     y1: torch.Tensor,
     y2: torch.Tensor,
@@ -64,11 +75,6 @@ def correlation(
         if isinstance(y1, torch.Tensor)
         else _np_correlation(y1=y1, y2=y2, axis=dim, eps=eps, **kwargs)
     )
-
-
-def msse(y_true: torch.Tensor, y_pred: torch.Tensor):
-    """Mean sum squared error"""
-    return torch.mean(torch.sum(torch.square(y_true - y_pred), dim=-1))
 
 
 class Loss(_Loss):
@@ -122,8 +128,7 @@ class PoissonLoss(Loss):
         self.eps = eps
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        loss = y_pred - y_true * torch.log(y_pred + self.eps)
-        loss = torch.mean(torch.sum(loss, dim=-1))
+        loss = poisson_loss(y_true=y_true, y_pred=y_pred, eps=self.eps)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
