@@ -330,7 +330,7 @@ class Stacked2dCore(Core, nn.Module):
         final_nonlinearity: bool = True,
         elu_shift: t.Tuple[int, int] = (0, 0),
         bias: bool = True,
-        momentum: float = 0.1,
+        momentum: float = 0.9,
         pad_input: bool = False,
         hidden_padding: t.Union[None, int, t.List[int]] = None,
         batch_norm: bool = True,
@@ -365,16 +365,7 @@ class Stacked2dCore(Core, nn.Module):
         self.gamma_input = gamma_input
         self.gamma_hidden = gamma_hidden
         self.input_channels = self.input_shape[0]
-
-        if isinstance(hidden_channels, Iterable) and skip > 1:
-            raise NotImplementedError(
-                "Passing a list of hidden channels and `skip > 1` at the same time is not yet implemented."
-            )
-        self.hidden_channels = (
-            hidden_channels
-            if isinstance(hidden_channels, Iterable)
-            else [hidden_channels] * self.num_layers
-        )
+        self.hidden_channels = hidden_channels
         self.skip = skip
 
         self.activation_fn = AdaptiveELU
@@ -489,12 +480,12 @@ class Stacked2dCore(Core, nn.Module):
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
             in_channels=self.input_channels,
-            out_channels=self.hidden_channels[0],
+            out_channels=self.hidden_channels,
             kernel_size=self.input_kern,
             padding=self.input_kern // 2 if self.pad_input else 0,
             bias=self.bias and not self.batch_norm,
         )
-        self.add_bn_layer(layer, self.hidden_channels[0])
+        self.add_bn_layer(layer, self.hidden_channels)
         self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
@@ -509,17 +500,17 @@ class Stacked2dCore(Core, nn.Module):
                     (self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1
                 ) // 2
             layer[self.conv_layer_name] = self.ConvLayer(
-                in_channels=self.hidden_channels[l - 1]
+                in_channels=self.hidden_channels
                 if not self.skip > 1
-                else min(self.skip, l) * self.hidden_channels[0],
-                out_channels=self.hidden_channels[l],
+                else min(self.skip, l) * self.hidden_channels,
+                out_channels=self.hidden_channels,
                 kernel_size=self.hidden_kern[l - 1],
                 stride=self.stride,
                 padding=self.hidden_padding,
                 dilation=self.hidden_dilation,
                 bias=self.bias,
             )
-            self.add_bn_layer(layer, self.hidden_channels[l])
+            self.add_bn_layer(layer, self.hidden_channels)
             self.add_activation(layer)
             if l != self.num_layers - 1:
                 layer["dropout"] = nn.Dropout2d(p=self.dropout_rate, inplace=True)
@@ -534,18 +525,6 @@ class Stacked2dCore(Core, nn.Module):
                 **kwargs:
             """
             super().__init__(**kwargs)
-
-    def forward(self, inputs: torch.Tensor):
-        outputs = []
-        for layer, fn in enumerate(self.features):
-            do_skip = layer >= 1 and self.skip > 1
-            inputs = fn(
-                inputs
-                if not do_skip
-                else torch.cat(outputs[-min(self.skip, layer) :], dim=1)
-            )
-            outputs.append(inputs)
-        return torch.cat([outputs[ind] for ind in self.stack], dim=1)
 
     def laplace(self):
         """
@@ -582,4 +561,16 @@ class Stacked2dCore(Core, nn.Module):
 
     @property
     def outchannels(self):
-        return len(self.features) * self.hidden_channels[-1]
+        return len(self.features) * self.hidden_channels
+
+    def forward(self, inputs: torch.Tensor):
+        outputs = []
+        for layer, fn in enumerate(self.features):
+            do_skip = layer >= 1 and self.skip > 1
+            inputs = fn(
+                inputs
+                if not do_skip
+                else torch.cat(outputs[-min(self.skip, layer) :], dim=1)
+            )
+            outputs.append(inputs)
+        return torch.cat([outputs[ind] for ind in self.stack], dim=1)
