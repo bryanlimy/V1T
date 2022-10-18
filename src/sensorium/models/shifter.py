@@ -41,15 +41,9 @@ class MLP(nn.Module):
             out_features = hidden_features
         layers.extend([nn.Linear(in_features=out_features, out_features=2), nn.Tanh()])
         self.mlp = nn.Sequential(*layers)
-        # self.initialize()
 
     def regularizer(self):
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
-
-    def initialize(self):
-        for layer in self.mlp:
-            if isinstance(layer, nn.Linear):
-                torch.nn.init.xavier_normal_(layer.weight)
 
     def forward(self, pupil_center: torch.Tensor, trial_idx: torch.Tensor = None):
         if trial_idx is not None:
