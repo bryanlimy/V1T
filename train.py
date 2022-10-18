@@ -156,19 +156,18 @@ def main(args):
         utils.load_pretrain_core(args, model=model)
 
     # separate learning rates for core and readout modules
-    # params = [
-    #     {
-    #         "params": model.core.parameters(),
-    #         "lr": args.core_lr_scale * args.lr,
-    #         "name": "core",
-    #     },
-    #     {"params": model.readouts.parameters(), "name": "readouts"},
-    # ]
-    # if args.use_shifter:
-    #     params.append({"params": model.shifter.parameters(), "name": "shifter"})
-
+    params = [
+        {
+            "params": model.core.parameters(),
+            "lr": args.core_lr_scale * args.lr,
+            "name": "core",
+        },
+        {"params": model.readouts.parameters(), "name": "readouts"},
+    ]
+    if args.use_shifter:
+        params.append({"params": model.shifter.parameters(), "name": "shifter"})
     optimizer = torch.optim.Adam(
-        params=model.parameters(),
+        params=params,
         lr=args.lr,
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
@@ -180,7 +179,7 @@ def main(args):
 
     epoch = scheduler.restore()
 
-    # utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -222,10 +221,6 @@ def main(args):
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
-
-        if epoch > 10 and val_result["single_trial_correlation"] < 0.29:
-            print("Model is not working")
-            exit()
 
         if tune.is_session_enabled():
             session.report(metrics=val_result)
