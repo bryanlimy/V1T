@@ -221,7 +221,7 @@ def main(args):
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
         for param_group in optimizer.param_groups:
             summary.scalar(
-                f'model/learning_rate/{param_group["name"] if "name" in param_group else "model"}',
+                f'model/lr/{param_group["name"] if "name" in param_group else "model"}',
                 value=param_group["lr"],
                 step=epoch,
                 mode=0,
