@@ -170,7 +170,7 @@ class MiceDataset(Dataset):
         self.image_ids = metadata["image_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
         # standardizer for responses
-        self._response_precision = self.compute_response_precision()
+        self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
@@ -220,22 +220,22 @@ class MiceDataset(Dataset):
         return image
 
     def transform_image(self, image: np.ndarray):
-        if self.crop_mode == 1:
-            image = self.resize_image(image)
         stats = self.image_stats
         image = (image - stats["mean"]) / stats["std"]
+        if self.crop_mode == 1:
+            image = self.resize_image(image)
         return image
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
-        stats = self.image_stats
-        image = (image * stats["std"]) + stats["mean"]
         if self.include_behaviour:
             image = (
                 torch.unsqueeze(image[0], dim=0)
                 if len(image.shape) == 3
                 else torch.unsqueeze(image[:, 0, :, :], dim=1)
             )
+        stats = self.image_stats
+        image = (image * stats["std"]) + stats["mean"]
         return image
 
     def transform_pupil_center(self, pupil_center: np.ndarray):
@@ -258,7 +258,7 @@ class MiceDataset(Dataset):
         idx = std > threshold
         response_precision = np.ones_like(std) / threshold
         response_precision[idx] = 1 / std[idx]
-        return response_precision
+        self._response_precision = response_precision
 
     def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response * self._response_precision

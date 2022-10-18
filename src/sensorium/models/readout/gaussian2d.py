@@ -39,10 +39,6 @@ class Gaussian2DReadout(Readout):
             )
         self.init_mu_range = init_mu_range
 
-        # self.gamma_readout = torch.tensor(
-        #     0.0076, dtype=torch.float32, device=self.device
-        # )
-
         # position grid shape
         self.grid_shape = (1, self.num_neurons, 1, 2)
 
