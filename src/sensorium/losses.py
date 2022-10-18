@@ -5,6 +5,8 @@ from torch import nn
 from torch.nn.modules.loss import _Loss
 from torch.utils.data import DataLoader
 
+REDUCTION = t.Literal["sum", "mean"]
+
 _CRITERION = dict()
 
 
@@ -17,15 +19,22 @@ def register(name):
     return add_to_dict
 
 
-def msse(y_true: torch.Tensor, y_pred: torch.Tensor):
+def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):
     """Mean sum squared error"""
     loss = torch.square(y_true - y_pred)
-    return torch.mean(torch.sum(loss, dim=-1))
+    loss = torch.sum(loss, dim=-1)  # sum over neurons
+    return torch.sum(loss) if reduction == "sum" else torch.mean(loss)
 
 
-def poisson_loss(y_true: torch.Tensor, y_pred: torch.Tensor, eps: float = 1e-8):
+def poisson_loss(
+    y_true: torch.Tensor,
+    y_pred: torch.Tensor,
+    eps: float = 1e-8,
+    reduction: REDUCTION = "sum",
+):
     loss = y_pred - y_true * torch.log(y_pred + eps)
-    return torch.mean(torch.sum(loss, dim=-1))
+    loss = torch.sum(loss, dim=-1)  # sum over neurons
+    return torch.sum(loss) if reduction == "sum" else torch.mean(loss)
 
 
 def _t_correlation(
@@ -115,8 +124,14 @@ class Loss(_Loss):
 class MSSE(Loss):
     """mean sum squared error"""
 
-    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        loss = msse(y_true=y_true, y_pred=y_pred)
+    def forward(
+        self,
+        y_true: torch.Tensor,
+        y_pred: torch.Tensor,
+        mouse_id: int,
+        reduction: REDUCTION = "sum",
+    ):
+        loss = msse(y_true=y_true, y_pred=y_pred, reduction=reduction)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
@@ -127,8 +142,16 @@ class PoissonLoss(Loss):
         super(PoissonLoss, self).__init__(args, ds=ds)
         self.eps = eps
 
-    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        loss = poisson_loss(y_true=y_true, y_pred=y_pred, eps=self.eps)
+    def forward(
+        self,
+        y_true: torch.Tensor,
+        y_pred: torch.Tensor,
+        mouse_id: int,
+        reduction: REDUCTION = "sum",
+    ):
+        loss = poisson_loss(
+            y_true=y_true, y_pred=y_pred, eps=self.eps, reduction=reduction
+        )
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
