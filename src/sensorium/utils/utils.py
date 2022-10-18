@@ -1,4 +1,5 @@
 import os
+import sys
 import copy
 import torch
 import random
@@ -372,3 +373,22 @@ def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
         del train_ds, model, optimizer, criterion
         torch.cuda.empty_cache()
         args.batch_size = batch_size
+
+
+class Logger:
+    """Re-direct stdout to log file with filename"""
+
+    def __init__(self, filename: str):
+        self.console = sys.stdout
+        if not os.path.isdir(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
+        self.file = open(filename, mode="a")
+
+    def write(self, message: str):
+        self.console.write(message)
+        self.file.write(message)
+        self.flush()
+
+    def flush(self):
+        self.console.flush()
+        self.file.flush()

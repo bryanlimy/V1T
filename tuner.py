@@ -15,23 +15,7 @@ from ray.tune.search.bohb import TuneBOHB
 from ray.tune.schedulers import HyperBandForBOHB
 
 import train as trainer
-
-
-class Logger:
-    def __init__(self, filename: str):
-        self.console = sys.stdout
-        if not os.path.isdir(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        self.file = open(filename, "a")
-
-    def write(self, message: str):
-        self.console.write(message)
-        self.file.write(message)
-        self.flush()
-
-    def flush(self):
-        self.console.flush()
-        self.file.flush()
+from sensorium.utils import utils
 
 
 def get_timestamp():
@@ -280,7 +264,7 @@ def main(args):
         else f"{get_timestamp()}-{args.core}"
     )
 
-    sys.stdout = Logger(
+    sys.stdout = utils.Logger(
         filename=os.path.join(args.output_dir, experiment_name, "output.log")
     )
 

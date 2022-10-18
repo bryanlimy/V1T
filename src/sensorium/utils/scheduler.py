@@ -14,9 +14,8 @@ class Scheduler:
         mode: t.Literal["min", "max"],
         model: nn.Module,
         optimizer: Optimizer,
-        max_reduce: int = 2,
-        min_lr: float = 1e-6,
-        lr_patience: int = 5,
+        max_reduce: int = 4,
+        lr_patience: int = 10,
         factor: float = 0.5,
         min_epochs: int = 50,
         save_optimizer: bool = True,
@@ -31,7 +30,6 @@ class Scheduler:
             optimizer: torch.optim, optimizer.
             max_reduce: int, maximum number of learning rate reductions before
                 terminating early stopping.
-            min_lr: float, minimum learning rate.
             lr_patience: int, the number of epochs to wait before reducing the
                 learning rate.
             factor: float, learning rate reduction factor.
@@ -49,7 +47,6 @@ class Scheduler:
         self.num_reduce = 0
         self.lr_patience = lr_patience
         self.lr_wait = 0
-        self.min_lr = min_lr
         if factor >= 1.0:
             raise ValueError("Factor should be < 1.0.")
         self.factor = factor
@@ -141,8 +138,7 @@ class Scheduler:
     def reduce_lr(self):
         """Reduce the learning rates for each param_group by the defined factor"""
         for i, param_group in enumerate(self.optimizer.param_groups):
-            old_lr = float(param_group["lr"])
-            new_lr = max(old_lr * self.factor, self.min_lr)
+            new_lr = self.factor * float(param_group["lr"])
             param_group["lr"] = new_lr
             if self.verbose >= 2:
                 print(f'Reduce learning rate of {param_group["name"]} to {new_lr}.')

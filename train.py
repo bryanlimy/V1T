@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import argparse
 import typing as t
@@ -18,10 +19,10 @@ from sensorium.utils.scheduler import Scheduler
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    rmsse = losses.rmsse(y_true=y_true, y_pred=y_pred)
+    msse = losses.msse(y_true=y_true, y_pred=y_pred)
     correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
     return {
-        "metrics/rmsee": rmsse.item(),
+        "metrics/msse": msse.item(),
         "metrics/single_trial_correlation": correlation.item(),
     }
 
@@ -141,6 +142,8 @@ def main(args):
         rmtree(args.output_dir)
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
+
+    sys.stdout = utils.Logger(filename=os.path.join(args.output_dir, "output.log"))
 
     utils.set_random_seed(args.seed)
     utils.get_device(args)
