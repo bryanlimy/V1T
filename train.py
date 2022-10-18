@@ -219,18 +219,13 @@ def main(args):
         elapse = time() - start
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
-        summary.scalar(
-            "model/learning_rate/core",
-            value=optimizer.param_groups[0]["lr"],
-            step=epoch,
-            mode=0,
-        )
-        summary.scalar(
-            "model/learning_rate/readouts",
-            value=optimizer.param_groups[1]["lr"],
-            step=epoch,
-            mode=0,
-        )
+        for param_group in optimizer.param_groups:
+            summary.scalar(
+                f'model/learning_rate/{param_group["name"]}',
+                value=param_group["lr"],
+                step=epoch,
+                mode=0,
+            )
         if args.verbose:
             print(
                 f'Train\t\t\tloss: {train_result["total_loss"]:.04f}\t\t'
