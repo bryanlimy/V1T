@@ -50,7 +50,7 @@ def train_step(
         "loss/loss": loss.item(),
         "loss/reg_loss": reg_loss.item(),
         "loss/total_loss": total_loss.item(),
-        **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+        # **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
     }
     if update:
         optimizer.step()
@@ -89,29 +89,6 @@ def train(
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
 
-def validation_step(
-    mouse_id: int,
-    data: t.Dict[str, torch.Tensor],
-    model: nn.Module,
-    criterion: losses.Loss,
-) -> t.Dict[str, torch.Tensor]:
-    result, device = {}, model.device
-    images = data["image"].to(device)
-    responses = data["response"].to(device)
-    pupil_center = data["pupil_center"].to(device)
-    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
-    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-    reg_loss = model.regularizer(mouse_id=mouse_id)
-    total_loss = loss + reg_loss
-    result = {
-        "loss/loss": loss.item(),
-        "loss/reg_loss": reg_loss.item(),
-        "loss/total_loss": total_loss.item(),
-        **compute_metrics(y_true=responses, y_pred=outputs),
-    }
-    return result
-
-
 def validate(
     args,
     ds: t.Dict[int, DataLoader],
@@ -121,21 +98,33 @@ def validate(
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
-    results = {}
+    results, device = {}, args.device
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose < 2) as pbar:
         with torch.no_grad():
             for mouse_id, mouse_ds in ds.items():
-                mouse_result = {}
+                mouse_result = {"responses": [], "outputs": []}
                 for data in mouse_ds:
-                    result = validation_step(
-                        mouse_id=mouse_id,
-                        data=data,
-                        model=model,
-                        criterion=criterion,
+                    images = data["image"].to(device)
+                    responses = data["response"].to(device)
+                    pupil_center = data["pupil_center"].to(device)
+                    outputs = model(
+                        images, mouse_id=mouse_id, pupil_center=pupil_center
                     )
-                    utils.update_dict(mouse_result, result)
+                    mouse_result["responses"].append(responses)
+                    mouse_result["outputs"].append(outputs)
                     pbar.update(1)
-                results[mouse_id] = mouse_result
+                mouse_result = {k: torch.cat(v) for k, v in mouse_result.items()}
+                results[mouse_id] = {
+                    "loss": criterion(
+                        y_true=mouse_result["responses"],
+                        y_pred=mouse_result["outputs"],
+                        mouse_id=mouse_id,
+                    ).item(),
+                    **compute_metrics(
+                        y_true=mouse_result["responses"],
+                        y_pred=mouse_result["outputs"],
+                    ),
+                }
     return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
 
 
@@ -199,15 +188,15 @@ def main(args):
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        train_result = train(
-            args,
-            ds=train_ds,
-            model=model,
-            optimizer=optimizer,
-            criterion=criterion,
-            epoch=epoch,
-            summary=summary,
-        )
+        # train_result = train(
+        #     args,
+        #     ds=train_ds,
+        #     model=model,
+        #     optimizer=optimizer,
+        #     criterion=criterion,
+        #     epoch=epoch,
+        #     summary=summary,
+        # )
         val_result = validate(
             args,
             ds=val_ds,
@@ -230,7 +219,7 @@ def main(args):
             print(
                 f'Train\t\t\tloss: {train_result["total_loss"]:.04f}\t\t'
                 f'correlation: {train_result["single_trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["total_loss"]:.04f}\t\t'
+                f'Validation\t\tloss: {val_result["loss"]:.04f}\t\t'
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
