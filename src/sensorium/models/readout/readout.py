@@ -81,11 +81,6 @@ class Readouts(nn.ModuleDict):
                     name=f"Mouse{mouse_id}Readout",
                 ),
             )
-        self.initialize()
-
-    def initialize(self):
-        for mouse_id, readout in self.items():
-            readout.initialize()
 
     def regularizer(self, mouse_id: int, reduction: str = "sum"):
         return self[str(mouse_id)].regularizer(reduction=reduction)
