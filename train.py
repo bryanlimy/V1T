@@ -410,6 +410,7 @@ if __name__ == "__main__":
         parser.add_argument("--num_heads", type=int, default=3)
         parser.add_argument("--mlp_dim", type=int, default=64)
         parser.add_argument("--dim_head", type=int, default=64)
+        parser.add_argument("--dropout", type=float, default=0.0)
         parser.add_argument("--core_reg_scale", type=float, default=0)
     elif temp_args.core == "stn":
         parser.add_argument("--num_layers", type=int, default=7)
