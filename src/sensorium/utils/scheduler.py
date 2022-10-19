@@ -79,21 +79,28 @@ class Scheduler:
         ckpt = {
             "epoch": epoch,
             "value": float(value),
-            "model_state_dict": self._parameters2save(),
+            "model": self._parameters2save(),
         }
         if self.save_optimizer:
-            ckpt["optimizer_state_dict"] = self.optimizer.state_dict()
+            ckpt["optimizer"] = self.optimizer.state_dict()
         if self.save_scheduler:
-            ckpt["scheduler_state_dict"] = self.state_dict()
+            ckpt["scheduler"] = self.state_dict()
         torch.save(ckpt, f=filename)
         if self.verbose:
             print(f"\nCheckpoint saved to {filename}.")
 
-    def restore(self, force: bool = False) -> int:
+    def restore(
+        self,
+        force: bool = False,
+        load_optimizer: bool = True,
+        load_scheduler: bool = True,
+    ) -> int:
         """
         Load the best model in self.checkpoint_dir and return the epoch
         Args:
             force: bool, raise an error if checkpoint is not found.
+            load_optimizer: bool, load optimizer from checkpoint.
+            load_scheduler: bool, load scheduler from checkpoint.
         Return:
             epoch: int, the number of epoch the model has been trained for,
                 return 0 if no checkpoint was found.
@@ -105,14 +112,14 @@ class Scheduler:
             epoch = ckpt["epoch"]
             # it is possible that the checkpoint only contains part of a model
             # hence we update the current state_dict of the model instead of
-            # directly calling model.load_state_dict(ckpt['model_state_dict'])
+            # directly calling model.load_state_dict(ckpt['model'])
             state_dict = self.model.state_dict()
-            state_dict.update(ckpt["model_state_dict"])
+            state_dict.update(ckpt["model"])
             self.model.load_state_dict(state_dict)
-            if "optimizer_state_dict" in ckpt:
-                self.optimizer.load_state_dict(ckpt["optimizer_state_dict"])
-            if "scheduler_state_dict" in ckpt:
-                self.load_state_dict(ckpt["scheduler_state_dict"])
+            if load_optimizer and "optimizer" in ckpt:
+                self.optimizer.load_state_dict(ckpt["optimizer"])
+            if load_scheduler and "scheduler" in ckpt:
+                self.load_state_dict(ckpt["scheduler"])
             if self.verbose:
                 print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")
         elif force:
@@ -141,7 +148,10 @@ class Scheduler:
             new_lr = self.factor * float(param_group["lr"])
             param_group["lr"] = new_lr
             if self.verbose >= 2:
-                print(f'Reduce learning rate of {param_group["name"]} to {new_lr}.')
+                print(
+                    f"Reduce learning rate of {param_group['name']} to "
+                    f"{new_lr:.04e} (num_reduce: {self.num_reduce})."
+                )
 
     def step(self, value: t.Union[float, np.ndarray, torch.Tensor], epoch: int):
         terminate = False
@@ -161,9 +171,9 @@ class Scheduler:
                             f"LR reductions."
                         )
                 else:
-                    self.restore()
-                    self.reduce_lr()
                     self.num_reduce += 1
+                    self.restore(load_optimizer=False, load_scheduler=False)
+                    self.reduce_lr()
                     self.lr_wait = 0
             else:
                 self.lr_wait += 1

@@ -235,7 +235,7 @@ def main(args):
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
-    scheduler.restore()
+    scheduler.restore(load_optimizer=False, load_scheduler=False)
 
     eval_result = utils.evaluate(
         args,
@@ -407,11 +407,17 @@ if __name__ == "__main__":
         parser.add_argument("--core_reg_hidden", type=float, default=0.0)
     elif temp_args.core == "vit":
         parser.add_argument("--patch_size", type=int, default=4)
+        parser.add_argument("--num_layers", type=int, default=4)
         parser.add_argument("--emb_dim", type=int, default=64)
         parser.add_argument("--num_heads", type=int, default=3)
         parser.add_argument("--mlp_dim", type=int, default=64)
         parser.add_argument("--dim_head", type=int, default=64)
         parser.add_argument("--core_reg_scale", type=float, default=0)
+    elif temp_args.core == "stn":
+        parser.add_argument("--num_layers", type=int, default=7)
+        parser.add_argument("--num_filters", type=int, default=63)
+        parser.add_argument("--dropout", type=float, default=0.1135)
+        parser.add_argument("--core_reg_scale", type=float, default=0.0450)
     else:
         parser.add_argument("--core_reg_scale", type=float, default=0)
 

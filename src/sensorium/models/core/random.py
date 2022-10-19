@@ -18,4 +18,5 @@ class RandomCore(Core):
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
-        return torch.rand(*(batch_size, *self.output_shape)) + self.weight - self.weight
+        random = torch.rand(*(batch_size, *self.output_shape), device=inputs.device)
+        return random + self.weight - self.weight
