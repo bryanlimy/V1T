@@ -11,9 +11,9 @@ class Scheduler:
     def __init__(
         self,
         args,
-        mode: t.Literal["min", "max"],
         model: nn.Module,
-        optimizer: Optimizer,
+        optimizer: Optimizer = None,
+        mode: t.Literal["min", "max"] = "max",
         max_reduce: int = 3,
         lr_patience: int = 10,
         factor: float = 0.3,
@@ -25,9 +25,10 @@ class Scheduler:
         """
         Args:
             args: argparse parameters.
-            mode: 'min' or 'max', compare objective by minimum or maximum
+
             model: Model, model.
-            optimizer: torch.optim, optimizer.
+            optimizer: (optional) torch.optim, optimizer.
+            mode: 'min' or 'max', compare objective by minimum or maximum
             max_reduce: int, maximum number of learning rate reductions before
                 terminating early stopping.
             lr_patience: int, the number of epochs to wait before reducing the
@@ -38,7 +39,10 @@ class Scheduler:
                 stopping begins monitoring.
             save_optimizer: bool, save optimizer state dict to checkpoint if True.
         """
-        assert mode in ("min", "max")
+        assert mode in ("min", "max"), f"mode must be either min or max but not {mode}."
+        assert (
+            not save_optimizer or optimizer is not None
+        ), "Optimizer must be provided when save_optimizer=True"
         self.mode = mode
         self.model = model
         self.optimizer = optimizer
@@ -167,7 +171,7 @@ class Scheduler:
                     terminate = True
                     if self.verbose:
                         print(
-                            f"Model has not improved after {self.num_reduce} "
+                            f"\nModel has not improved after {self.num_reduce} "
                             f"LR reductions."
                         )
                 else:

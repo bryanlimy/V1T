@@ -312,16 +312,6 @@ def load_model(args) -> Model:
     return model
 
 
-def load_model_state(args, model: Model, filename: str):
-    ckpt = torch.load(filename, map_location=args.device)
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"checkpoint {filename} not found.")
-    model.load_state_dict(ckpt["model_state_dict"])
-    if args.verbose:
-        if args.verbose:
-            print(f"\nLoaded model state (epoch {ckpt['epoch']}) from {filename}.")
-
-
 def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     device = args.device.type
 

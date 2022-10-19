@@ -179,7 +179,7 @@ def main(args):
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
     )
-    scheduler = Scheduler(args, mode="max", model=model, optimizer=optimizer)
+    scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
