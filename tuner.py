@@ -155,6 +155,8 @@ def get_search_space(args):
                 "core": "stacked2d",
                 "num_layers": tune.randint(1, 8),
                 "dropout": tune.uniform(0, 0.8),
+                "core_reg_input": tune.uniform(0, 10),
+                "core_reg_hidden": tune.uniform(0, 10),
             }
         )
         points_to_evaluate = [
@@ -166,7 +168,8 @@ def get_search_space(args):
                 "bias_mode": 0,
                 "criterion": "poisson",
                 "lr": 1e-3,
-                "core_reg_scale": 1,
+                "core_reg_input": 6.3831,
+                "core_reg_hidden": 0.0,
                 "readout_reg_scale": 0.0076,
                 "shifter_reg_scale": 0,
                 "ds_scale": True,

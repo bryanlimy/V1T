@@ -186,8 +186,6 @@ def main(args):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
-
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
