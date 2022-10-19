@@ -29,7 +29,7 @@ def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum
 def poisson_loss(
     y_true: torch.Tensor,
     y_pred: torch.Tensor,
-    eps: float = 1e-8,
+    eps: float = 1e-12,
     reduction: REDUCTION = "sum",
 ):
     loss = y_pred - y_true * torch.log(y_pred + eps)
@@ -138,7 +138,7 @@ class MSSE(Loss):
 
 @register("poisson")
 class PoissonLoss(Loss):
-    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-8):
+    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-12):
         super(PoissonLoss, self).__init__(args, ds=ds)
         self.eps = eps
 

@@ -162,7 +162,7 @@ def main(args):
     if args.pretrain_core:
         utils.load_pretrain_core(args, model=model)
 
-    # separate learning rates for core and readout modules
+    # separate learning rates for different modules
     params = [
         {
             "params": model.core.parameters(),
@@ -171,7 +171,7 @@ def main(args):
         },
         {"params": model.readouts.parameters(), "name": "readouts"},
     ]
-    if args.use_shifter:
+    if model.shifter is not None:
         params.append({"params": model.shifter.parameters(), "name": "shifter"})
     optimizer = torch.optim.Adam(
         params=params,
