@@ -73,9 +73,8 @@ class Gaussian2DReadout(Readout):
 
         self.use_bias = use_bias
         self.bias_mode = args.bias_mode
-        self.initialize_bias(stats=ds.dataset.response_stats)
 
-        self.initialize()
+        self.initialize(ds=ds)
 
     def feature_l1(self, reduction: REDUCTIONS = "sum"):
         """
@@ -164,7 +163,7 @@ class Gaussian2DReadout(Readout):
         else:
             self.bias = None
 
-    def initialize(self):
+    def initialize(self, ds: DataLoader):
         """
         Initializes the mean, and sigma of the Gaussian readout along with
         the features weights
@@ -179,6 +178,7 @@ class Gaussian2DReadout(Readout):
         self.features.data.fill_(1 / self.input_shape[0])
         if self._shared_features:
             self.scales.data.fill_(1.0)
+        self.initialize_bias(stats=ds.dataset.response_stats)
 
     @property
     def mu(self):

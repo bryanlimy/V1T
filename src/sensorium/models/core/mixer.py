@@ -49,13 +49,13 @@ class MixerCore(Core):
         name: str = "MixerCore",
     ):
         super(MixerCore, self).__init__(args, input_shape=input_shape, name=name)
-
         self.patch_size = patch_size
         self.dim = dim
         self.num_layers = num_layers
         self.expansion_factor = expansion_factor
         self.expansion_factor_token = expansion_factor_token
         self.dropout = args.dropout
+        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
 
         num_channels, height, width = input_shape
         assert (height % patch_size) == 0 and (
@@ -104,6 +104,10 @@ class MixerCore(Core):
         self._latent_shape = (num_patches, dim)
         self._reshape_shape = (height, num_patches // height, dim)
         self.output_shape = (dim, height, num_patches // height)
+
+    def regularizer(self):
+        """L1 regularization"""
+        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size()[0]

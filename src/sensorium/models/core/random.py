@@ -13,6 +13,9 @@ class RandomCore(Core):
 
         self.weight = nn.Parameter(torch.rand(1))
 
+    def regularizer(self):
+        return 0.0
+
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         return torch.rand(*(batch_size, *self.output_shape)) + self.weight - self.weight

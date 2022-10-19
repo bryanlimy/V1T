@@ -165,6 +165,7 @@ class ViTCore(Core):
         dim_head = args.dim_head
         dropout = args.dropout
         emb_dropout = args.dropout
+        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
 
         if isinstance(patch_size, int):
             patch_height, patch_width = patch_size, patch_size
@@ -200,6 +201,10 @@ class ViTCore(Core):
         (new_h, new_w) = find_shape(num_patches)
         self.latent_dim = (new_h, new_w, emb_dim)
         self.output_shape = (emb_dim, new_h, new_w)
+
+    def regularizer(self):
+        """L1 regularization"""
+        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)

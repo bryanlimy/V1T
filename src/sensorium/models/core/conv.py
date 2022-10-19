@@ -18,6 +18,7 @@ class ConvCore(Core):
         name: str = "ConvCore",
     ):
         super(ConvCore, self).__init__(args, input_shape=input_shape, name=name)
+        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
 
         output_shape = input_shape
         self.conv_block1 = nn.Sequential(
@@ -76,6 +77,10 @@ class ConvCore(Core):
         )
 
         self.output_shape = output_shape
+
+    def regularizer(self):
+        """L1 regularization"""
+        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.conv_block1(inputs)

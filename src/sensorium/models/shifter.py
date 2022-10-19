@@ -26,9 +26,7 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
         self.name = name
         self.device = args.device
-        self.reg_scale = torch.tensor(
-            args.shifter_reg_scale, dtype=torch.float32, device=self.device
-        )
+        self.reg_scale = torch.tensor(args.shifter_reg_scale, device=self.device)
         out_features = in_features
         layers = []
         for _ in range(num_layers - 1):

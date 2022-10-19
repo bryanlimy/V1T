@@ -392,33 +392,21 @@ if __name__ == "__main__":
         parser.add_argument("--num_layers", type=int, default=4)
         parser.add_argument("--num_filters", type=int, default=8)
         parser.add_argument("--dropout", type=float, default=0.0)
-        parser.add_argument(
-            "--core_reg_scale",
-            default=0,
-            type=float,
-            help="weight regularization coefficient for core module.",
-        )
+        parser.add_argument("--core_reg_scale", type=float, default=0)
     elif temp_args.core == "stacked2d":
         parser.add_argument("--num_layers", type=int, default=4)
         parser.add_argument("--dropout", type=float, default=0.0)
-        parser.add_argument(
-            "--core_reg_scale",
-            default=1,
-            type=float,
-            help="weight regularization coefficient for core module.",
-        )
+        parser.add_argument("--core_reg_input", type=float, default=6.3831)
+        parser.add_argument("--core_reg_hidden", type=float, default=0.0)
     elif temp_args.core == "vit":
         parser.add_argument("--patch_size", type=int, default=4)
         parser.add_argument("--emb_dim", type=int, default=64)
         parser.add_argument("--num_heads", type=int, default=3)
         parser.add_argument("--mlp_dim", type=int, default=64)
         parser.add_argument("--dim_head", type=int, default=64)
-        parser.add_argument(
-            "--core_reg_scale",
-            default=0,
-            type=float,
-            help="weight regularization coefficient for core module.",
-        )
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+    else:
+        parser.add_argument("--core_reg_scale", type=float, default=0)
 
     # hyper-parameters for readout modules
     if temp_args.readout == "gaussian2d":
@@ -434,28 +422,13 @@ if __name__ == "__main__":
             "1: initialize bias with the mean responses"
             "2: initialize bias with the mean responses divide by standard deviation",
         )
-        parser.add_argument(
-            "--readout_reg_scale",
-            default=0.0076,
-            type=float,
-            help="weight regularization coefficient for readout module.",
-        )
+        parser.add_argument("--readout_reg_scale", type=float, default=0.0076)
     else:
-        parser.add_argument(
-            "--readout_reg_scale",
-            default=0.0,
-            type=float,
-            help="weight regularization coefficient for readout module.",
-        )
+        parser.add_argument("--readout_reg_scale", type=float, default=0.0)
 
     # hyper-parameters for shifter module
-    if temp_args.use_shifter:
-        parser.add_argument(
-            "--shifter_reg_scale",
-            default=0.0,
-            type=float,
-            help="weight regularization coefficient for shifter module.",
-        )
+    if temp_args.use_shifter or temp_args.include_behaviour:
+        parser.add_argument("--shifter_reg_scale", type=float, default=0.0)
 
     del temp_args
     main(parser.parse_args())
