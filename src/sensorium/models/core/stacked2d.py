@@ -572,7 +572,7 @@ class Stacked2dCore(Core, nn.Module):
     def regularizer(self):
         term1 = self.gamma_hidden * self.group_sparsity()
         term2 = self.gamma_input * self.laplace()
-        return self.reg_scale * (term1 + term2)
+        return term1 + term2
 
     @property
     def outchannels(self):
