@@ -272,66 +272,19 @@ if __name__ == "__main__":
         help="include behaviour data into input as additional channels.",
     )
     parser.add_argument(
+        "--crop_mode",
+        default=1,
+        type=int,
+        choices=[0, 1],
+        help="image crop mode:"
+        "0: no cropping and return full image (1, 144, 256)"
+        "1: resize image to (1, 36, 64)",
+    )
+    parser.add_argument(
         "--num_workers",
         default=2,
         type=int,
         help="number of works for DataLoader.",
-    )
-
-    # model settings
-    parser.add_argument(
-        "--core", type=str, required=True, help="The core module to use."
-    )
-    parser.add_argument(
-        "--readout", type=str, required=True, help="The readout module to use."
-    )
-
-    # ConvCore
-    parser.add_argument("--num_layers", type=int, default=4)
-    parser.add_argument("--num_filters", type=int, default=8)
-    parser.add_argument("--dropout", type=float, default=0.0)
-
-    # ViTCore
-    parser.add_argument("--patch_size", type=int, default=4)
-    parser.add_argument("--emb_dim", type=int, default=64)
-    parser.add_argument("--num_heads", type=int, default=3)
-    parser.add_argument("--mlp_dim", type=int, default=64)
-    parser.add_argument("--dim_head", type=int, default=64)
-
-    parser.add_argument(
-        "--core_reg_scale",
-        default=0,
-        type=float,
-        help="weight regularization coefficient for core module.",
-    )
-
-    # Gaussian2DReadout
-    parser.add_argument("--disable_grid_predictor", action="store_true")
-    parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
-    parser.add_argument(
-        "--bias_mode",
-        type=int,
-        default=0,
-        choices=[0, 1, 2],
-        help="Gaussian2d readout bias mode:"
-        "0: initialize bias with zeros"
-        "1: initialize bias with the mean responses"
-        "2: initialize bias with the mean responses divide by standard deviation",
-    )
-    parser.add_argument(
-        "--readout_reg_scale",
-        default=0.0076,
-        type=float,
-        help="weight regularization coefficient for readout module.",
-    )
-
-    # Shifter
-    parser.add_argument("--use_shifter", action="store_true")
-    parser.add_argument(
-        "--shifter_reg_scale",
-        default=0.0,
-        type=float,
-        help="weight regularization coefficient for shifter module.",
     )
 
     # training settings
@@ -344,16 +297,6 @@ if __name__ == "__main__":
         type=int,
         help="If batch_size == 0 and CUDA is available, then dynamically test "
         "batch size. Otherwise use the provided value.",
-    )
-
-    parser.add_argument(
-        "--crop_mode",
-        default=1,
-        type=int,
-        choices=[0, 1],
-        help="image crop mode:"
-        "0: no cropping and return full image (1, 144, 256)"
-        "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(
         "--device",
@@ -405,7 +348,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_plots", action="store_true", help="save plots to --output_dir"
     )
-    parser.add_argument("--dpi", type=int, default=120, help="matplotlib figure DPI")
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=120,
+        help="matplotlib figure DPI",
+    )
     parser.add_argument(
         "--format",
         type=str,
@@ -422,5 +370,92 @@ if __name__ == "__main__":
     )
     parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
 
-    params = parser.parse_args()
-    main(params)
+    # model settings
+    parser.add_argument(
+        "--core",
+        type=str,
+        required=True,
+        help="The core module to use.",
+    )
+    parser.add_argument(
+        "--readout",
+        type=str,
+        required=True,
+        help="The readout module to use.",
+    )
+    parser.add_argument("--use_shifter", action="store_true")
+
+    temp_args = parser.parse_known_args()[0]
+
+    # hyper-parameters for core module
+    if temp_args.core == "conv":
+        parser.add_argument("--num_layers", type=int, default=4)
+        parser.add_argument("--num_filters", type=int, default=8)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument(
+            "--core_reg_scale",
+            default=0,
+            type=float,
+            help="weight regularization coefficient for core module.",
+        )
+    elif temp_args.core == "stacked2d":
+        parser.add_argument("--num_layers", type=int, default=4)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument(
+            "--core_reg_scale",
+            default=1,
+            type=float,
+            help="weight regularization coefficient for core module.",
+        )
+    elif temp_args.core == "vit":
+        parser.add_argument("--patch_size", type=int, default=4)
+        parser.add_argument("--emb_dim", type=int, default=64)
+        parser.add_argument("--num_heads", type=int, default=3)
+        parser.add_argument("--mlp_dim", type=int, default=64)
+        parser.add_argument("--dim_head", type=int, default=64)
+        parser.add_argument(
+            "--core_reg_scale",
+            default=0,
+            type=float,
+            help="weight regularization coefficient for core module.",
+        )
+
+    # hyper-parameters for readout modules
+    if temp_args.readout == "gaussian2d":
+        parser.add_argument("--disable_grid_predictor", action="store_true")
+        parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
+        parser.add_argument(
+            "--bias_mode",
+            type=int,
+            default=0,
+            choices=[0, 1, 2],
+            help="Gaussian2d readout bias mode:"
+            "0: initialize bias with zeros"
+            "1: initialize bias with the mean responses"
+            "2: initialize bias with the mean responses divide by standard deviation",
+        )
+        parser.add_argument(
+            "--readout_reg_scale",
+            default=0.0076,
+            type=float,
+            help="weight regularization coefficient for readout module.",
+        )
+    else:
+        parser.add_argument(
+            "--readout_reg_scale",
+            default=0.0,
+            type=float,
+            help="weight regularization coefficient for readout module.",
+        )
+
+    # hyper-parameters for shifter module
+    if temp_args.use_shifter:
+        parser.add_argument(
+            "--shifter_reg_scale",
+            default=0.0,
+            type=float,
+            help="weight regularization coefficient for shifter module.",
+        )
+
+    del temp_args
+    main(parser.parse_args())
