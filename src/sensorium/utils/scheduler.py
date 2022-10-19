@@ -92,8 +92,8 @@ class Scheduler:
     def restore(
         self,
         force: bool = False,
-        load_optimizer: bool = True,
-        load_scheduler: bool = True,
+        load_optimizer: bool = False,
+        load_scheduler: bool = False,
     ) -> int:
         """
         Load the best model in self.checkpoint_dir and return the epoch
@@ -172,7 +172,7 @@ class Scheduler:
                         )
                 else:
                     self.num_reduce += 1
-                    self.restore(load_optimizer=False, load_scheduler=False)
+                    self.restore()
                     self.reduce_lr()
                     self.lr_wait = 0
             else:

@@ -184,7 +184,7 @@ def main(args):
 
     utils.save_args(args)
 
-    epoch = scheduler.restore()
+    epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
     utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
 
@@ -235,7 +235,7 @@ def main(args):
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
-    scheduler.restore(load_optimizer=False, load_scheduler=False)
+    scheduler.restore()
 
     eval_result = utils.evaluate(
         args,
