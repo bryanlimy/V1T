@@ -255,9 +255,7 @@ def log_metrics(
         for metric in metrics:
             value = results[mouse_id][metric]
             if not isinstance(value, float):
-                results[mouse_id][metric] = (
-                    np.mean(value) if "correlation" in metric else np.sum(value)
-                )
+                results[mouse_id][metric] = np.mean(value)
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
                 value=results[mouse_id][metric],

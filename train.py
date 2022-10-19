@@ -3,6 +3,7 @@ import sys
 import torch
 import argparse
 import typing as t
+import numpy as np
 from ray import tune
 from torch import nn
 from tqdm import tqdm
@@ -89,6 +90,23 @@ def train(
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
 
+def validation_step(
+    mouse_id: int,
+    data: t.Dict[str, torch.Tensor],
+    model: nn.Module,
+    criterion: losses.Loss,
+) -> t.Dict[str, torch.Tensor]:
+    result, device = {}, model.device
+    images = data["image"].to(device)
+    responses = data["response"].to(device)
+    pupil_center = data["pupil_center"].to(device)
+    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    result["loss/loss"] = loss.item()
+    result.update(compute_metrics(y_true=responses, y_pred=outputs))
+    return result
+
+
 def validate(
     args,
     ds: t.Dict[int, DataLoader],
@@ -98,32 +116,21 @@ def validate(
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
-    results, device = {}, args.device
+    results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose < 2) as pbar:
         with torch.no_grad():
             for mouse_id, mouse_ds in ds.items():
-                mouse_result = {"responses": [], "outputs": []}
+                mouse_result = {}
                 for data in mouse_ds:
-                    outputs = model(
-                        data["image"].to(device),
+                    result = validation_step(
                         mouse_id=mouse_id,
-                        pupil_center=data["pupil_center"].to(device),
+                        data=data,
+                        model=model,
+                        criterion=criterion,
                     )
-                    mouse_result["responses"].append(data["response"])
-                    mouse_result["outputs"].append(outputs.cpu())
+                    utils.update_dict(mouse_result, result)
                     pbar.update(1)
-                mouse_result = {k: torch.cat(v) for k, v in mouse_result.items()}
-                results[mouse_id] = {
-                    "loss": criterion(
-                        y_true=mouse_result["responses"],
-                        y_pred=mouse_result["outputs"],
-                        mouse_id=mouse_id,
-                    ).item(),
-                    **compute_metrics(
-                        y_true=mouse_result["responses"],
-                        y_pred=mouse_result["outputs"],
-                    ),
-                }
+                results[mouse_id] = mouse_result
     return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
 
 
