@@ -118,9 +118,9 @@ def main(args):
     utils.load_args(args)
 
     if 0 not in args.output_shapes:
-        print("Warning: model was on trained on Mouse 1")
+        print("Warning: the saved model was not trained on Mouse 1")
     if 1 not in args.output_shapes:
-        print("Warning: model was on trained on Mouse 2")
+        print("Warning: the saved model was not trained on Mouse 2")
 
     utils.get_device(args)
 

@@ -97,10 +97,7 @@ def get_search_space(args):
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
         "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
-        "lr": tune.loguniform(1e-4, 1e-2),
-        "core_reg_scale": tune.uniform(0, 1),
-        "readout_reg_scale": tune.uniform(0, 1),
-        "shifter_reg_scale": tune.uniform(0, 1),
+        "lr": tune.loguniform(1e-5, 1e-2),
         "ds_scale": tune.choice([True, False]),
         "crop_mode": 1,
         "adam_beta1": tune.loguniform(1e-10, 1.0),
@@ -114,13 +111,14 @@ def get_search_space(args):
         search_space.update(
             {
                 "core": "vit",
-                "dropout": tune.uniform(0, 0.8),
                 "patch_size": tune.randint(1, 10),
+                "num_layers": tune.randint(1, 8),
                 "emb_dim": tune.randint(8, 128),
                 "num_heads": tune.randint(1, 16),
                 "mlp_dim": tune.randint(8, 128),
-                "num_layers": tune.randint(1, 8),
                 "dim_head": tune.randint(8, 128),
+                "dropout": tune.uniform(0, 0.8),
+                "core_reg_scale": tune.uniform(0, 1),
             }
         )
         points_to_evaluate = [
