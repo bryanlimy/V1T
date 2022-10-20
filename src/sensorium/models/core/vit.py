@@ -73,6 +73,7 @@ class MultiHeadAttention(nn.Module):
         super(MultiHeadAttention, self).__init__()
         self.emb_dim = emb_dim
         self.num_heads = num_heads
+        self.register_buffer("scale", torch.tensor(emb_dim ** (1 / 2)))
         hidden_dims = emb_dim * num_heads
         # fuse the queries, keys and values in one matrix
         self.qkv = nn.Linear(in_features=emb_dim, out_features=hidden_dims * 3)
@@ -95,8 +96,7 @@ class MultiHeadAttention(nn.Module):
         if mask is not None:
             fill_value = torch.finfo(torch.float32).min
             energy.masked_fill(~mask, fill_value)
-        scale = self.dim ** (1 / 2)
-        attention = self.softmax(energy) / scale
+        attention = self.softmax(energy) / self.scale
         attention = self.dropout(attention)
         # sum up over the third axis
         outputs = torch.einsum("bhal, bhlv -> bhav", attention, values)
@@ -162,26 +162,20 @@ class ViTCore(Core):
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
-        patch_size = args.patch_size
-        emb_dim = args.emb_dim
-        num_heads = args.num_heads
-        mlp_dim = args.mlp_dim
-        num_blocks = args.num_blocks
-        dropout = args.dropout
         self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
 
         self.patch_embedding = PatchEmbedding(
             image_shape=input_shape,
-            emb_dim=emb_dim,
-            patch_size=patch_size,
-            stride=1 if max(input_shape) < 100 else patch_size,
+            emb_dim=args.emb_dim,
+            patch_size=args.patch_size,
+            stride=1 if max(input_shape) < 100 else args.patch_size,
         )
         self.transformer = Transformer(
-            num_blocks=num_blocks,
-            emb_dim=emb_dim,
-            num_heads=num_heads,
-            mlp_dim=mlp_dim,
-            dropout=dropout,
+            num_blocks=args.num_blocks,
+            emb_dim=args.emb_dim,
+            num_heads=args.num_heads,
+            mlp_dim=args.mlp_dim,
+            dropout=args.dropout,
         )
         # calculate latent height and width based on num_patches
         latent_height, latent_width = self.find_shape(
@@ -193,9 +187,9 @@ class ViTCore(Core):
             "b (lh lw) c -> b c lh lw",
             lh=latent_height,
             lw=latent_width,
-            c=emb_dim,
+            c=args.emb_dim,
         )
-        self.output_shape = (emb_dim, latent_height, latent_width)
+        self.output_shape = (args.emb_dim, latent_height, latent_width)
 
     @staticmethod
     def find_shape(num_patches: int):
