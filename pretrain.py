@@ -23,7 +23,9 @@ class Model(nn.Module):
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shape = args.output_shape
-        self.reg_scale = args.reg_scale
+        self.output_module_reg_scale = torch.tensor(
+            args.output_module_reg_scale, device=args.device
+        )
 
         self.add_module(
             name="core",
@@ -33,7 +35,7 @@ class Model(nn.Module):
         core_shape = self.core.output_shape
 
         if args.mode == 0:
-            self.readout = nn.Sequential(
+            self.output_module = nn.Sequential(
                 Reduce("b c h w -> b c", "mean"),
                 nn.Linear(
                     in_features=core_shape[0],
@@ -65,7 +67,7 @@ class Model(nn.Module):
                 input_shape=output_shape, num_filters=1, kernel_size=1
             )
             assert output_shape == self.output_shape
-            self.readout = nn.Sequential(
+            self.output_module = nn.Sequential(
                 nn.ConvTranspose2d(
                     in_channels=core_shape[0],
                     out_channels=core_shape[0] // 2,
@@ -108,7 +110,7 @@ class Model(nn.Module):
                 input_shape=output_shape, num_filters=1, kernel_size=1
             )
             assert output_shape == self.output_shape
-            self.readout = nn.Sequential(
+            self.output_module = nn.Sequential(
                 nn.ConvTranspose2d(
                     in_channels=core_shape[0],
                     out_channels=core_shape[0] // 2,
@@ -139,11 +141,15 @@ class Model(nn.Module):
 
     def regularizer(self):
         """L1 regularization"""
-        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
+        core_reg = self.core.regularizer()
+        output_module_reg = self.output_module_reg_scale * sum(
+            p.abs().sum() for p in self.output_module.parameters()
+        )
+        return core_reg + output_module_reg
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.core(inputs)
-        outputs = self.readout(outputs)
+        outputs = self.output_module(outputs)
         return outputs
 
 
@@ -186,11 +192,11 @@ def main(args):
     scheduler = Scheduler(
         args,
         mode="min",
-        model=model,  # only save core module
+        model=model,
         optimizer=optimizer,
         save_optimizer=False,
         save_scheduler=False,
-        save_modules=["core"],
+        module_names=["core"],  # only save core module
     )
 
     utils.save_args(args)
@@ -268,26 +274,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument(
-        "--num_workers", default=4, type=int, help="number of works for DataLoader."
+        "--num_workers",
+        type=int,
+        default=4,
+        help="number of works for DataLoader.",
     )
-
-    # model settings
-    parser.add_argument(
-        "--core", type=str, required=True, help="The core module to use."
-    )
-
-    # ConvCore
-    parser.add_argument("--num_filters", type=int, default=8)
-    parser.add_argument("--dropout", type=float, default=0.2)
-    parser.add_argument("--activation", type=str, default="gelu")
-
-    # ViTCore
-    parser.add_argument("--patch_size", type=int, default=4)
-    parser.add_argument("--emb_dim", type=int, default=64)
-    parser.add_argument("--num_heads", type=int, default=3)
-    parser.add_argument("--mlp_dim", type=int, default=64)
-    parser.add_argument("--num_layers", type=int, default=3)
-    parser.add_argument("--dim_head", type=int, default=64)
 
     # training settings
     parser.add_argument(
@@ -300,20 +291,22 @@ if __name__ == "__main__":
         "  1: reconstruction",
     )
     parser.add_argument(
-        "--epochs", default=200, type=int, help="maximum epochs to train the model."
+        "--epochs",
+        type=int,
+        default=200,
+        help="maximum epochs to train the model.",
     )
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument(
-        "--reg_scale",
-        default=0,
+        "--lr",
         type=float,
-        help="weight regularization coefficient.",
+        default=1e-4,
+        help="initial learning rate",
     )
-    parser.add_argument("--lr", default=1e-4, type=float, help="model learning rate")
     parser.add_argument(
         "--crop_mode",
-        default=1,
         type=int,
+        default=1,
         choices=[0, 1],
         help="image crop mode:"
         "0: no cropping and return full image (1, 144, 256)"
@@ -327,7 +320,6 @@ if __name__ == "__main__":
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
-    parser.add_argument("--mixed_precision", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
 
     # plot settings
@@ -351,5 +343,46 @@ if __name__ == "__main__":
     )
     parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
 
-    params = parser.parse_args()
-    main(params)
+    parser.add_argument(
+        "--core", type=str, required=True, help="The core module to use."
+    )
+
+    temp_args = parser.parse_known_args()[0]
+
+    # hyper-parameters for core module
+    if temp_args.core == "conv":
+        parser.add_argument("--num_layers", type=int, default=4)
+        parser.add_argument("--num_filters", type=int, default=8)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+    elif temp_args.core == "stacked2d":
+        parser.add_argument("--num_layers", type=int, default=4)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument("--core_reg_input", type=float, default=6.3831)
+        parser.add_argument("--core_reg_hidden", type=float, default=0.0)
+    elif temp_args.core == "vit":
+        parser.add_argument("--patch_size", type=int, default=4)
+        parser.add_argument("--num_layers", type=int, default=4)
+        parser.add_argument("--emb_dim", type=int, default=64)
+        parser.add_argument("--num_heads", type=int, default=3)
+        parser.add_argument("--mlp_dim", type=int, default=64)
+        parser.add_argument("--dim_head", type=int, default=64)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+    elif temp_args.core == "stn":
+        parser.add_argument("--num_layers", type=int, default=7)
+        parser.add_argument("--num_filters", type=int, default=63)
+        parser.add_argument("--dropout", type=float, default=0.1135)
+        parser.add_argument("--core_reg_scale", type=float, default=0.0450)
+    else:
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+
+    parser.add_argument(
+        "--output_module_reg_scale",
+        type=float,
+        default=0,
+        help="weight regularization coefficient for output module.",
+    )
+
+    del temp_args
+    main(parser.parse_args())

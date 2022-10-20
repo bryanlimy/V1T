@@ -3,7 +3,6 @@ import sys
 import torch
 import argparse
 import typing as t
-import numpy as np
 from ray import tune
 from torch import nn
 from tqdm import tqdm
@@ -294,7 +293,10 @@ if __name__ == "__main__":
 
     # training settings
     parser.add_argument(
-        "--epochs", default=200, type=int, help="maximum epochs to train the model."
+        "--epochs",
+        default=200,
+        type=int,
+        help="maximum epochs to train the model.",
     )
     parser.add_argument(
         "--batch_size",

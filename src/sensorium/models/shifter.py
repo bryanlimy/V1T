@@ -2,7 +2,6 @@ import torch
 import typing as t
 from torch import nn
 from torch.nn import ModuleDict
-from torch.nn.init import xavier_normal
 
 
 class MLP(nn.Module):

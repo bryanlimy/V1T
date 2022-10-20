@@ -276,7 +276,7 @@ def num_steps(ds: t.Dict[int, DataLoader]):
 
 
 def load_pretrain_core(args, model: Model):
-    filename = os.path.join(args.pretrain_core, "ckpt", "best_model.pt")
+    filename = os.path.join(args.pretrain_core, "ckpt", "model_state.pt")
     assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
     model_dict = model.state_dict()
     core_ckpt = torch.load(filename, map_location=model.device)
@@ -292,27 +292,11 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def save_model(args, model: nn.Module, epoch: int):
-    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
-    torch.save({"epoch": epoch, "model": model}, f=filename)
-    if args.verbose:
-        print(f"\nModel saved to {filename}.")
-
-
-def load_model(args) -> Model:
-    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"checkpoint {filename} not found.")
-    ckpt = torch.load(filename, map_location=args.device)
-    if args.verbose:
-        print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
-    model = ckpt["model"]
-    model.to(args.device)
-    model.device = args.device
-    return model
-
-
 def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
+    """
+    Calculate the maximum batch size that can fill the GPU memory if CUDA device
+    is set and args.batch_size is not set.
+    """
     device = args.device.type
 
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):

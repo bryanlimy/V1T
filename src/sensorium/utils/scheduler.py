@@ -25,7 +25,6 @@ class Scheduler:
         """
         Args:
             args: argparse parameters.
-
             model: Model, model.
             optimizer: (optional) torch.optim, optimizer.
             mode: 'min' or 'max', compare objective by minimum or maximum
@@ -34,10 +33,13 @@ class Scheduler:
             lr_patience: int, the number of epochs to wait before reducing the
                 learning rate.
             factor: float, learning rate reduction factor.
-                i.e. new_lr = max(factor * old_lr, min_lr)
+                i.e. new_lr = factor * old_lr
             min_epochs: int, number of epochs to train the model before early
                 stopping begins monitoring.
-            save_optimizer: bool, save optimizer state dict to checkpoint if True.
+            save_optimizer: bool, save optimizer state dict to checkpoint.
+            save_scheduler: bool, save scheduler state dict to checkpoint.
+            module_names: t.List[str], a list of module names in the model to
+                save in the checkpoint, save all modules if None.
         """
         assert mode in ("min", "max"), f"mode must be either min or max but not {mode}."
         assert (
