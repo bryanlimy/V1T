@@ -2,7 +2,6 @@ import os
 import torch
 import torchinfo
 import typing as t
-import numpy as np
 from torch import nn
 from torch.utils.data import DataLoader
 
@@ -10,17 +9,6 @@ from sensorium.models import shifter
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
-
-
-class ELU1(nn.Module):
-    """ELU activation + 1 to output standardized responses"""
-
-    def __init__(self):
-        super(ELU1, self).__init__()
-        self.elu = nn.ELU()
-
-    def forward(self, inputs: torch.Tensor):
-        return self.elu(inputs) + 1
 
 
 class Model(nn.Module):
@@ -39,7 +27,7 @@ class Model(nn.Module):
         self.initialize_readouts(args, ds=ds)
         self.initialize_shifter(args, ds=ds)
 
-        self.activation = ELU1()
+        self.elu = nn.ELU()
 
     def initialize_core(self, args):
         self.add_module(
@@ -89,12 +77,14 @@ class Model(nn.Module):
         activate: bool = True,
     ):
         outputs = self.core(inputs)
-        shift = None
-        if self.shifter is not None:
-            shift = self.shifter(mouse_id=mouse_id, pupil_center=pupil_center)
+        shift = (
+            None
+            if self.shifter is None
+            else self.shifter(mouse_id=mouse_id, pupil_center=pupil_center)
+        )
         outputs = self.readouts(outputs, mouse_id=mouse_id, shift=shift)
         if activate:
-            outputs = self.activation(outputs)
+            outputs = self.elu(outputs) + 1
         return outputs
 
 

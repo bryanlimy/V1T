@@ -20,6 +20,13 @@ class PatchEmbedding(nn.Module):
     ):
         super(PatchEmbedding, self).__init__()
         c, h, w = image_shape
+        output_shape = model_utils.conv2d_shape(
+            input_shape=image_shape,
+            num_filters=emb_dim,
+            kernel_size=patch_size,
+            stride=stride,
+        )
+        num_patches = output_shape[1] * output_shape[2]
         self.projection = nn.Sequential(
             nn.Conv2d(
                 in_channels=c,
@@ -29,14 +36,7 @@ class PatchEmbedding(nn.Module):
             ),
             Rearrange("b c h w -> b (h w) c"),
         )
-        output_shape = model_utils.conv2d_shape(
-            input_shape=image_shape,
-            num_filters=emb_dim,
-            kernel_size=patch_size,
-            stride=stride,
-        )
-        # 1 additional patch for cls token
-        num_patches = output_shape[1] * output_shape[2] + 1
+        num_patches = num_patches + 1
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         self.positions = nn.Parameter(torch.randn(num_patches, emb_dim))
         self.output_shape = (num_patches, output_shape[0])
