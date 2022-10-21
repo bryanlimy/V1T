@@ -54,68 +54,58 @@ class PatchEmbedding(nn.Module):
         return patches
 
 
-class FeedForward(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int, dropout: float = 0.0):
-        super(FeedForward, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(in_features=dim, out_features=hidden_dim),
-            nn.GELU(),
-            nn.Dropout(p=dropout),
-            nn.Linear(in_features=hidden_dim, out_features=dim),
-        )
-
-    def forward(self, inputs: torch.Tensor):
-        return self.model(inputs)
+def feedforward(dim: int, hidden_dim: int, dropout: float = 0.0):
+    return nn.Sequential(
+        nn.Linear(in_features=dim, out_features=hidden_dim),
+        nn.GELU(),
+        nn.Dropout(p=dropout),
+        nn.Linear(in_features=hidden_dim, out_features=dim),
+    )
 
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, emb_dim: int, num_heads: int, dropout: float = 0.0):
         super(MultiHeadAttention, self).__init__()
-        self.emb_dim = emb_dim
+        inner_dim = emb_dim * num_heads
         self.num_heads = num_heads
-        self.register_buffer("scale", torch.tensor(emb_dim ** (1 / 2)))
-        hidden_dims = emb_dim * num_heads
-        # fuse the queries, keys and values in one matrix
-        self.qkv = nn.Linear(in_features=emb_dim, out_features=hidden_dims * 3)
-        self.dropout = nn.Dropout(p=dropout)
+        self.register_buffer("scale", torch.tensor(emb_dim**-0.5))
         self.softmax = nn.Softmax(dim=-1)
-        self.projection = nn.Linear(in_features=hidden_dims, out_features=emb_dim)
-
-    def forward(self, inputs: torch.Tensor, mask: torch.Tensor = None):
-        # split keys, queries and values in num_heads
-        qkv = rearrange(
-            self.qkv(inputs),
-            "b n (h d qkv) -> (qkv) b h n d",
-            h=self.num_heads,
-            qkv=3,
+        self.dropout = nn.Dropout(dropout)
+        self.to_qkv = nn.Linear(
+            in_features=emb_dim, out_features=inner_dim * 3, bias=False
         )
-        queries, keys, values = qkv[0], qkv[1], qkv[2]
-        # sum up over the last axis
-        # shape (batch size, num heads, query length, key length)
-        energy = torch.einsum("bhqd, bhkd -> bhqk", queries, keys)
-        if mask is not None:
-            fill_value = torch.finfo(torch.float32).min
-            energy.masked_fill(~mask, fill_value)
-        attention = self.softmax(energy) / self.scale
+        self.projection = nn.Linear(in_features=inner_dim, out_features=emb_dim)
+
+    def forward(self, inputs: torch.Tensor):
+        qkv = self.to_qkv(inputs)
+        qkv = qkv.chunk(3, dim=-1)
+        q, k, v = map(
+            lambda t: rearrange(t, "b n (h d) -> b h n d", h=self.num_heads), qkv
+        )
+
+        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+
+        attention = self.softmax(dots)
         attention = self.dropout(attention)
-        # sum up over the third axis
-        outputs = torch.einsum("bhal, bhlv -> bhav", attention, values)
+
+        outputs = torch.matmul(attention, v)
         outputs = rearrange(outputs, "b h n d -> b n (h d)")
         outputs = self.projection(outputs)
         return outputs
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, dim: int, model: nn.Module, dropout: float = 0.0):
+    def __init__(self, emb_dim: int, model: nn.Module, dropout: float = 0.0):
         super(ResidualBlock, self).__init__()
-        self.norm = nn.LayerNorm(normalized_shape=dim)
+        self.norm = nn.LayerNorm(normalized_shape=emb_dim)
         self.model = model
-        self.dropout = nn.Dropout(p=dropout)
+        self.dropout = None if dropout is None else nn.Dropout(p=dropout)
 
     def forward(self, inputs: torch.Tensor, **kwargs):
         outputs = self.norm(inputs)
         outputs = self.model(outputs, **kwargs)
-        outputs = self.dropout(outputs)
+        if self.dropout is not None:
+            outputs = self.dropout(outputs)
         return outputs + inputs
 
 
@@ -133,7 +123,7 @@ class Transformer(nn.Module):
         for i in range(num_blocks):
             blocks.append(
                 ResidualBlock(
-                    dim=emb_dim,
+                    emb_dim=emb_dim,
                     model=MultiHeadAttention(
                         emb_dim=emb_dim, num_heads=num_heads, dropout=dropout
                     ),
@@ -142,9 +132,9 @@ class Transformer(nn.Module):
             )
             blocks.append(
                 ResidualBlock(
-                    dim=emb_dim,
-                    model=FeedForward(dim=emb_dim, hidden_dim=mlp_dim, dropout=dropout),
-                    dropout=0 if i == num_blocks - 1 else dropout,
+                    emb_dim=emb_dim,
+                    model=feedforward(dim=emb_dim, hidden_dim=mlp_dim, dropout=dropout),
+                    dropout=None if i == num_blocks - 1 else dropout,
                 )
             )
         self.model = nn.Sequential(*blocks)
