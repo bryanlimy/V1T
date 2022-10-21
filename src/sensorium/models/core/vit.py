@@ -19,27 +19,27 @@ class PatchEmbedding(nn.Module):
         stride: int = 1,
     ):
         super(PatchEmbedding, self).__init__()
+        self.patch_size = patch_size
+        self.stride = stride
         c, h, w = image_shape
-        output_shape = model_utils.conv2d_shape(
-            input_shape=image_shape,
-            num_filters=emb_dim,
-            kernel_size=patch_size,
-            stride=stride,
-        )
-        num_patches = output_shape[1] * output_shape[2]
+        # tensor dimension after unfolding inputs
+        # (batch_size, (patch_size * patch_size * c), (new_h * new_w))
+        new_h, new_w = self.latent_size(h), self.latent_size(w)
+        num_patches = new_h * new_w
+        patch_dim = patch_size * patch_size * c
         self.projection = nn.Sequential(
-            nn.Conv2d(
-                in_channels=c,
-                out_channels=emb_dim,
-                kernel_size=patch_size,
-                stride=stride,
-            ),
-            Rearrange("b c h w -> b (h w) c"),
+            nn.Unfold(kernel_size=self.patch_size, stride=stride),
+            Rearrange("b c n -> b n c"),
+            nn.Linear(in_features=patch_dim, out_features=emb_dim),
         )
-        num_patches = num_patches + 1
+        num_patches = num_patches + 1  # cls token
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         self.positions = nn.Parameter(torch.randn(num_patches, emb_dim))
-        self.output_shape = (num_patches, output_shape[0])
+        self.output_shape = (num_patches, emb_dim)
+
+    def latent_size(self, in_size: int):
+        """Calculate the spatial dimension of the outputs after unfold"""
+        return int(((in_size - (self.patch_size - 1) - 1) / self.stride) + 1)
 
     @property
     def num_patches(self):
