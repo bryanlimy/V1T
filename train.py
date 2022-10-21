@@ -137,6 +137,7 @@ def validate(
                         mouse_id=mouse_id,
                         data=data,
                         model=model,
+                        scaler=scaler,
                         criterion=criterion,
                     )
                     utils.update_dict(mouse_result, result)
@@ -224,6 +225,7 @@ def main(args):
         )
         elapse = time() - start
 
+        summary.scalar("model/grad_scale", value=scaler.get_scale(), step=epoch, mode=0)
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
         for param_group in optimizer.param_groups:
             summary.scalar(
