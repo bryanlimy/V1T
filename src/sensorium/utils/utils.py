@@ -222,6 +222,7 @@ def get_device(args):
             device = "cuda"
         elif torch.backends.mps.is_available():
             device = "mps"
+    args.mixed_precision = args.mixed_precision and "cuda" in device
     args.device = torch.device(device)
 
 

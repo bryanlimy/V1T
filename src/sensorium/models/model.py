@@ -114,34 +114,34 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     model = Model(args, ds=ds)
     model.to(args.device)
 
-    # model_info = get_model_info(
-    #     model=model,
-    #     input_data=[
-    #         torch.randn(args.batch_size, *args.input_shape),  # images
-    #         list(args.output_shapes.keys())[0],  # mouse ID
-    #         torch.randn(args.batch_size, 2),  # pupil centers
-    #     ],
-    #     filename=os.path.join(args.output_dir, "model.txt"),
-    #     summary=summary,
-    # )
-    # if args.verbose > 2:
-    #     print(str(model_info))
-    #
-    # get_model_info(
-    #     model=model.core,
-    #     input_data=[torch.randn(args.batch_size, *args.input_shape)],
-    #     filename=os.path.join(args.output_dir, "model_core.txt"),
-    #     summary=summary,
-    #     tag="model/trainable_parameters/core",
-    # )
-    #
-    # mouse_id = list(model.readouts.keys())[0]
-    # get_model_info(
-    #     model=model.readouts[mouse_id],
-    #     input_data=[torch.randn(args.batch_size, *model.core.output_shape)],
-    #     filename=os.path.join(args.output_dir, "model_readout.txt"),
-    #     summary=summary,
-    #     tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
-    # )
+    model_info = get_model_info(
+        model=model,
+        input_data=[
+            torch.randn(args.batch_size, *args.input_shape),  # images
+            list(args.output_shapes.keys())[0],  # mouse ID
+            torch.randn(args.batch_size, 2),  # pupil centers
+        ],
+        filename=os.path.join(args.output_dir, "model.txt"),
+        summary=summary,
+    )
+    if args.verbose > 2:
+        print(str(model_info))
+
+    get_model_info(
+        model=model.core,
+        input_data=[torch.randn(args.batch_size, *args.input_shape)],
+        filename=os.path.join(args.output_dir, "model_core.txt"),
+        summary=summary,
+        tag="model/trainable_parameters/core",
+    )
+
+    mouse_id = list(model.readouts.keys())[0]
+    get_model_info(
+        model=model.readouts[mouse_id],
+        input_data=[torch.randn(args.batch_size, *model.core.output_shape)],
+        filename=os.path.join(args.output_dir, "model_readout.txt"),
+        summary=summary,
+        tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
+    )
 
     return model
