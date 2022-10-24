@@ -57,7 +57,7 @@ class SpatialTransformerCore(Core):
         # Initialize the weights/bias with identity transformation
         self.regressor[3].weight.data.zero_()
         self.regressor[3].bias.data.copy_(
-            torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32)
+            torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float)
         )
 
         # CNN network

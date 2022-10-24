@@ -138,8 +138,10 @@ class MSSE(Loss):
 
 @register("poisson")
 class PoissonLoss(Loss):
-    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-12):
+    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = None):
         super(PoissonLoss, self).__init__(args, ds=ds)
+        if eps is None:
+            eps = torch.tensor(1e-612) if args.mixed_precision else torch.tensor(1e-12)
         self.eps = eps
 
     def forward(

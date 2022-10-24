@@ -16,7 +16,7 @@ from sensorium.models import get_model
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
-from torch.cuda import amp
+from torch.cuda.amp import autocast, GradScaler
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
@@ -36,12 +36,12 @@ def train_step(
     data: t.Dict[str, torch.Tensor],
     model: nn.Module,
     optimizer: torch.optim,
-    scaler: amp.GradScaler,
+    scaler: GradScaler,
     criterion: losses.Loss,
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
-    with amp.autocast(enabled=scaler.is_enabled()):
+    with autocast(enabled=scaler.is_enabled()):
         images = data["image"].to(device)
         responses = data["response"].to(device)
         pupil_center = data["pupil_center"].to(device)
@@ -70,7 +70,7 @@ def train(
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
     optimizer: torch.optim,
-    scaler: amp.GradScaler,
+    scaler: GradScaler,
     criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
@@ -102,11 +102,11 @@ def validation_step(
     mouse_id: int,
     data: t.Dict[str, torch.Tensor],
     model: nn.Module,
-    scaler: amp.GradScaler,
+    scaler: GradScaler,
     criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
     result, device = {}, model.device
-    with amp.autocast(enabled=scaler.is_enabled()):
+    with autocast(enabled=scaler.is_enabled()):
         images = data["image"].to(device)
         responses = data["response"].to(device)
         pupil_center = data["pupil_center"].to(device)
@@ -121,7 +121,7 @@ def validate(
     args,
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
-    scaler: amp.GradScaler,
+    scaler: GradScaler,
     criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
@@ -192,7 +192,7 @@ def main(args):
         eps=args.adam_eps,
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
-    scaler = amp.GradScaler(enabled=args.mixed_precision)
+    scaler = GradScaler(enabled=args.mixed_precision)
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)

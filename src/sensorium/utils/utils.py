@@ -10,7 +10,7 @@ import pandas as pd
 from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-
+from torch.cuda.amp import autocast, GradScaler
 
 from sensorium.models import Model
 from sensorium import losses, data
@@ -32,7 +32,9 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
 
 
-def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tensor]:
+def inference(
+    ds: DataLoader, model: torch.nn.Module, scaler: GradScaler
+) -> t.Dict[str, torch.Tensor]:
     """Inference data in DataLoader ds
     Returns:
         results: t.Dict[int, t.Dict[str, torch.Tensor]]
@@ -54,11 +56,12 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
     model.train(False)
     with torch.no_grad():
         for data in ds:
-            predictions = model(
-                data["image"].to(device),
-                mouse_id=mouse_id,
-                pupil_center=data["pupil_center"].to(device),
-            )
+            with autocast(enabled=scaler.is_enabled()):
+                predictions = model(
+                    data["image"].to(device),
+                    mouse_id=mouse_id,
+                    pupil_center=data["pupil_center"].to(device),
+                )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
             results["images"].append(data["image"])
@@ -293,7 +296,11 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
+def get_batch_size(
+    args,
+    max_batch_size: int = None,
+    num_iterations: int = 5,
+):
     """
     Calculate the maximum batch size that can fill the GPU memory if CUDA device
     is set and args.batch_size is not set.
@@ -303,6 +310,7 @@ def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
         assert args.batch_size > 1
     else:
+        scaler = GradScaler(enabled=args.mixed_precision)
         device, mouse_id = args.device, 2
         train_ds, _, _ = data.get_training_ds(
             args,
@@ -331,15 +339,23 @@ def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
                 break
             try:
                 for _ in range(num_iterations):
-                    inputs = torch.rand(*(batch_size, *args.input_shape), device=device)
-                    targets = torch.rand(*(batch_size, *output_shape), device=device)
-                    pupil_center = torch.rand(batch_size, 2, device=device)
-                    outputs = model(
-                        inputs, mouse_id=mouse_id, pupil_center=pupil_center
-                    )
-                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
-                    loss.backward()
-                    optimizer.step()
+                    with autocast(enabled=scaler.is_enabled()):
+                        inputs = torch.rand(
+                            *(batch_size, *args.input_shape), device=device
+                        )
+                        targets = torch.rand(
+                            *(batch_size, *output_shape), device=device
+                        )
+                        pupil_center = torch.rand(batch_size, 2, device=device)
+                        outputs = model(
+                            inputs, mouse_id=mouse_id, pupil_center=pupil_center
+                        )
+                        loss = criterion(
+                            y_true=targets, y_pred=outputs, mouse_id=mouse_id
+                        )
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
                     optimizer.zero_grad()
                 batch_size *= 2
             except RuntimeError:
@@ -347,7 +363,7 @@ def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
                     print(f"OOM at batch size: {batch_size}")
                 batch_size //= 2
                 break
-        del train_ds, model, optimizer, criterion
+        del train_ds, model, optimizer, criterion, scaler
         torch.cuda.empty_cache()
         args.batch_size = batch_size
 
