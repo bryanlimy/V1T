@@ -1,9 +1,10 @@
 import torch
 import typing as t
 import numpy as np
-from torch import nn
-from torch.nn.modules.loss import _Loss
+from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
+from torch.nn.modules.loss import _Loss
+
 
 REDUCTION = t.Literal["sum", "mean"]
 
@@ -43,15 +44,16 @@ def _t_correlation(
     dim: t.Union[None, int, t.Tuple[int]] = -1,
     eps: float = 1e-8,
 ):
-    if dim is None:
-        dim = tuple(range(y1.dim()))
-    y1 = (y1 - y1.mean(dim=dim, keepdim=True)) / (
-        y1.std(dim=dim, unbiased=False, keepdim=True) + eps
-    )
-    y2 = (y2 - y2.mean(dim=dim, keepdim=True)) / (
-        y2.std(dim=dim, unbiased=False, keepdim=True) + eps
-    )
-    corr = (y1 * y2).mean(dim=dim)
+    with autocast(enabled=False):
+        if dim is None:
+            dim = tuple(range(y1.dim()))
+        y1 = (y1 - y1.mean(dim=dim, keepdim=True)) / (
+            y1.std(dim=dim, unbiased=False, keepdim=True) + eps
+        )
+        y2 = (y2 - y2.mean(dim=dim, keepdim=True)) / (
+            y2.std(dim=dim, unbiased=False, keepdim=True) + eps
+        )
+        corr = (y1 * y2).mean(dim=dim)
     return corr
 
 
@@ -138,11 +140,8 @@ class MSSE(Loss):
 
 @register("poisson")
 class PoissonLoss(Loss):
-    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = None):
+    def __init__(self, args, ds: t.Dict[int, DataLoader]):
         super(PoissonLoss, self).__init__(args, ds=ds)
-        if eps is None:
-            eps = torch.tensor(1e-612) if args.mixed_precision else torch.tensor(1e-12)
-        self.eps = eps
 
     def forward(
         self,
@@ -150,11 +149,11 @@ class PoissonLoss(Loss):
         y_pred: torch.Tensor,
         mouse_id: int,
         reduction: REDUCTION = "sum",
+        eps: float = 1e-12,
     ):
-        loss = poisson_loss(
-            y_true=y_true, y_pred=y_pred, eps=self.eps, reduction=reduction
-        )
-        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        with autocast(enabled=False):
+            loss = poisson_loss(y_true, y_pred, eps=eps, reduction=reduction)
+            loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
 
