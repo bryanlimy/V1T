@@ -39,6 +39,7 @@ def train_step(
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
+    print(f"mixed precision: {scaler.is_enabled()}")
     with autocast(enabled=scaler.is_enabled()):
         images = data["image"].to(device)
         responses = data["response"].to(device)
