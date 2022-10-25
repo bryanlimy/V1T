@@ -355,30 +355,3 @@ def get_batch_size(
         if args.verbose > 1:
             print(f"set batch size: {batch_size}")
         args.batch_size = batch_size
-
-
-class Logger:
-    """Re-direct stdout and stderr to log file"""
-
-    def __init__(self, args, output: t.Literal["stdout", "stderr"]):
-        assert output in ("stdout", "stderr")
-        self.console = sys.stdout if output == "stdout" else sys.stderr
-        filename = os.path.join(args.output_dir, "output.log")
-        if not os.path.isdir(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        self.file = open(filename, mode="a")
-
-    def write(self, message: str):
-        self.console.write(message)
-        self.file.write(message)
-        self.flush()
-
-    def flush(self):
-        self.console.flush()
-        self.file.flush()
-
-
-def write_logs(args):
-    """Helper to re-direct stdout and stderr to log file"""
-    sys.stdout = Logger(args, output="stdout")
-    sys.stderr = Logger(args, output="stderr")

@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 
 from sensorium import losses, data
 from sensorium.models import get_model
+from sensorium.utils.logger import Logger
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
@@ -138,7 +139,8 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    utils.write_logs(args)
+    # utils.write_logs(args)
+    logger = Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
     utils.get_batch_size(args)
@@ -242,10 +244,11 @@ def main(args):
         save_result=args.output_dir,
     )
 
-    summary.close()
-
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
+
+    summary.close()
+    logger.close()
 
     return eval_result
 
