@@ -43,6 +43,4 @@ class Logger:
         sys.stderr = self.stderr = RedirectOutput(self.file, stream="stderr")
 
     def close(self):
-        self.stdout.flush()
-        self.stderr.flush()
         self.file.close()

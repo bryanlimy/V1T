@@ -248,7 +248,7 @@ def main(args):
         print(f"\nResults saved to {args.output_dir}.")
 
     summary.close()
-    # logger.close()
+    logger.close()
 
     return eval_result
 
