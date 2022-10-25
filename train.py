@@ -40,9 +40,9 @@ def train_step(
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
     print(f"\nmixed precision: {scaler.is_enabled()}")
-    images = data["image"].to(device)
-    responses = data["response"].to(device)
-    pupil_center = data["pupil_center"].to(device)
+    images = data["image"].to(device).to(torch.float16)
+    responses = data["response"].to(device).to(torch.float16)
+    pupil_center = data["pupil_center"].to(device).to(torch.float16)
     with autocast(enabled=scaler.is_enabled()):
         outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
         print(f"\nimages type: {images.dtype}, outputs type: {outputs.dtype}")

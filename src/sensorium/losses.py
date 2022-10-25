@@ -151,7 +151,7 @@ class PoissonLoss(Loss):
         reduction: REDUCTION = "sum",
         eps: float = 1e-12,
     ):
-        print(f"\n{y_true.dtype}, {y_pred.dtype}, {eps}")
+        print(f"y_true type: {y_true.dtype}, y_pred type: {y_pred.dtype}, eps: {eps}")
         exit()
         loss = poisson_loss(y_true, y_pred, eps=eps, reduction=reduction)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
