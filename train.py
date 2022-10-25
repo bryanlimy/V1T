@@ -1,5 +1,4 @@
 import os
-import sys
 import torch
 import argparse
 import typing as t
@@ -10,13 +9,12 @@ from time import time
 from shutil import rmtree
 from ray.air import session
 from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 
 from sensorium import losses, data
 from sensorium.models import get_model
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
-
-from torch.cuda.amp import autocast, GradScaler
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
@@ -152,12 +150,9 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    sys.stdout = utils.Logger(args, output="stdout")
-    sys.stderr = utils.Logger(args, output="stderr")
-
+    utils.write_logs(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
-
     utils.get_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(

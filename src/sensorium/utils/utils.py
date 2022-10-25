@@ -372,7 +372,7 @@ def get_batch_size(
 
 
 class Logger:
-    """Re-direct stdout and stderr to log file with filename"""
+    """Re-direct stdout and stderr to log file"""
 
     def __init__(self, args, output: t.Literal["stdout", "stderr"]):
         assert output in ("stdout", "stderr")
@@ -391,6 +391,8 @@ class Logger:
         self.console.flush()
         self.file.flush()
 
-    def close(self):
-        self.flush()
-        self.file.close()
+
+def write_logs(args):
+    """Helper to re-direct stdout and stderr to log file"""
+    sys.stdout = Logger(args, output="stdout")
+    sys.stderr = Logger(args, output="stderr")
