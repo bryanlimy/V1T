@@ -29,7 +29,8 @@ class Image2Patches(nn.Module):
             p1=patch_size,
             p2=patch_size,
         )
-        model.num_patches = new_h * new_w
+        self.num_patches = new_h * new_w
+        model.num_patches = self.num_patches
 
     def forward(self, inputs: torch.Tensor):
         patches = inputs.unfold(
