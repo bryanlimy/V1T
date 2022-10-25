@@ -152,6 +152,9 @@ class PoissonLoss(Loss):
         eps: float = 1e-12,
     ):
         with autocast(enabled=False):
+            print(y_true.dtype, y_pred.dtype)
+            print(eps)
+            exit()
             loss = poisson_loss(y_true, y_pred, eps=eps, reduction=reduction)
             loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
