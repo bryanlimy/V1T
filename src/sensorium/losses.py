@@ -29,7 +29,7 @@ def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum
 def poisson_loss(
     y_true: torch.Tensor,
     y_pred: torch.Tensor,
-    eps: float = 1e-12,
+    eps: t.Union[float, torch.Tensor] = 1e-12,
     reduction: REDUCTION = "sum",
 ):
     loss = y_pred - y_true * torch.log(y_pred + eps)

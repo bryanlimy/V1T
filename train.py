@@ -139,7 +139,6 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    # utils.write_logs(args)
     logger = Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
