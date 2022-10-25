@@ -4,7 +4,6 @@ import torchinfo
 import typing as t
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast
 
 from sensorium.models import shifter
 from sensorium.utils import tensorboard

@@ -1,5 +1,4 @@
 import os
-import io
 import sys
 import copy
 import torch
@@ -11,7 +10,6 @@ import pandas as pd
 from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
 
 from sensorium.models import Model
 from sensorium import losses, data
@@ -33,9 +31,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
 
 
-def inference(
-    ds: DataLoader, model: torch.nn.Module, mixed_precision: bool = False
-) -> t.Dict[str, torch.Tensor]:
+def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tensor]:
     """Inference data in DataLoader ds
     Returns:
         results: t.Dict[int, t.Dict[str, torch.Tensor]]
@@ -57,12 +53,11 @@ def inference(
     model.train(False)
     with torch.no_grad():
         for data in ds:
-            with autocast(enabled=mixed_precision):
-                predictions = model(
-                    data["image"].to(device),
-                    mouse_id=mouse_id,
-                    pupil_center=data["pupil_center"].to(device),
-                )
+            predictions = model(
+                data["image"].to(device),
+                mouse_id=mouse_id,
+                pupil_center=data["pupil_center"].to(device),
+            )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
             results["images"].append(data["image"])
@@ -108,9 +103,7 @@ def evaluate(
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
-        outputs[mouse_id] = inference(
-            ds=mouse_ds, model=model, mixed_precision=args.mixed_precision
-        )
+        outputs[mouse_id] = inference(ds=mouse_ds, model=model)
 
         mouse_metric = Metrics(ds=mouse_ds, results=outputs[mouse_id])
 
@@ -228,7 +221,6 @@ def get_device(args):
             device = "cuda"
         elif torch.backends.mps.is_available():
             device = "mps"
-    args.mixed_precision = args.mixed_precision and "cuda" in device
     args.device = torch.device(device)
 
 
@@ -313,7 +305,6 @@ def get_batch_size(
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
         assert args.batch_size > 1
     else:
-        scaler = GradScaler(enabled=args.mixed_precision)
         device, mouse_id = args.device, 2
         train_ds, _, _ = data.get_training_ds(
             args,
@@ -342,23 +333,16 @@ def get_batch_size(
                 break
             try:
                 for _ in range(num_iterations):
-                    with autocast(enabled=scaler.is_enabled()):
-                        inputs = torch.rand(
-                            *(batch_size, *args.input_shape), device=device
-                        )
-                        targets = torch.rand(
-                            *(batch_size, *output_shape), device=device
-                        )
-                        pupil_center = torch.rand(batch_size, 2, device=device)
-                        outputs = model(
-                            inputs, mouse_id=mouse_id, pupil_center=pupil_center
-                        )
-                        loss = criterion(
-                            y_true=targets, y_pred=outputs, mouse_id=mouse_id
-                        )
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                    targets = torch.rand(*(batch_size, *output_shape), device=device)
+                    outputs = model(
+                        torch.rand(*(batch_size, *args.input_shape), device=device),
+                        mouse_id=mouse_id,
+                        pupil_center=torch.rand(batch_size, 2, device=device),
+                    )
+                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
+                    loss += model.regularizer(mouse_id=mouse_id)
+                    loss.backward()
+                    optimizer.step()
                     optimizer.zero_grad()
                 batch_size *= 2
             except RuntimeError:
@@ -366,7 +350,7 @@ def get_batch_size(
                     print(f"OOM at batch size: {batch_size}")
                 batch_size //= 2
                 break
-        del train_ds, model, optimizer, criterion, scaler
+        del train_ds, model, optimizer, criterion
         torch.cuda.empty_cache()
         args.batch_size = batch_size
 

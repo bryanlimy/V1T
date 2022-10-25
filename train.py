@@ -9,7 +9,6 @@ from time import time
 from shutil import rmtree
 from ray.air import session
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
 
 from sensorium import losses, data
 from sensorium.models import get_model
@@ -34,23 +33,18 @@ def train_step(
     data: t.Dict[str, torch.Tensor],
     model: nn.Module,
     optimizer: torch.optim,
-    scaler: GradScaler,
     criterion: losses.Loss,
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
-    print(f"\nmixed precision: {scaler.is_enabled()}")
-    images = data["image"].to(device).to(torch.float16)
-    responses = data["response"].to(device).to(torch.float16)
-    pupil_center = data["pupil_center"].to(device).to(torch.float16)
-    with autocast(enabled=scaler.is_enabled()):
-        outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
-        print(f"\nimages type: {images.dtype}, outputs type: {outputs.dtype}")
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        reg_loss = model.regularizer(mouse_id=mouse_id)
-        total_loss = loss + reg_loss
-    scaler.scale(total_loss).backward()
-    # total_loss.backward()  # calculate and accumulate gradients
+    images = data["image"].to(device)
+    responses = data["response"].to(device)
+    pupil_center = data["pupil_center"].to(device)
+    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = loss + reg_loss
+    total_loss.backward()  # calculate and accumulate gradients
     result = {
         "loss/loss": loss.item(),
         "loss/reg_loss": reg_loss.item(),
@@ -58,9 +52,7 @@ def train_step(
         **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
     }
     if update:
-        scaler.step(optimizer)
-        scaler.update()
-        # optimizer.step()
+        optimizer.step()
         optimizer.zero_grad()
     return result
 
@@ -70,7 +62,6 @@ def train(
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
     optimizer: torch.optim,
-    scaler: GradScaler,
     criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
@@ -90,7 +81,6 @@ def train(
             data=mouse_data,
             model=model,
             optimizer=optimizer,
-            scaler=scaler,
             criterion=criterion,
             update=(i + 1) % update_frequency == 0,
         )
@@ -102,16 +92,14 @@ def validation_step(
     mouse_id: int,
     data: t.Dict[str, torch.Tensor],
     model: nn.Module,
-    scaler: GradScaler,
     criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
     result, device = {}, model.device
-    with autocast(enabled=scaler.is_enabled()):
-        images = data["image"].to(device)
-        responses = data["response"].to(device)
-        pupil_center = data["pupil_center"].to(device)
-        outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    images = data["image"].to(device)
+    responses = data["response"].to(device)
+    pupil_center = data["pupil_center"].to(device)
+    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
     return result
@@ -121,7 +109,6 @@ def validate(
     args,
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
-    scaler: GradScaler,
     criterion: losses.Loss,
     epoch: int,
     summary: tensorboard.Summary,
@@ -137,7 +124,6 @@ def validate(
                         mouse_id=mouse_id,
                         data=data,
                         model=model,
-                        scaler=scaler,
                         criterion=criterion,
                     )
                     utils.update_dict(mouse_result, result)
@@ -190,7 +176,6 @@ def main(args):
         eps=args.adam_eps,
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
-    scaler = GradScaler(enabled=args.mixed_precision)
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
@@ -207,7 +192,6 @@ def main(args):
             ds=train_ds,
             model=model,
             optimizer=optimizer,
-            scaler=scaler,
             criterion=criterion,
             epoch=epoch,
             summary=summary,
@@ -216,14 +200,12 @@ def main(args):
             args,
             ds=val_ds,
             model=model,
-            scaler=scaler,
             criterion=criterion,
             epoch=epoch,
             summary=summary,
         )
         elapse = time() - start
 
-        summary.scalar("model/grad_scale", value=scaler.get_scale(), step=epoch, mode=0)
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
         for param_group in optimizer.param_groups:
             summary.scalar(
@@ -351,7 +333,6 @@ if __name__ == "__main__":
         action="store_true",
         help="scale loss by the size of the dataset",
     )
-    parser.add_argument("--mixed_precision", action="store_true")
 
     # pre-trained Core
     parser.add_argument(
