@@ -151,7 +151,7 @@ class PoissonLoss(Loss):
         reduction: REDUCTION = "sum",
         eps: float = 1e-12,
     ):
-        with autocast(enabled=False):
+        with autocast(enabled=True):
             print(y_true.dtype, y_pred.dtype)
             print(eps)
             exit()
