@@ -6,12 +6,10 @@ import typing as t
 class RedirectOutput:
     """Re-direct stdout or stderr to log file"""
 
-    def __init__(self, filename: str, stream: t.Literal["stdout", "stderr"]):
+    def __init__(self, file: t.TextIO, stream: t.Literal["stdout", "stderr"]):
         assert stream in ("stdout", "stderr")
+        self.file = file
         self.console = sys.stdout if stream == "stdout" else sys.stderr
-        if not os.path.isdir(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        self.file = open(filename, mode="a")
         self._tqdm_newline = False
 
     def write(self, message: str):
@@ -32,18 +30,19 @@ class RedirectOutput:
         self.console.flush()
         self.file.flush()
 
-    def close(self):
-        self.file.close()
-
 
 class Logger:
     """Write both stdout and stderr to file"""
 
     def __init__(self, args):
         filename = os.path.join(args.output_dir, "output.log")
-        sys.stdout = self.stdout = RedirectOutput(filename, stream="stdout")
-        sys.stderr = self.stderr = RedirectOutput(filename, stream="stderr")
+        if not os.path.isdir(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
+        self.file = open(filename, mode="a")
+        sys.stdout = self.stdout = RedirectOutput(self.file, stream="stdout")
+        sys.stderr = self.stderr = RedirectOutput(self.file, stream="stderr")
 
     def close(self):
-        self.stdout.close()
-        self.stderr.close()
+        self.stdout.flush()
+        self.stderr.flush()
+        self.file.close()
