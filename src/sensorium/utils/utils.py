@@ -352,6 +352,8 @@ def get_batch_size(
                 break
         del train_ds, model, optimizer, criterion
         torch.cuda.empty_cache()
+        if args.verbose > 1:
+            print(f"set batch size: {batch_size}")
         args.batch_size = batch_size
 
 
