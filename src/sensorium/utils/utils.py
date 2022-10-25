@@ -33,7 +33,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
 
 
 def inference(
-    ds: DataLoader, model: torch.nn.Module, scaler: GradScaler
+    ds: DataLoader, model: torch.nn.Module, mixed_precision: bool = False
 ) -> t.Dict[str, torch.Tensor]:
     """Inference data in DataLoader ds
     Returns:
@@ -56,7 +56,7 @@ def inference(
     model.train(False)
     with torch.no_grad():
         for data in ds:
-            with autocast(enabled=scaler.is_enabled()):
+            with autocast(enabled=mixed_precision):
                 predictions = model(
                     data["image"].to(device),
                     mouse_id=mouse_id,
@@ -107,7 +107,9 @@ def evaluate(
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
-        outputs[mouse_id] = inference(ds=mouse_ds, model=model)
+        outputs[mouse_id] = inference(
+            ds=mouse_ds, model=model, mixed_precision=args.mixed_precision
+        )
 
         mouse_metric = Metrics(ds=mouse_ds, results=outputs[mouse_id])
 
