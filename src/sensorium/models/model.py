@@ -92,6 +92,7 @@ class Model(nn.Module):
             reg += self.shifter.regularizer(mouse_id=mouse_id)
         return reg
 
+    @autocast()
     def forward(
         self,
         inputs: torch.Tensor,

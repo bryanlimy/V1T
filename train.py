@@ -39,14 +39,13 @@ def train_step(
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
-    print(f"mixed precision: {scaler.is_enabled()}")
+    print(f"\nmixed precision: {scaler.is_enabled()}")
     images = data["image"].to(device)
     responses = data["response"].to(device)
     pupil_center = data["pupil_center"].to(device)
-    with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
-
+    with autocast(enabled=scaler.is_enabled()):
         outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
-        print(f"{images.dtype}, {outputs.dtype}")
+        print(f"\nimages type: {images.dtype}, outputs type: {outputs.dtype}")
         loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
         reg_loss = model.regularizer(mouse_id=mouse_id)
         total_loss = loss + reg_loss
