@@ -152,7 +152,8 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    sys.stdout = utils.Logger(filename=os.path.join(args.output_dir, "output.log"))
+    sys.stdout = utils.Logger(args, output="stdout")
+    sys.stderr = utils.Logger(args, output="stderr")
 
     utils.set_random_seed(args.seed)
     utils.get_device(args)

@@ -1,4 +1,5 @@
 import os
+import io
 import sys
 import copy
 import torch
@@ -371,10 +372,12 @@ def get_batch_size(
 
 
 class Logger:
-    """Re-direct stdout to log file with filename"""
+    """Re-direct stdout and stderr to log file with filename"""
 
-    def __init__(self, filename: str):
-        self.console = sys.stdout
+    def __init__(self, args, output: t.Literal["stdout", "stderr"]):
+        assert output in ("stdout", "stderr")
+        self.console = sys.stdout if output == "stdout" else sys.stderr
+        filename = os.path.join(args.output_dir, "output.log")
         if not os.path.isdir(os.path.dirname(filename)):
             os.makedirs(os.path.dirname(filename))
         self.file = open(filename, mode="a")
@@ -387,3 +390,7 @@ class Logger:
     def flush(self):
         self.console.flush()
         self.file.flush()
+
+    def close(self):
+        self.flush()
+        self.file.close()
