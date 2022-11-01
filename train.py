@@ -275,12 +275,18 @@ if __name__ == "__main__":
         help="include behaviour data into input as additional channels.",
     )
     parser.add_argument(
-        "--crop_mode",
+        "--center_crop",
+        default=1.0,
+        type=float,
+        help="crop the center of the image to (scale * height, scale, width)",
+    )
+    parser.add_argument(
+        "--resize_image",
         default=1,
         type=int,
         choices=[0, 1],
-        help="image crop mode:"
-        "0: no cropping and return full image (1, 144, 256)"
+        help="resize image mode:"
+        "0: no resizing, return full image (1, 144, 256)"
         "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(

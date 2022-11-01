@@ -20,7 +20,7 @@ def reverse(image: torch.Tensor):
     return image * IMAGE_STD + IMAGE_MEAN
 
 
-def transform(image: Image, crop_mode: int):
+def transform(image: Image, resize_image: int):
     image = F.to_grayscale(image)
     # ToTensor convert PIL image to range [0, 1]
     image = F.to_tensor(image)
@@ -28,7 +28,7 @@ def transform(image: Image, crop_mode: int):
     image = image * 255.0
     # convert images to (1, 144, 256)
     image = F.resize(image, size=list(IMAGE_SIZE[1:]), antialias=False)
-    if crop_mode == 1:
+    if resize_image == 1:
         image = F.resize(image, size=[36, 64], antialias=False)
     image = (image - IMAGE_MEAN) / IMAGE_STD
     return image
@@ -37,7 +37,7 @@ def transform(image: Image, crop_mode: int):
 def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     image_ds = ImageFolder(
         root=data_dir,
-        transform=partial(transform, crop_mode=args.crop_mode),
+        transform=partial(transform, resize_image=args.resize_image),
     )
 
     size = len(image_ds)
@@ -59,7 +59,7 @@ def get_ds(args, data_dir: str, batch_size: int, device: torch.device):
     val_ds = data.DataLoader(val_ds, **dataloader_kwargs)
     test_ds = data.DataLoader(test_ds, **dataloader_kwargs)
 
-    args.input_shape = IMAGE_SIZE if args.crop_mode == 0 else (1, 36, 64)
+    args.input_shape = (1, 36, 64) if args.resize_image else IMAGE_SIZE
     if args.mode == 0:
         args.output_shape = (NUM_CLASSES,)
     else:

@@ -7,6 +7,7 @@ from tqdm import tqdm
 from zipfile import ZipFile
 from skimage.transform import rescale, resize, rotate
 from torch.utils.data import Dataset, DataLoader
+import torchvision.transforms.functional as F
 
 from sensorium.utils import utils
 
@@ -176,9 +177,11 @@ class MiceDataset(Dataset):
         self.hashed = mouse_id in (0, 1)
 
         image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
-        assert args.crop_mode in (0, 1, 2, 3)
-        self.crop_mode = args.crop_mode
-        if self.crop_mode == 1:
+        assert 0 < args.center_crop <= 1
+        self.crop_scale = args.center_crop
+        assert args.resize_image in (0, 1)
+        self.resize_image = args.resize_image
+        if self.resize_image == 1:
             image_shape = (1, 36, 64)
         # include the 3 behaviour data as channel of the image
         if self.include_behaviour:
@@ -209,7 +212,7 @@ class MiceDataset(Dataset):
         return len(self.neuron_ids)
 
     @staticmethod
-    def resize_image(image: np.ndarray, height: int = 36, width: int = 64):
+    def resize(image: np.ndarray, height: int = 36, width: int = 64):
         image = resize(
             image,
             output_shape=(image.shape[0], height, width),
@@ -219,11 +222,21 @@ class MiceDataset(Dataset):
         )
         return image
 
+    @staticmethod
+    def center_crop(image: t.Union[np.ndarray, torch.Tensor], scale: float):
+        h, w = image.shape[1:]
+        new_h, new_w = int(h * scale), int(w * scale)
+        start_h = h // 2 - (new_h // 2)
+        start_w = w // 2 - (new_w // 2)
+        image = image[..., start_h : start_h + new_h, start_w : start_w + new_w]
+        return image
+
     def transform_image(self, image: np.ndarray):
         stats = self.image_stats
         image = (image - stats["mean"]) / stats["std"]
-        if self.crop_mode == 1:
-            image = self.resize_image(image)
+        image = self.center_crop(image, scale=self.crop_scale)
+        if self.resize_image == 1:
+            image = self.resize(image)
         return image
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
