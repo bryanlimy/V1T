@@ -40,17 +40,14 @@ class Image2Patches(nn.Module):
         return int(((size - (self.patch_size - 1) - 1) / self.stride) + 1)
 
     def forward(self, inputs: torch.Tensor):
+        batch_size = inputs.size(0)
         patches = self.unfold(inputs)
         patches = self.rearrange(patches)
-        b, n, _ = patches.shape
-
         outputs = self.linear(patches)
-
-        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
+        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
         outputs += self.pos_embedding
         outputs = self.dropout(outputs)
-
         return outputs
 
 
@@ -204,11 +201,7 @@ class ViTCore(Core):
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)
-
         outputs = self.transformer(outputs)
-
         outputs = outputs[:, 1:, :]  # remove CLS token
-
         outputs = self.reshape(outputs)
-
         return outputs
