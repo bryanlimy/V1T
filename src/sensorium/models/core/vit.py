@@ -48,7 +48,7 @@ class Image2Patches(nn.Module):
 
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
-        outputs += self.pos_embedding[:, : n + 1]
+        outputs += self.pos_embedding
         outputs = self.dropout(outputs)
 
         return outputs
