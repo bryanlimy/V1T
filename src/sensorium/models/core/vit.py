@@ -30,7 +30,7 @@ class Image2Patches(nn.Module):
 
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
 
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
+        self.pos_embedding = nn.Parameter(torch.randn(num_patches + 1, emb_dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         self.dropout = nn.Dropout(p=dropout)
 
