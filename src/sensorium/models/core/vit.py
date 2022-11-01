@@ -22,30 +22,25 @@ class Image2Patches(nn.Module):
         c, h, w = image_shape
         self.patch_size = patch_size
         self.stride = stride
-        new_h = int(((image_shape[1] - (patch_size - 1) - 1) / stride) + 1)
-        new_w = int(((image_shape[2] - (patch_size - 1) - 1) / stride) + 1)
-        self.rearrange = Rearrange(
-            "b c h w p1 p2 -> b (h w) (p1 p2 c)",
-            h=new_h,
-            w=new_w,
-            p1=patch_size,
-            p2=patch_size,
-        )
+
+        self.unfold = nn.Unfold(kernel_size=patch_size, stride=stride)
+        self.rearrange = Rearrange("b c n -> b n c")
         patch_dim = patch_size * patch_size * c
-        num_patches = new_h * new_w
+        num_patches = self.new_dim(image_shape[1]) * self.new_dim(image_shape[2])
 
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
 
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         self.dropout = nn.Dropout(p=dropout)
-        # num_patches += 1
+
         self.num_patches = num_patches
 
+    def new_dim(self, size: int):
+        return int(((size - (self.patch_size - 1) - 1) / self.stride) + 1)
+
     def forward(self, inputs: torch.Tensor):
-        patches = inputs.unfold(
-            dimension=2, size=self.patch_size, step=self.stride
-        ).unfold(dimension=3, size=self.patch_size, step=self.stride)
+        patches = self.unfold(inputs)
         patches = self.rearrange(patches)
         b, n, _ = patches.shape
 
