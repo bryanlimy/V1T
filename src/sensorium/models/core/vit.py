@@ -12,12 +12,14 @@ from einops.layers.torch import Rearrange
 class Image2Patches(nn.Module):
     def __init__(
         self,
-        model: nn.Module,
         image_shape: t.Tuple[int, int, int],
         patch_size: int,
-        stride: int = 1,
+        stride: int,
+        emb_dim: int,
+        dropout: float = 0.0,
     ):
         super(Image2Patches, self).__init__()
+        c, h, w = image_shape
         self.patch_size = patch_size
         self.stride = stride
         new_h = int(((image_shape[1] - (patch_size - 1) - 1) / stride) + 1)
@@ -29,15 +31,32 @@ class Image2Patches(nn.Module):
             p1=patch_size,
             p2=patch_size,
         )
-        self.num_patches = new_h * new_w
-        model.num_patches = self.num_patches
+        patch_dim = patch_size * patch_size * c
+        num_patches = new_h * new_w
+
+        self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
+
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, emb_dim))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
+        self.dropout = nn.Dropout(p=dropout)
+        # num_patches += 1
+        self.num_patches = num_patches
 
     def forward(self, inputs: torch.Tensor):
         patches = inputs.unfold(
             dimension=2, size=self.patch_size, step=self.stride
         ).unfold(dimension=3, size=self.patch_size, step=self.stride)
         patches = self.rearrange(patches)
-        return patches
+        b, n, _ = patches.shape
+
+        outputs = self.linear(patches)
+
+        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
+        outputs = torch.cat((cls_tokens, outputs), dim=1)
+        outputs += self.pos_embedding[:, : n + 1]
+        outputs = self.dropout(outputs)
+
+        return outputs
 
 
 class PreNorm(nn.Module):
@@ -152,25 +171,16 @@ class ViTCore(Core):
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
-        c, h, w = input_shape
         self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
 
-        patch_dim = args.patch_size * args.patch_size * c
-        self.patch_embedding = nn.Sequential(
-            Image2Patches(
-                self,
-                image_shape=input_shape,
-                patch_size=args.patch_size,
-                stride=1 if max(input_shape) < 100 else args.patch_size,
-            ),
-            nn.Linear(in_features=patch_dim, out_features=args.emb_dim),
+        self.patch_embedding = Image2Patches(
+            image_shape=input_shape,
+            patch_size=args.patch_size,
+            stride=1 if max(input_shape) < 100 else args.patch_size,
+            emb_dim=args.emb_dim,
+            dropout=args.dropout,
         )
-        num_patches = self.num_patches
-
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, args.emb_dim))
-        self.cls_token = nn.Parameter(torch.randn(1, 1, args.emb_dim))
-        self.emb_dropout = nn.Dropout(p=args.dropout)
-        # num_patches += 1
+        num_patches = self.patch_embedding.num_patches
 
         self.transformer = Transformer(
             emb_dim=args.emb_dim,
@@ -199,12 +209,6 @@ class ViTCore(Core):
 
     def forward(self, inputs: torch.Tensor):
         outputs = self.patch_embedding(inputs)
-        b, n, _ = outputs.shape
-
-        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
-        outputs = torch.cat((cls_tokens, outputs), dim=1)
-        outputs += self.pos_embedding[:, : n + 1]
-        outputs = self.emb_dropout(outputs)
 
         outputs = self.transformer(outputs)
 
