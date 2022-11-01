@@ -30,13 +30,13 @@ install_torch() {
     printf "\nInstalling PyTorch...\n"
     case $device in
         osx-arm64)
-            pip install torch torchvision torchaudio
+            conda install -c pytorch pytorch torchvision torchaudio -y
             ;;
         osx-64)
             conda install -c pytorch pytorch torchvision torchaudio -y
             ;;
         linux-64)
-            conda install pytorch torchvision torchaudio cudatoolkit=11.3 -c pytorch -y
+            conda install pytorch torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia
             ;;
         *)
             pip install pytorch torchvision torchaudio
