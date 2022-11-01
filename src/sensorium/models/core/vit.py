@@ -170,7 +170,7 @@ class ViTCore(Core):
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, args.emb_dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, args.emb_dim))
         self.emb_dropout = nn.Dropout(p=args.dropout)
-        num_patches += 1
+        # num_patches += 1
 
         self.transformer = Transformer(
             emb_dim=args.emb_dim,
@@ -207,6 +207,8 @@ class ViTCore(Core):
         outputs = self.emb_dropout(outputs)
 
         outputs = self.transformer(outputs)
+
+        outputs = outputs[:, 1:, :]  # remove CLS token
 
         outputs = self.reshape(outputs)
 
