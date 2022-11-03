@@ -35,9 +35,7 @@ class Readout(nn.Module):
         self.output_shape = output_shape
         self.device = args.device
         self.neuron_coordinates = ds.dataset.coordinates
-        self.reg_scale = torch.tensor(
-            args.readout_reg_scale, dtype=torch.float32, device=self.device
-        )
+        self.reg_scale = torch.tensor(args.readout_reg_scale, device=self.device)
 
     @property
     def num_neurons(self):
@@ -81,11 +79,6 @@ class Readouts(nn.ModuleDict):
                     name=f"Mouse{mouse_id}Readout",
                 ),
             )
-        self.initialize()
-
-    def initialize(self):
-        for mouse_id, readout in self.items():
-            readout.initialize()
 
     def regularizer(self, mouse_id: int, reduction: str = "sum"):
         return self[str(mouse_id)].regularizer(reduction=reduction)

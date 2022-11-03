@@ -25,7 +25,11 @@ class Gaussian2DReadout(Readout):
         name: str = "Gaussian2DReadout",
     ):
         super(Gaussian2DReadout, self).__init__(
-            args, input_shape=input_shape, output_shape=output_shape, ds=ds, name=name
+            args,
+            input_shape=input_shape,
+            output_shape=output_shape,
+            ds=ds,
+            name=name,
         )
 
         if init_mu_range > 1.0 or init_mu_range <= 0.0 or init_sigma <= 0.0:
@@ -34,10 +38,6 @@ class Gaussian2DReadout(Readout):
                 "init_sigma_range is non-positive"
             )
         self.init_mu_range = init_mu_range
-
-        # self.gamma_readout = torch.tensor(
-        #     0.0076, dtype=torch.float32, device=self.device
-        # )
 
         # position grid shape
         self.grid_shape = (1, self.num_neurons, 1, 2)
@@ -73,9 +73,8 @@ class Gaussian2DReadout(Readout):
 
         self.use_bias = use_bias
         self.bias_mode = args.bias_mode
-        self.initialize_bias(stats=ds.dataset.response_stats)
 
-        self.initialize()
+        self.initialize(ds=ds)
 
     def feature_l1(self, reduction: REDUCTIONS = "sum"):
         """
@@ -164,7 +163,7 @@ class Gaussian2DReadout(Readout):
         else:
             self.bias = None
 
-    def initialize(self):
+    def initialize(self, ds: DataLoader):
         """
         Initializes the mean, and sigma of the Gaussian readout along with
         the features weights
@@ -179,6 +178,7 @@ class Gaussian2DReadout(Readout):
         self.features.data.fill_(1 / self.input_shape[0])
         if self._shared_features:
             self.scales.data.fill_(1.0)
+        self.initialize_bias(stats=ds.dataset.response_stats)
 
     @property
     def mu(self):

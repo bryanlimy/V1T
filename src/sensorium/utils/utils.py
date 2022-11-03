@@ -1,4 +1,5 @@
 import os
+import sys
 import copy
 import torch
 import random
@@ -10,9 +11,8 @@ from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-
-from sensorium import losses, data
 from sensorium.models import Model
+from sensorium import losses, data
 from sensorium.metrics import Metrics
 from sensorium.utils import yaml, tensorboard
 
@@ -233,7 +233,7 @@ def metrics2df(results: t.Dict[int, torch.Tensor]):
 
 
 def log_metrics(
-    results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
+    results: t.Dict[t.Union[int, str], t.Dict[str, t.Any]],
     epoch: int,
     mode: int,
     summary: tensorboard.Summary,
@@ -247,23 +247,26 @@ def log_metrics(
         epoch: int, the current epoch number.
         mode: int, Summary logging mode.
         summary: tensorboard.Summary, Summary class
-        mouse_id: int, the mouse_id of the result dictionary, None if the
-            dictionary represents results from multiple mice.
     """
-    keys = list(results.keys())
-    metrics = list(results[keys[0]].keys())
-    for mouse_id in keys:
+    mouse_ids = list(results.keys())
+    metrics = list(results[mouse_ids[0]].keys())
+    for mouse_id in mouse_ids:
         for metric in metrics:
-            results[mouse_id][metric] = np.mean(results[mouse_id][metric])
+            value = results[mouse_id][metric]
+            if not isinstance(value, float):
+                results[mouse_id][metric] = np.mean(value)
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
                 value=results[mouse_id][metric],
                 step=epoch,
                 mode=mode,
             )
+    overall_result = {}
     for metric in metrics:
-        results[metric] = np.mean([results[mouse_id][metric] for mouse_id in keys])
-        summary.scalar(metric, value=results[metric], step=epoch, mode=mode)
+        value = np.mean([results[mouse_id][metric] for mouse_id in mouse_ids])
+        overall_result[metric[metric.find("/") + 1 :]] = value
+        summary.scalar(metric, value=value, step=epoch, mode=mode)
+    return overall_result
 
 
 def num_steps(ds: t.Dict[int, DataLoader]):
@@ -272,7 +275,7 @@ def num_steps(ds: t.Dict[int, DataLoader]):
 
 
 def load_pretrain_core(args, model: Model):
-    filename = os.path.join(args.pretrain_core, "ckpt", "best_model.pt")
+    filename = os.path.join(args.pretrain_core, "ckpt", "model_state.pt")
     assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
     model_dict = model.state_dict()
     core_ckpt = torch.load(filename, map_location=model.device)
@@ -288,37 +291,15 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def save_model(args, model: nn.Module, epoch: int):
-    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
-    torch.save({"epoch": epoch, "model": model}, f=filename)
-    if args.verbose:
-        print(f"\nModel saved to {filename}.")
-
-
-def load_model(args) -> Model:
-    filename = os.path.join(args.output_dir, "ckpt", "model.pt")
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"checkpoint {filename} not found.")
-    ckpt = torch.load(filename, map_location=args.device)
-    if args.verbose:
-        print(f"\nLoaded model (epoch {ckpt['epoch']}) from {filename}.")
-    model = ckpt["model"]
-    model.to(args.device)
-    model.device = args.device
-    return model
-
-
-def load_model_state(args, model: Model, filename: str):
-    ckpt = torch.load(filename, map_location=args.device)
-    if not os.path.exists(filename):
-        raise FileNotFoundError(f"checkpoint {filename} not found.")
-    model.load_state_dict(ckpt["model_state_dict"])
-    if args.verbose:
-        if args.verbose:
-            print(f"\nLoaded model state (epoch {ckpt['epoch']}) from {filename}.")
-
-
-def get_batch_size(args):
+def get_batch_size(
+    args,
+    max_batch_size: int = None,
+    num_iterations: int = 5,
+):
+    """
+    Calculate the maximum batch size that can fill the GPU memory if CUDA device
+    is set and args.batch_size is not set.
+    """
     device = args.device.type
 
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
@@ -336,34 +317,41 @@ def get_batch_size(args):
         output_shape = (train_ds[mouse_id].dataset.num_neurons,)
         model = Model(args, ds=train_ds)
         model.to(device)
+        model.train(True)
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         criterion = losses.get_criterion(args, ds=train_ds)
 
         ds_size = len(train_ds[mouse_id].dataset)
 
-        batch_size, terminate = 1, False
-        while not terminate:
-            if batch_size > ds_size:
+        batch_size = 1
+        while True:
+            if max_batch_size is not None and batch_size >= max_batch_size:
+                batch_size = max_batch_size
+                break
+            if batch_size >= ds_size:
                 batch_size //= 2
                 break
             try:
-                model.train(True)
-                for _ in range(5):
-                    inputs = torch.rand(*(batch_size, *args.input_shape), device=device)
+                for _ in range(num_iterations):
                     targets = torch.rand(*(batch_size, *output_shape), device=device)
-                    pupil_center = torch.rand(batch_size, 2, device=device)
                     outputs = model(
-                        inputs, mouse_id=mouse_id, pupil_center=pupil_center
+                        torch.rand(*(batch_size, *args.input_shape), device=device),
+                        mouse_id=mouse_id,
+                        pupil_center=torch.rand(batch_size, 2, device=device),
                     )
                     loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
+                    loss += model.regularizer(mouse_id=mouse_id)
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
                 batch_size *= 2
             except RuntimeError:
                 if args.verbose > 1:
-                    print(f"Dynamic batch size: {batch_size}")
+                    print(f"OOM at batch size: {batch_size}")
                 batch_size //= 2
-                terminate = True
+                break
         del train_ds, model, optimizer, criterion
+        torch.cuda.empty_cache()
+        if args.verbose > 1:
+            print(f"set batch size: {batch_size}")
         args.batch_size = batch_size

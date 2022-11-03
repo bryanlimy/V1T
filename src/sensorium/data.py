@@ -158,8 +158,8 @@ class MiceDataset(Dataset):
         self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
-        self.plus = args.plus
-        if self.plus and mouse_id == 0:
+        self.include_behaviour = args.include_behaviour
+        if self.include_behaviour and mouse_id == 0:
             raise ValueError("Mouse 0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
@@ -170,23 +170,18 @@ class MiceDataset(Dataset):
         self.image_ids = metadata["image_id"][self.indexes]
         self.trial_ids = metadata["trial_id"][self.indexes]
         # standardizer for responses
-        self._response_precision = self.compute_response_precision()
+        self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
         image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
-        self.retinotopy = self.get_retinotopy(mouse_id=mouse_id)
         assert args.crop_mode in (0, 1, 2, 3)
         self.crop_mode = args.crop_mode
         if self.crop_mode == 1:
             image_shape = (1, 36, 64)
-        elif self.crop_mode == 2:
-            image_shape = (1, 36, 64)
-        elif self.crop_mode == 3:
-            image_shape = (1, 36, 64)
         # include the 3 behaviour data as channel of the image
-        if self.plus:
+        if self.include_behaviour:
             image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
         self.image_shape = image_shape
 
@@ -213,24 +208,6 @@ class MiceDataset(Dataset):
     def num_neurons(self):
         return len(self.neuron_ids)
 
-    def get_retinotopy(self, mouse_id: int):
-        if mouse_id == 0:
-            return (0, 43)
-        elif mouse_id == 1:
-            return (26, 43)
-        elif mouse_id == 2:
-            return (46, 14)
-        elif mouse_id == 3:
-            return (38, 0)
-        elif mouse_id == 4:
-            return (77, 14)
-        elif mouse_id == 5:
-            return (77, 0)
-        elif mouse_id == 6:
-            return (62, 43)
-        else:
-            raise KeyError(f"No retinotopy for mouse {mouse_id}.")
-
     @staticmethod
     def resize_image(image: np.ndarray, height: int = 36, width: int = 64):
         image = resize(
@@ -242,41 +219,23 @@ class MiceDataset(Dataset):
         )
         return image
 
-    def retina_crop(self, image: np.ndarray, width: int = 179, height: int = 101):
-        """Crop image based on the retinotopy of the mouse"""
-        left, top = self.retinotopy
-        image = image[..., top : top + height, left : left + width]
-        image = self.resize_image(image)
-        return image
-
-    def crop_left_half(self, image: np.ndarray, width: int = 128):
-        """Crop left half of the image then rotate s.t. longer edge is width."""
-        image = image[..., :width]
-        image = np.rot90(image, k=1, axes=(1, 2))
-        image = self.resize_image(image)
-        return image
-
     def transform_image(self, image: np.ndarray):
-        if self.crop_mode == 1:
-            image = self.resize_image(image)
-        elif self.crop_mode == 2:
-            image = self.retina_crop(image)
-        elif self.crop_mode == 3:
-            image = self.crop_left_half(image)
         stats = self.image_stats
         image = (image - stats["mean"]) / stats["std"]
+        if self.crop_mode == 1:
+            image = self.resize_image(image)
         return image
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
-        stats = self.image_stats
-        image = (image * stats["std"]) + stats["mean"]
-        if self.plus:
+        if self.include_behaviour:
             image = (
                 torch.unsqueeze(image[0], dim=0)
                 if len(image.shape) == 3
                 else torch.unsqueeze(image[:, 0, :, :], dim=1)
             )
+        stats = self.image_stats
+        image = (image * stats["std"]) + stats["mean"]
         return image
 
     def transform_pupil_center(self, pupil_center: np.ndarray):
@@ -299,7 +258,7 @@ class MiceDataset(Dataset):
         idx = std > threshold
         response_precision = np.ones_like(std) / threshold
         response_precision[idx] = 1 / std[idx]
-        return response_precision
+        self._response_precision = response_precision
 
     def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response * self._response_precision
@@ -334,7 +293,7 @@ class MiceDataset(Dataset):
         data["response"] = self.transform_response(data["response"])
         data["behavior"] = self.transform_behavior(data["behavior"])
         data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
-        if self.plus:
+        if self.include_behaviour:
             data["image"] = self.add_behavior_to_image(
                 image=data["image"], behavior=data["behavior"]
             )
@@ -368,7 +327,7 @@ def get_training_ds(
             sets where keys are the mouse IDs.
     """
     if mouse_ids is None:
-        mouse_ids = list(range(1, 7)) if args.plus else list(range(0, 7))
+        mouse_ids = list(range(1, 7)) if args.include_behaviour else list(range(0, 7))
 
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}

@@ -6,17 +6,17 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 
-@register("linear")
-class LinearReadout(Readout):
+@register("random")
+class RandomReadout(Readout):
     def __init__(
         self,
         args,
         input_shape: tuple,
         output_shape: tuple,
         ds: DataLoader,
-        name: str = "LinearReadout",
+        name: str = "RandomReadout",
     ):
-        super(LinearReadout, self).__init__(
+        super(RandomReadout, self).__init__(
             args,
             input_shape=input_shape,
             output_shape=output_shape,
@@ -24,12 +24,9 @@ class LinearReadout(Readout):
             name=name,
         )
 
-        self.linear = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(
-                in_features=int(np.prod(input_shape)), out_features=self.num_neurons
-            ),
-        )
+        self.weight = nn.Parameter(torch.rand(1))
 
     def forward(self, inputs: torch.Tensor, shift: torch.Tensor = None):
-        return self.linear(inputs)
+        batch_size = inputs.size(0)
+        random = torch.rand(*(batch_size, *self.output_shape), device=inputs.device)
+        return random + self.weight - self.weight

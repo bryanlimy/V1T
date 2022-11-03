@@ -26,6 +26,7 @@ class SpatialTransformerCore(Core):
         super(SpatialTransformerCore, self).__init__(
             args, input_shape=input_shape, name=name
         )
+        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
 
         c, h, w = input_shape
 
@@ -56,7 +57,7 @@ class SpatialTransformerCore(Core):
         # Initialize the weights/bias with identity transformation
         self.regressor[3].weight.data.zero_()
         self.regressor[3].bias.data.copy_(
-            torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float32)
+            torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float)
         )
 
         # CNN network
@@ -111,6 +112,10 @@ class SpatialTransformerCore(Core):
             if i < args.num_layers - 1:
                 layer["dropout"] = nn.Dropout2d(p=args.dropout)
             self.cnn.add_module(f"block{i+1}", nn.Sequential(layer))
+
+    def regularizer(self):
+        """L1 regularization"""
+        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
     def stn(self, inputs: torch.Tensor, align_corners: bool = True):
         """Spatial transformer network forward function"""

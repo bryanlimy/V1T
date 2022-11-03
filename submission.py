@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader
 from sensorium import data
 from sensorium.utils import utils
 from sensorium.models import Model
+from sensorium.utils.scheduler import Scheduler
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):
@@ -117,9 +118,9 @@ def main(args):
     utils.load_args(args)
 
     if 0 not in args.output_shapes:
-        print("Warning: model was on trained on Mouse 1")
+        print("Warning: the saved model was not trained on Mouse 1")
     if 1 not in args.output_shapes:
-        print("Warning: model was on trained on Mouse 2")
+        print("Warning: the saved model was not trained on Mouse 2")
 
     utils.get_device(args)
 
@@ -130,16 +131,11 @@ def main(args):
         device=args.device,
     )
 
-    if os.path.exists(os.path.join(args.output_dir, "ckpt", "model.pt")):
-        model = utils.load_model(args)
-    else:
-        model = Model(args, ds=test_ds)
-        utils.load_model_state(
-            args,
-            model=model,
-            filename=os.path.join(args.output_dir, "ckpt", "best_model.pt"),
-        )
-        model.to(args.device)
+    model = Model(args, ds=test_ds)
+    model.to(args.device)
+
+    scheduler = Scheduler(args, model=model, save_optimizer=False)
+    scheduler.restore(force=True)
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"

@@ -17,21 +17,17 @@ def register(name):
 
 
 class Core(nn.Module):
-    def __init__(self, args, input_shape: t.Tuple[int, int, int], name: str = "Conv"):
+    def __init__(self, args, input_shape: t.Tuple[int, int, int], name: str = "Core"):
         super(Core, self).__init__()
         self.input_shape = input_shape
         self.name = name
         self.device = args.device
-        self.reg_scale = torch.tensor(
-            args.core_reg_scale, dtype=torch.float32, device=self.device
-        )
 
     def initialize(self):
-        pass
+        raise NotImplementedError("Initialize function has not been implemented")
 
     def regularizer(self):
-        """L1 regularization"""
-        return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
+        raise NotImplementedError("Regularizer function has not been implemented")
 
 
 def get_core(args):

@@ -1,31 +1,11 @@
 import torch
 import typing as t
 import numpy as np
-from torch.utils.data import DataLoader
 from copy import deepcopy
+from torch.utils.data import DataLoader
 
 
-def correlation(
-    y1: t.Union[torch.Tensor, np.ndarray],
-    y2: t.Union[torch.Tensor, np.ndarray],
-    axis: t.Union[None, int, t.Tuple[int]] = -1,
-    eps: float = 1e-8,
-    **kwargs
-):
-    """
-    Compute the correlation between two NumPy arrays along the specified dimension(s).
-    """
-    is_tensor = isinstance(y1, torch.Tensor)
-    if is_tensor:
-        y1, y2 = y1.numpy(), y2.numpy()
-    y1 = (y1 - y1.mean(axis=axis, keepdims=True)) / (
-        y1.std(axis=axis, keepdims=True, ddof=0) + eps
-    )
-    y2 = (y2 - y2.mean(axis=axis, keepdims=True)) / (
-        y2.std(axis=axis, keepdims=True, ddof=0) + eps
-    )
-    corr = (y1 * y2).mean(axis=axis, **kwargs)
-    return torch.tensor(corr, dtype=torch.float32) if is_tensor else corr
+from sensorium import losses
 
 
 class Metrics:
@@ -81,7 +61,7 @@ class Metrics:
         Returns:
             corr: t.Union[float, np.ndarray], single trial correlation
         """
-        corr = correlation(y1=self.predictions, y2=self.targets, axis=0)
+        corr = losses.correlation(y1=self.predictions, y2=self.targets, dim=0)
         return corr if per_neuron else corr.mean()
 
     def correlation_to_average(self, per_neuron: bool = False):
@@ -98,7 +78,7 @@ class Metrics:
             mean_predictions.append(repeat_predictions.mean(axis=0, keepdims=True))
         mean_responses = np.vstack(mean_responses)
         mean_predictions = np.vstack(mean_predictions)
-        corr = correlation(y1=mean_responses, y2=mean_predictions, axis=0)
+        corr = losses.correlation(y1=mean_responses, y2=mean_predictions, dim=0)
         return corr if per_neuron else corr.mean()
 
     def _fev(

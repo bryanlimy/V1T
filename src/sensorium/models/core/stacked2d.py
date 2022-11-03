@@ -1,13 +1,11 @@
 from .core import Core, register
 
-
 import torch
 import warnings
 import typing as t
 import numpy as np
 from torch import nn
 import torch.nn.init as init
-from functools import partial
 import torch.nn.functional as F
 from collections import Iterable, OrderedDict
 
@@ -323,14 +321,12 @@ class Stacked2dCore(Core, nn.Module):
         hidden_channels: int = 64,
         input_kern: int = 9,
         hidden_kern: int = 7,
-        gamma_hidden: int = 0,
-        gamma_input: float = 6.3831,
         skip: int = 0,
         stride: int = 1,
         final_nonlinearity: bool = True,
         elu_shift: t.Tuple[int, int] = (0, 0),
         bias: bool = True,
-        momentum: float = 0.1,
+        momentum: float = 0.9,
         pad_input: bool = False,
         hidden_padding: t.Union[None, int, t.List[int]] = None,
         batch_norm: bool = True,
@@ -362,19 +358,10 @@ class Stacked2dCore(Core, nn.Module):
         regularizer_config = dict(padding=laplace_padding)
         self._input_weights_regularizer = LaplaceL2norm(**regularizer_config)
         self.num_layers = args.num_layers
-        self.gamma_input = gamma_input
-        self.gamma_hidden = gamma_hidden
+        self.gamma_input = torch.tensor(args.core_reg_input, device=args.device)
+        self.gamma_hidden = torch.tensor(args.core_reg_hidden, device=args.device)
         self.input_channels = self.input_shape[0]
-
-        if isinstance(hidden_channels, Iterable) and skip > 1:
-            raise NotImplementedError(
-                "Passing a list of hidden channels and `skip > 1` at the same time is not yet implemented."
-            )
-        self.hidden_channels = (
-            hidden_channels
-            if isinstance(hidden_channels, Iterable)
-            else [hidden_channels] * self.num_layers
-        )
+        self.hidden_channels = hidden_channels
         self.skip = skip
 
         self.activation_fn = AdaptiveELU
@@ -421,7 +408,7 @@ class Stacked2dCore(Core, nn.Module):
             self.ConvLayer = nn.Conv2d
             self.ignore_group_sparsity = False
 
-        if self.ignore_group_sparsity and gamma_hidden > 0:
+        if self.ignore_group_sparsity and self.gamma_hidden > 0:
             warnings.warn(
                 "group sparsity can not be calculated for the requested conv "
                 "type. Hidden channels will not be regularized and gamma_hidden "
@@ -489,12 +476,12 @@ class Stacked2dCore(Core, nn.Module):
         layer = OrderedDict()
         layer["conv"] = nn.Conv2d(
             in_channels=self.input_channels,
-            out_channels=self.hidden_channels[0],
+            out_channels=self.hidden_channels,
             kernel_size=self.input_kern,
             padding=self.input_kern // 2 if self.pad_input else 0,
             bias=self.bias and not self.batch_norm,
         )
-        self.add_bn_layer(layer, self.hidden_channels[0])
+        self.add_bn_layer(layer, self.hidden_channels)
         self.add_activation(layer)
         self.features.add_module("layer0", nn.Sequential(layer))
 
@@ -509,17 +496,17 @@ class Stacked2dCore(Core, nn.Module):
                     (self.hidden_kern[l - 1] - 1) * self.hidden_dilation + 1
                 ) // 2
             layer[self.conv_layer_name] = self.ConvLayer(
-                in_channels=self.hidden_channels[l - 1]
+                in_channels=self.hidden_channels
                 if not self.skip > 1
-                else min(self.skip, l) * self.hidden_channels[0],
-                out_channels=self.hidden_channels[l],
+                else min(self.skip, l) * self.hidden_channels,
+                out_channels=self.hidden_channels,
                 kernel_size=self.hidden_kern[l - 1],
                 stride=self.stride,
                 padding=self.hidden_padding,
                 dilation=self.hidden_dilation,
                 bias=self.bias,
             )
-            self.add_bn_layer(layer, self.hidden_channels[l])
+            self.add_bn_layer(layer, self.hidden_channels)
             self.add_activation(layer)
             if l != self.num_layers - 1:
                 layer["dropout"] = nn.Dropout2d(p=self.dropout_rate, inplace=True)
@@ -535,17 +522,24 @@ class Stacked2dCore(Core, nn.Module):
             """
             super().__init__(**kwargs)
 
-    def forward(self, inputs: torch.Tensor):
-        outputs = []
-        for layer, fn in enumerate(self.features):
-            do_skip = layer >= 1 and self.skip > 1
-            inputs = fn(
-                inputs
-                if not do_skip
-                else torch.cat(outputs[-min(self.skip, layer) :], dim=1)
-            )
-            outputs.append(inputs)
-        return torch.cat([outputs[ind] for ind in self.stack], dim=1)
+    def initialize(self):
+        """Initialization applied on the core."""
+        self.apply(self.init_conv)
+
+    @staticmethod
+    def init_conv(m):
+        """
+        Initialize convolution layers with:
+            - weights: xavier_normal
+            - biases: 0
+
+        Args:
+            m (nn.Module): a pytorch nn module.
+        """
+        if isinstance(m, nn.Conv2d):
+            nn.init.xavier_normal_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0)
 
     def laplace(self):
         """
@@ -576,10 +570,22 @@ class Stacked2dCore(Core, nn.Module):
         return ret / ((self.num_layers - 1) if self.num_layers > 1 else 1)
 
     def regularizer(self):
-        term1 = self.group_sparsity() * self.gamma_hidden
+        term1 = self.gamma_hidden * self.group_sparsity()
         term2 = self.gamma_input * self.laplace()
-        return self.reg_scale * (term1 + term2)
+        return term1 + term2
 
     @property
     def outchannels(self):
-        return len(self.features) * self.hidden_channels[-1]
+        return len(self.features) * self.hidden_channels
+
+    def forward(self, inputs: torch.Tensor):
+        outputs = []
+        for layer, fn in enumerate(self.features):
+            do_skip = layer >= 1 and self.skip > 1
+            inputs = fn(
+                inputs
+                if not do_skip
+                else torch.cat(outputs[-min(self.skip, layer) :], dim=1)
+            )
+            outputs.append(inputs)
+        return torch.cat([outputs[ind] for ind in self.stack], dim=1)

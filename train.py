@@ -10,19 +10,22 @@ from shutil import rmtree
 from ray.air import session
 from torch.utils.data import DataLoader
 
+from sensorium import losses, data
 from sensorium.models import get_model
-from sensorium import losses, metrics, data
+from sensorium.utils.logger import Logger
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
-    y_true, y_pred = y_true.cpu().numpy(), y_pred.cpu().numpy()
+    msse = losses.msse(y_true=y_true, y_pred=y_pred)
+    poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
+    correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
     return {
-        "metrics/trial_correlation": metrics.correlation(
-            y1=y_pred, y2=y_true, axis=None
-        )
+        "metrics/msse": msse.item(),
+        "metrics/poisson_loss": poisson_loss.item(),
+        "metrics/single_trial_correlation": correlation.item(),
     }
 
 
@@ -83,8 +86,7 @@ def train(
             update=(i + 1) % update_frequency == 0,
         )
         utils.update_dict(results[mouse_id], result)
-    utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
-    return results
+    return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
 
 def validation_step(
@@ -128,8 +130,7 @@ def validate(
                     utils.update_dict(mouse_result, result)
                     pbar.update(1)
                 results[mouse_id] = mouse_result
-    utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
-    return results
+    return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
 
 
 def main(args):
@@ -138,9 +139,9 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
+    logger = Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
-
     utils.get_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
@@ -158,30 +159,29 @@ def main(args):
     if args.pretrain_core:
         utils.load_pretrain_core(args, model=model)
 
-    # separate learning rates for core and readout modules
+    # separate learning rates for different modules
+    params = [
+        {
+            "params": model.core.parameters(),
+            "lr": args.core_lr_scale * args.lr,
+            "name": "core",
+        },
+        {"params": model.readouts.parameters(), "name": "readouts"},
+    ]
+    if model.shifter is not None:
+        params.append({"params": model.shifter.parameters(), "name": "shifter"})
     optimizer = torch.optim.Adam(
-        params=[
-            {
-                "params": model.core.parameters(),
-                "lr": args.core_lr_scale * args.lr,
-                "name": "core",
-            },
-            {
-                "params": model.readouts.parameters(),
-                "name": "readouts",
-            },
-        ],
+        params=params,
         lr=args.lr,
+        betas=(args.adam_beta1, args.adam_beta2),
+        eps=args.adam_eps,
     )
-    scheduler = Scheduler(args, mode="max", model=model, optimizer=optimizer)
-
+    scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
 
-    epoch = scheduler.restore()
-
-    utils.evaluate(args, ds=val_ds, model=model, epoch=epoch, summary=summary, mode=1)
+    epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -208,46 +208,29 @@ def main(args):
         elapse = time() - start
 
         summary.scalar("model/elapse", value=elapse, step=epoch, mode=0)
-        summary.scalar(
-            "model/learning_rate/core",
-            value=optimizer.param_groups[0]["lr"],
-            step=epoch,
-            mode=0,
-        )
-        summary.scalar(
-            "model/learning_rate/readouts",
-            value=optimizer.param_groups[1]["lr"],
-            step=epoch,
-            mode=0,
-        )
+        for param_group in optimizer.param_groups:
+            summary.scalar(
+                f'model/lr/{param_group["name"] if "name" in param_group else "model"}',
+                value=param_group["lr"],
+                step=epoch,
+                mode=0,
+            )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {train_result["metrics/trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["loss/loss"]:.04f}\t\t'
-                f'correlation: {val_result["metrics/trial_correlation"]:.04f}\n'
+                f'Train\t\t\tloss: {train_result["loss"]:.04f}\t\t'
+                f'correlation: {train_result["single_trial_correlation"]:.04f}\n'
+                f'Validation\t\tloss: {val_result["loss"]:.04f}\t\t'
+                f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
 
-        if epoch % 10 == 0 or epoch == args.epochs:
-            eval_result = utils.evaluate(
-                args,
-                ds=test_ds,
-                model=model,
-                epoch=epoch,
-                summary=summary,
-                mode=2,
-            )
-            if tune.is_session_enabled():
-                eval_result["iterations"] = epoch // 10
-                session.report(metrics=eval_result)
+        if tune.is_session_enabled():
+            session.report(metrics=val_result)
 
-        if scheduler.step(val_result["metrics/trial_correlation"], epoch=epoch):
+        if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
     scheduler.restore()
-
-    utils.save_model(args, model=model, epoch=epoch)
 
     eval_result = utils.evaluate(
         args,
@@ -259,12 +242,12 @@ def main(args):
         print_result=True,
         save_result=args.output_dir,
     )
-    eval_result["iterations"] = epoch // 10
-
-    summary.close()
 
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
+
+    summary.close()
+    logger.close()
 
     return eval_result
 
@@ -286,70 +269,33 @@ if __name__ == "__main__":
         default=None,
         help="Mouse to use for training.",
     )
-    parser.add_argument("--plus", action="store_true", help="training for sensorium+.")
     parser.add_argument(
-        "--num_workers", default=2, type=int, help="number of works for DataLoader."
-    )
-
-    # model settings
-    parser.add_argument(
-        "--core", type=str, required=True, help="The core module to use."
+        "--include_behaviour",
+        action="store_true",
+        help="include behaviour data into input as additional channels.",
     )
     parser.add_argument(
-        "--readout", type=str, required=True, help="The readout module to use."
-    )
-
-    # ConvCore
-    parser.add_argument("--num_layers", type=int, default=4)
-    parser.add_argument("--num_filters", type=int, default=8)
-    parser.add_argument("--dropout", type=float, default=0.0)
-
-    # ViTCore
-    parser.add_argument("--patch_size", type=int, default=4)
-    parser.add_argument("--emb_dim", type=int, default=64)
-    parser.add_argument("--num_heads", type=int, default=3)
-    parser.add_argument("--mlp_dim", type=int, default=64)
-    parser.add_argument("--dim_head", type=int, default=64)
-
-    parser.add_argument(
-        "--core_reg_scale",
-        default=0,
-        type=float,
-        help="weight regularization coefficient for core module.",
-    )
-
-    # Gaussian2DReadout
-    parser.add_argument("--disable_grid_predictor", action="store_true")
-    parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
-    parser.add_argument(
-        "--bias_mode",
+        "--crop_mode",
+        default=1,
         type=int,
-        default=0,
-        choices=[0, 1, 2],
-        help="Gaussian2d readout bias mode:"
-        "0: initialize bias with zeros"
-        "1: initialize bias with the mean responses"
-        "2: initialize bias with the mean responses divide by standard deviation",
+        choices=[0, 1],
+        help="image crop mode:"
+        "0: no cropping and return full image (1, 144, 256)"
+        "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(
-        "--readout_reg_scale",
-        default=0.0076,
-        type=float,
-        help="weight regularization coefficient for readout module.",
-    )
-
-    # Shifter
-    parser.add_argument("--use_shifter", action="store_true")
-    parser.add_argument(
-        "--shifter_reg_scale",
-        default=0.0,
-        type=float,
-        help="weight regularization coefficient for shifter module.",
+        "--num_workers",
+        default=2,
+        type=int,
+        help="number of works for DataLoader.",
     )
 
     # training settings
     parser.add_argument(
-        "--epochs", default=200, type=int, help="maximum epochs to train the model."
+        "--epochs",
+        default=200,
+        type=int,
+        help="maximum epochs to train the model.",
     )
     parser.add_argument(
         "--batch_size",
@@ -357,35 +303,6 @@ if __name__ == "__main__":
         type=int,
         help="If batch_size == 0 and CUDA is available, then dynamically test "
         "batch size. Otherwise use the provided value.",
-    )
-    parser.add_argument(
-        "--criterion",
-        default="poisson",
-        type=str,
-        help="criterion (loss function) to use.",
-    )
-    parser.add_argument("--lr", default=1e-3, type=float, help="initial learning rate")
-    parser.add_argument(
-        "--depth_scale",
-        default=1.0,
-        type=float,
-        help="the coefficient to scale loss for neurons in depth of 240 to 260.",
-    )
-    parser.add_argument(
-        "--ds_scale",
-        action="store_true",
-        help="scale loss by the size of the dataset",
-    )
-    parser.add_argument(
-        "--crop_mode",
-        default=1,
-        type=int,
-        choices=[0, 1, 2, 3],
-        help="image crop mode:"
-        "0: no cropping and return full image (1, 144, 256)"
-        "1: rescale image by 0.25 in both width and height (1, 36, 64)"
-        "2: crop image based on retinotopy and rescale to (1, 36, 64)"
-        "3: crop left half of the image and rotate.",
     )
     parser.add_argument(
         "--device",
@@ -396,6 +313,28 @@ if __name__ == "__main__":
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--seed", type=int, default=1234)
+
+    # optimizer settings
+    parser.add_argument("--adam_beta1", type=float, default=0.9)
+    parser.add_argument("--adam_beta2", type=float, default=0.9999)
+    parser.add_argument("--adam_eps", type=float, default=1e-8)
+    parser.add_argument(
+        "--criterion",
+        default="poisson",
+        type=str,
+        help="criterion (loss function) to use.",
+    )
+    parser.add_argument(
+        "--lr",
+        default=1e-3,
+        type=float,
+        help="initial learning rate",
+    )
+    parser.add_argument(
+        "--ds_scale",
+        action="store_true",
+        help="scale loss by the size of the dataset",
+    )
 
     # pre-trained Core
     parser.add_argument(
@@ -415,7 +354,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save_plots", action="store_true", help="save plots to --output_dir"
     )
-    parser.add_argument("--dpi", type=int, default=120, help="matplotlib figure DPI")
+    parser.add_argument(
+        "--dpi",
+        type=int,
+        default=120,
+        help="matplotlib figure DPI",
+    )
     parser.add_argument(
         "--format",
         type=str,
@@ -432,5 +376,71 @@ if __name__ == "__main__":
     )
     parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
 
-    params = parser.parse_args()
-    main(params)
+    # model settings
+    parser.add_argument(
+        "--core",
+        type=str,
+        required=True,
+        help="The core module to use.",
+    )
+    parser.add_argument(
+        "--readout",
+        type=str,
+        required=True,
+        help="The readout module to use.",
+    )
+    parser.add_argument("--use_shifter", action="store_true")
+
+    temp_args = parser.parse_known_args()[0]
+
+    # hyper-parameters for core module
+    if temp_args.core == "conv":
+        parser.add_argument("--num_layers", type=int, default=4)
+        parser.add_argument("--num_filters", type=int, default=8)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+    elif temp_args.core == "stacked2d":
+        parser.add_argument("--num_layers", type=int, default=4)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument("--core_reg_input", type=float, default=6.3831)
+        parser.add_argument("--core_reg_hidden", type=float, default=0.0)
+    elif temp_args.core == "vit":
+        parser.add_argument("--patch_size", type=int, default=4)
+        parser.add_argument("--num_blocks", type=int, default=4)
+        parser.add_argument("--emb_dim", type=int, default=64)
+        parser.add_argument("--num_heads", type=int, default=3)
+        parser.add_argument("--mlp_dim", type=int, default=64)
+        parser.add_argument("--dropout", type=float, default=0.0)
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+    elif temp_args.core == "stn":
+        parser.add_argument("--num_layers", type=int, default=7)
+        parser.add_argument("--num_filters", type=int, default=63)
+        parser.add_argument("--dropout", type=float, default=0.1135)
+        parser.add_argument("--core_reg_scale", type=float, default=0.0450)
+    else:
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+
+    # hyper-parameters for readout modules
+    if temp_args.readout == "gaussian2d":
+        parser.add_argument("--disable_grid_predictor", action="store_true")
+        parser.add_argument("--grid_predictor_dim", type=int, default=2, choices=[2, 3])
+        parser.add_argument(
+            "--bias_mode",
+            type=int,
+            default=0,
+            choices=[0, 1, 2],
+            help="Gaussian2d readout bias mode:"
+            "0: initialize bias with zeros"
+            "1: initialize bias with the mean responses"
+            "2: initialize bias with the mean responses divide by standard deviation",
+        )
+        parser.add_argument("--readout_reg_scale", type=float, default=0.0076)
+    else:
+        parser.add_argument("--readout_reg_scale", type=float, default=0.0)
+
+    # hyper-parameters for shifter module
+    if temp_args.use_shifter or temp_args.include_behaviour:
+        parser.add_argument("--shifter_reg_scale", type=float, default=0.0)
+
+    del temp_args
+    main(parser.parse_args())
