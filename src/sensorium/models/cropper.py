@@ -12,7 +12,7 @@ class MLP(nn.Module):
         in_features: int = 2,
         hidden_features: int = 10,
         num_layers: int = 1,
-        name: str = "MLPShifter",
+        name: str = "PupilShifter",
     ):
         """
         Multi-layer perceptron shifter
@@ -57,16 +57,35 @@ class Cropper(nn.Module):
         super().__init__()
         mouse_ids = list(ds.keys())
         c, h, w = ds[mouse_ids[0]].dataset.image_shape
+
         self.crop_scale = args.center_crop
+        self.crop_h, self.crop_w = h, w
         if self.crop_scale < 1:
-            h, w = int(h * self.crop_scale), int(w * self.crop_scale)
-        self.center_crop = transforms.CenterCrop(size=(h, w))
+            self.crop_h = int(h * self.crop_scale)
+            self.crop_w = int(w * self.crop_scale)
+        # the top left coordinate for a center crop
+        self.center_coordinate = (h // 2 - self.crop_h // 2, (w - self.crop_w))
+
         if args.resize_image == 1:
             h, w = 36, 64
         self.resize = transforms.Resize(size=(h, w), antialias=False)
         self.output_shape = (c, h, w)
 
+    def crop_image(
+        self,
+        images: torch.Tensor,
+        coordinate: t.Union[t.Tuple[int, int], torch.Tensor] = None,
+    ):
+        """Given top left coordinate, crop images to size (self.crop_h, self.crop_w)"""
+        if coordinate is None:
+            coordinate = self.center_coordinate
+        return images[
+            ...,
+            coordinate[0] : coordinate[0] + self.crop_h,
+            coordinate[1] : coordinate[1] + self.crop_w,
+        ]
+
     def forward(self, inputs: torch.Tensor, mouse_id: int, pupil_center: torch.Tensor):
-        outputs = self.center_crop(inputs)
+        outputs = self.crop_image(inputs)
         outputs = self.resize(outputs)
         return outputs
