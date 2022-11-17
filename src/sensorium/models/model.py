@@ -41,6 +41,7 @@ class Model(nn.Module):
         ), "output_shapes must be a dictionary of mouse_id and output_shape"
         self.name = name
         self.device = args.device
+        self.output_shapes = args.output_shapes
 
         self.initialize_cropper(args, ds=ds)
         self.initialize_core(args, input_shape=self.cropper.output_shape)
@@ -49,8 +50,6 @@ class Model(nn.Module):
         self.use_shifter = args.include_behaviour or args.use_shifter
         self.initialize_shifter(args, ds=ds)
         self.elu = nn.ELU()
-
-        self.output_shapes = args.output_shapes
 
     def initialize_core(self, args, input_shape: t.Tuple[int, int, int]):
         self.add_module(
