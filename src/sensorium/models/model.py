@@ -133,7 +133,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
 
     get_model_info(
         model=model.core,
-        input_data=[torch.randn(args.batch_size, *args.input_shape)],
+        input_data=[torch.randn(args.batch_size, *model.cropper.output_shape)],
         filename=os.path.join(args.output_dir, "model_core.txt"),
         summary=summary,
         tag="model/trainable_parameters/core",
