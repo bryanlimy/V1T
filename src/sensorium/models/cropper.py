@@ -56,7 +56,7 @@ class Cropper(nn.Module):
     def __init__(self, args, ds: t.Dict[int, DataLoader]):
         super().__init__()
         mouse_ids = list(ds.keys())
-        _, h, w = ds[mouse_ids[0]].dataset.image_shape
+        c, h, w = ds[mouse_ids[0]].dataset.image_shape
         self.crop_scale = args.center_crop
         if self.crop_scale < 1:
             h, w = int(h * self.crop_scale), int(w * self.crop_scale)
@@ -64,6 +64,7 @@ class Cropper(nn.Module):
         if args.resize_image == 1:
             h, w = 36, 64
         self.resize = transforms.Resize(size=(h, w), antialias=False)
+        self.output_shape = (c, h, w)
 
     def forward(self, inputs: torch.Tensor, mouse_id: int, pupil_center: torch.Tensor):
         outputs = self.center_crop(inputs)

@@ -41,21 +41,21 @@ class Model(nn.Module):
         ), "output_shapes must be a dictionary of mouse_id and output_shape"
         self.name = name
         self.device = args.device
-        self.input_shape = args.input_shape
-        self.output_shapes = args.output_shapes
-        self.use_shifter = args.include_behaviour or args.use_shifter
 
-        self.initialize_core(args)
-        self.initialize_readouts(args, ds=ds)
-        self.initialize_shifter(args, ds=ds)
         self.initialize_cropper(args, ds=ds)
+        self.initialize_core(args, input_shape=self.cropper.output_shape)
+        self.initialize_readouts(args, ds=ds)
 
+        self.use_shifter = args.include_behaviour or args.use_shifter
+        self.initialize_shifter(args, ds=ds)
         self.elu = nn.ELU()
 
-    def initialize_core(self, args):
+        self.output_shapes = args.output_shapes
+
+    def initialize_core(self, args, input_shape: t.Tuple[int, int, int]):
         self.add_module(
             name="core",
-            module=get_core(args)(args, input_shape=self.input_shape),
+            module=get_core(args)(args, input_shape=input_shape),
         )
 
     def initialize_readouts(self, args, ds: t.Dict[int, DataLoader]):
