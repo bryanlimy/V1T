@@ -142,8 +142,8 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     )
 
     get_model_info(
-        model=model.readouts[mouse_id],
-        input_data=[torch.randn(args.batch_size, *model.readout.input_shape)],
+        model=model.readouts[str(mouse_id)],
+        input_data=[torch.randn(args.batch_size, *model.core.output_shape)],
         filename=os.path.join(args.output_dir, "model_readout.txt"),
         summary=summary,
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
