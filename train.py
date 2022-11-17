@@ -41,7 +41,7 @@ def train_step(
     images = data["image"].to(device)
     responses = data["response"].to(device)
     pupil_center = data["pupil_center"].to(device)
-    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+    outputs, _ = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
@@ -99,7 +99,7 @@ def validation_step(
     images = data["image"].to(device)
     responses = data["response"].to(device)
     pupil_center = data["pupil_center"].to(device)
-    outputs = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+    outputs, _ = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
@@ -247,7 +247,6 @@ def main(args):
         print(f"\nResults saved to {args.output_dir}.")
 
     summary.close()
-    logger.close()
 
     return eval_result
 

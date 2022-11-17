@@ -5,7 +5,7 @@ import typing as t
 from torch import nn
 from torch.utils.data import DataLoader
 
-from sensorium.models import shifter
+from sensorium.models import shifter, cropper
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
@@ -48,6 +48,7 @@ class Model(nn.Module):
         self.initialize_core(args)
         self.initialize_readouts(args, ds=ds)
         self.initialize_shifter(args, ds=ds)
+        self.initialize_cropper(args, ds=ds)
 
         self.elu = nn.ELU()
 
@@ -84,6 +85,9 @@ class Model(nn.Module):
         else:
             self.shifter = None
 
+    def initialize_cropper(self, args, ds: t.Dict[int, DataLoader]):
+        self.add_module("cropper", module=cropper.Cropper(args, ds=ds))
+
     def regularizer(self, mouse_id: int):
         reg = self.core.regularizer()
         reg += self.readouts.regularizer(mouse_id=mouse_id)
@@ -98,7 +102,8 @@ class Model(nn.Module):
         pupil_center: torch.Tensor,
         activate: bool = True,
     ):
-        outputs = self.core(inputs)
+        images = self.cropper(inputs, mouse_id=mouse_id, pupil_center=pupil_center)
+        outputs = self.core(images)
         shift = (
             None
             if self.shifter is None
@@ -107,7 +112,7 @@ class Model(nn.Module):
         outputs = self.readouts(outputs, mouse_id=mouse_id, shift=shift)
         if activate:
             outputs = self.elu(outputs) + 1
-        return outputs
+        return outputs, images
 
 
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):

@@ -177,12 +177,12 @@ class MiceDataset(Dataset):
         self.hashed = mouse_id in (0, 1)
 
         image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
-        assert 0 < args.center_crop <= 1
-        self.crop_scale = args.center_crop
-        assert args.resize_image in (0, 1)
-        self.resize_image = args.resize_image
-        if self.resize_image == 1:
-            image_shape = (1, 36, 64)
+        # assert 0 < args.center_crop <= 1
+        # self.crop_scale = args.center_crop
+        # assert args.resize_image in (0, 1)
+        # self.resize_image = args.resize_image
+        # if self.resize_image == 1:
+        #     image_shape = (1, 36, 64)
         # include the 3 behaviour data as channel of the image
         if self.include_behaviour:
             image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
@@ -234,9 +234,9 @@ class MiceDataset(Dataset):
     def transform_image(self, image: np.ndarray):
         stats = self.image_stats
         image = (image - stats["mean"]) / stats["std"]
-        image = self.center_crop(image, scale=self.crop_scale)
-        if self.resize_image == 1:
-            image = self.resize(image)
+        # image = self.center_crop(image, scale=self.crop_scale)
+        # if self.resize_image == 1:
+        #     image = self.resize(image)
         return image
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):

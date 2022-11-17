@@ -53,14 +53,14 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
     model.train(False)
     with torch.no_grad():
         for data in ds:
-            predictions = model(
+            predictions, images = model(
                 data["image"].to(device),
                 mouse_id=mouse_id,
                 pupil_center=data["pupil_center"].to(device),
             )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
-            results["images"].append(data["image"])
+            results["images"].append(images.cpu())
             results["image_ids"].append(data["image_id"])
             results["trial_ids"].append(data["trial_id"])
     results = {
@@ -129,7 +129,10 @@ def evaluate(
         for metric, values in results.items():
             if values:
                 summary.box_plot(
-                    metric, data=metrics2df(results[metric]), step=epoch, mode=mode
+                    metric,
+                    data=metrics2df(results[metric]),
+                    step=epoch,
+                    mode=mode,
                 )
 
     # compute the average value for each mouse
