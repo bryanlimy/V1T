@@ -41,6 +41,7 @@ class Model(nn.Module):
         ), "output_shapes must be a dictionary of mouse_id and output_shape"
         self.name = name
         self.device = args.device
+        self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
 
         self.initialize_cropper(args, ds=ds)
@@ -118,11 +119,12 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     model = Model(args, ds=ds)
     model.to(args.device)
 
+    mouse_id = list(args.output_shapes.keys())[0]
     model_info = get_model_info(
         model=model,
         input_data=[
-            torch.randn(args.batch_size, *args.input_shape),  # images
-            list(args.output_shapes.keys())[0],  # mouse ID
+            torch.randn(args.batch_size, *model.input_shape),  # images
+            mouse_id,  # mouse ID
             torch.randn(args.batch_size, 2),  # pupil centers
         ],
         filename=os.path.join(args.output_dir, "model.txt"),
@@ -133,16 +135,15 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
 
     get_model_info(
         model=model.core,
-        input_data=[torch.randn(args.batch_size, *model.cropper.output_shape)],
+        input_data=[torch.randn(args.batch_size, *model.core.input_shape)],
         filename=os.path.join(args.output_dir, "model_core.txt"),
         summary=summary,
         tag="model/trainable_parameters/core",
     )
 
-    mouse_id = list(model.readouts.keys())[0]
     get_model_info(
         model=model.readouts[mouse_id],
-        input_data=[torch.randn(args.batch_size, *model.core.output_shape)],
+        input_data=[torch.randn(args.batch_size, *model.readout.input_shape)],
         filename=os.path.join(args.output_dir, "model_readout.txt"),
         summary=summary,
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
