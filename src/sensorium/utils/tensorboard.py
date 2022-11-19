@@ -122,8 +122,8 @@ class Summary(object):
         if not os.path.isdir(self.plots_dir):
             os.makedirs(self.plots_dir)
 
-        if platform.system() == "Darwin" and args.verbose > 2:
-            matplotlib.use("TkAgg")
+        # if platform.system() == "Darwin" and args.verbose > 2:
+        #     matplotlib.use("TkAgg")
 
     def get_writer(self, mode: int = 0):
         """Get SummaryWriter

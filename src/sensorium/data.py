@@ -5,9 +5,7 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
-from skimage.transform import rescale, resize, rotate
 from torch.utils.data import Dataset, DataLoader
-import torchvision.transforms.functional as F
 
 from sensorium.utils import utils
 
@@ -177,12 +175,6 @@ class MiceDataset(Dataset):
         self.hashed = mouse_id in (0, 1)
 
         image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
-        # assert 0 < args.center_crop <= 1
-        # self.crop_scale = args.center_crop
-        # assert args.resize_image in (0, 1)
-        # self.resize_image = args.resize_image
-        # if self.resize_image == 1:
-        #     image_shape = (1, 36, 64)
         # include the 3 behaviour data as channel of the image
         if self.include_behaviour:
             image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
@@ -211,33 +203,9 @@ class MiceDataset(Dataset):
     def num_neurons(self):
         return len(self.neuron_ids)
 
-    @staticmethod
-    def resize(image: np.ndarray, height: int = 36, width: int = 64):
-        image = resize(
-            image,
-            output_shape=(image.shape[0], height, width),
-            clip=True,
-            preserve_range=True,
-            anti_aliasing=False,
-        )
-        return image
-
-    @staticmethod
-    def center_crop(image: t.Union[np.ndarray, torch.Tensor], scale: float):
-        h, w = image.shape[1:]
-        new_h, new_w = int(h * scale), int(w * scale)
-        start_h = h // 2 - (new_h // 2)
-        start_w = w // 2 - (new_w // 2)
-        image = image[..., start_h : start_h + new_h, start_w : start_w + new_w]
-        return image
-
     def transform_image(self, image: np.ndarray):
         stats = self.image_stats
-        image = (image - stats["mean"]) / stats["std"]
-        # image = self.center_crop(image, scale=self.crop_scale)
-        # if self.resize_image == 1:
-        #     image = self.resize(image)
-        return image
+        return (image - stats["mean"]) / stats["std"]
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""

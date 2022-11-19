@@ -48,8 +48,20 @@ class Model(nn.Module):
         self.initialize_core(args, input_shape=self.cropper.output_shape)
         self.initialize_readouts(args, ds=ds)
 
-        self.use_shifter = args.include_behaviour or args.use_shifter
-        self.initialize_shifter(args, ds=ds)
+        # if args.use_shifter:
+        #     self.add_module(
+        #         "shifter",
+        #         module=shifter.MLPShifter(
+        #             args,
+        #             mouse_ids=list(ds.keys()),
+        #             input_channels=2,
+        #             hidden_features=5,
+        #             num_layers=3,
+        #         ),
+        #     )
+        # else:
+        #     self.shifter = None
+
         self.elu = nn.ELU()
 
     def initialize_core(self, args, input_shape: t.Tuple[int, int, int]):
@@ -70,21 +82,6 @@ class Model(nn.Module):
             ),
         )
 
-    def initialize_shifter(self, args, ds: t.Dict[int, DataLoader]):
-        if self.use_shifter:
-            self.add_module(
-                "shifter",
-                module=shifter.MLPShifter(
-                    args,
-                    mouse_ids=list(ds.keys()),
-                    input_channels=2,
-                    hidden_features=5,
-                    num_layers=3,
-                ),
-            )
-        else:
-            self.shifter = None
-
     def initialize_cropper(self, args, ds: t.Dict[int, DataLoader]):
         self.add_module("cropper", module=cropper.Cropper(args, ds=ds))
 
@@ -104,11 +101,12 @@ class Model(nn.Module):
     ):
         images = self.cropper(inputs, mouse_id=mouse_id, pupil_center=pupil_center)
         outputs = self.core(images)
-        shift = (
-            None
-            if self.shifter is None
-            else self.shifter(mouse_id=mouse_id, pupil_center=pupil_center)
-        )
+        # shift = (
+        #     None
+        #     if self.shifter is None
+        #     else self.shifter(mouse_id=mouse_id, pupil_center=pupil_center)
+        # )
+        shift = None
         outputs = self.readouts(outputs, mouse_id=mouse_id, shift=shift)
         if activate:
             outputs = self.elu(outputs) + 1

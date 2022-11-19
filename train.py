@@ -139,7 +139,7 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    logger = Logger(args)
+    # logger = Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
     utils.get_batch_size(args)
@@ -168,6 +168,8 @@ def main(args):
         },
         {"params": model.readouts.parameters(), "name": "readouts"},
     ]
+    if model.cropper is not None:
+        params.append({"params": model.cropper.parameters(), "name": "cropper"})
     if model.shifter is not None:
         params.append({"params": model.shifter.parameters(), "name": "shifter"})
     optimizer = torch.optim.Adam(
