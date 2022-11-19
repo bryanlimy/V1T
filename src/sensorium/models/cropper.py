@@ -50,6 +50,7 @@ class Cropper(nn.Module):
         super().__init__()
         mouse_ids = list(ds.keys())
         self.use_shifter = args.use_shifter
+        self.input_shape = args.input_shape
         c, in_h, in_w = args.input_shape
         out_h, out_w = in_h, in_w
 
@@ -58,6 +59,8 @@ class Cropper(nn.Module):
         if self.crop_scale < 1:
             out_h = self.crop_h = int(in_h * self.crop_scale)
             out_w = self.crop_w = int(in_w * self.crop_scale)
+
+        self.build_grid()
 
         if args.use_shifter:
             max_shift = (1 - self.crop_scale) / 2
@@ -84,21 +87,15 @@ class Cropper(nn.Module):
 
         self.output_shape = (c, out_h, out_w)
 
-    def build_grid(
-        self,
-        input_shape: t.Tuple[int, int, int, int],
-        shifts: torch.Tensor = None,
-    ):
-        b, c, in_h, in_w = input_shape
+    def build_grid(self):
+        _, in_h, in_w = self.input_shape
         h_pixels = torch.linspace(-self.crop_scale, self.crop_scale, self.crop_h)
         w_pixels = torch.linspace(-self.crop_scale, self.crop_scale, self.crop_w)
         mesh_x, mesh_y = torch.meshgrid(h_pixels, w_pixels, indexing="ij")
         grid = torch.stack((mesh_x, mesh_y), dim=2)
         grid = torch.flip(grid, dims=(2,))  # grid_sample uses (x, y) coordinates
-        grid = repeat(grid.unsqueeze(0), "1 c h w -> b c h w", b=b)
-        if shifts is not None:
-            grid = grid + repeat(shifts, "b d -> b 1 1 d")
-        return grid
+        grid = grid.unsqueeze(0)
+        self.register_buffer("grid", grid)
 
     def forward(
         self,
@@ -106,10 +103,11 @@ class Cropper(nn.Module):
         mouse_id: int,
         pupil_center: torch.Tensor,
     ):
-        shifts = (
-            None if self.shifter is None else self.shifter[str(mouse_id)](pupil_center)
-        )
-        grid = self.build_grid(input_shape=inputs.shape, shifts=shifts)
+        batch_size = inputs.size(0)
+        grid = repeat(self.grid, "1 c h w -> b c h w", b=batch_size)
+        if self.shifter is not None:
+            shifts = self.shifter[str(mouse_id)](pupil_center)
+            grid = grid + repeat(shifts, "b d -> b 1 1 d")
         outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
         outputs = self.resize(outputs)
         return outputs
