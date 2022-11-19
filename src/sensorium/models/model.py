@@ -48,19 +48,19 @@ class Model(nn.Module):
         self.initialize_core(args, input_shape=self.cropper.output_shape)
         self.initialize_readouts(args, ds=ds)
 
-        # if args.use_shifter:
-        #     self.add_module(
-        #         "shifter",
-        #         module=shifter.MLPShifter(
-        #             args,
-        #             mouse_ids=list(ds.keys()),
-        #             input_channels=2,
-        #             hidden_features=5,
-        #             num_layers=3,
-        #         ),
-        #     )
-        # else:
-        #     self.shifter = None
+        if args.use_shifter and False:
+            self.add_module(
+                "shifter",
+                module=shifter.MLPShifter(
+                    args,
+                    mouse_ids=list(ds.keys()),
+                    input_channels=2,
+                    hidden_features=5,
+                    num_layers=3,
+                ),
+            )
+        else:
+            self.shifter = None
 
         self.elu = nn.ELU()
 
