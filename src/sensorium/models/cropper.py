@@ -60,7 +60,7 @@ class Cropper(nn.Module):
         self.build_grid()
 
         if use_shifter:
-            max_shift = (1 - self.crop_scale) / 2
+            max_shift = 1 - self.crop_scale
             self.add_module(
                 name="image_shifter",
                 module=nn.ModuleDict(
@@ -110,4 +110,4 @@ class Cropper(nn.Module):
             grid = grid + shifts[:, None, None, :]
         outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
         outputs = self.resize(outputs)
-        return outputs
+        return outputs, grid

@@ -195,8 +195,8 @@ def main(args):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(model, ds=val_ds, summary=summary, epoch=epoch)
-    exit()
+    utils.plot_samples(model, ds=train_ds, summary=summary, epoch=epoch)
+
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")

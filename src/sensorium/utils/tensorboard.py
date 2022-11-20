@@ -216,30 +216,54 @@ class Summary(object):
     ):
         """Plot image-prediction-response for each mouse"""
         num_samples = len(results["images"])
-        label_fontsize, tick_fontsize = 12, 10
+        label_fontsize, tick_fontsize = 10, 8
         figure, axes = plt.subplots(
             nrows=num_samples,
             ncols=3,
-            gridspec_kw={"wspace": 0.05, "hspace": 0.4},
-            figsize=(10, 2 * num_samples),
+            gridspec_kw={
+                "width_ratios": [0.6, 0.6, 1],
+                "wspace": 0.1,
+                "hspace": 0.4,
+            },
+            figsize=(6, 2 * num_samples),
             dpi=self.dpi,
         )
         num_neurons = results["predictions"].shape[1]
         x_axis = np.arange(num_neurons)
 
+        # the (x, y) coordinates in crop_grids are in range [-1, 1]
+        # need to convert to [0, 144] and [0, 256] in height and width
+        _, _, h, w = results["images"].shape
+        crop_grids = results["crop_grids"]
+        crop_grids[..., 0] = w * (crop_grids[..., 0] + 1) / 2
+        crop_grids[..., 1] = -h * (crop_grids[..., 1] - 1) / 2
+
         for i in range(num_samples):
             image = results["images"][i]
+            crop_grid = crop_grids[i]
             target = results["targets"][i]
             prediction = results["predictions"][i]
             pupil_center = results["pupil_center"][i]
-            axes[i, 0].scatter(x=x_axis, y=target, s=2, alpha=0.8, color="orangered")
+            axes[i, 0].scatter(
+                x=x_axis,
+                y=target,
+                s=2,
+                alpha=0.8,
+                color="orangered",
+                label="target",
+            )
             axes[i, 1].scatter(
-                x=x_axis, y=prediction, s=2, alpha=0.8, color="dodgerblue"
+                x=x_axis,
+                y=prediction,
+                s=2,
+                alpha=0.8,
+                color="dodgerblue",
+                label="prediction",
             )
             y_max = np.ceil(max(np.max(target), np.max(prediction)))
             set_yticks(
                 axes[i, 0],
-                ticks_loc=[0, y_max],
+                ticks_loc=np.linspace(0, y_max, 3, dtype=int),
                 tick_fontsize=tick_fontsize,
             )
             axes[i, 0].set_ylim(0, y_max)
@@ -260,21 +284,38 @@ class Summary(object):
             else:
                 axes[i, 0].set_xticks([])
                 axes[i, 1].set_xticks([])
-            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255)
-            axes[i, 2].set_xticks([])
-            axes[i, 2].set_yticks([])
             remove_top_right_spines(axis=axes[i, 0])
             remove_top_right_spines(axis=axes[i, 1])
+
+            # plot image
+            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255)
+            # define crop grid rectangle box
+            axes[i, 2].add_patch(
+                matplotlib.patches.Rectangle(
+                    crop_grid[-1, 0],
+                    width=crop_grid.shape[1],
+                    height=crop_grid.shape[0],
+                    linewidth=1,
+                    edgecolor="red",
+                    facecolor="none",
+                )
+            )
+            axes[i, 2].set_xticks([])
+            axes[i, 2].set_yticks([])
             remove_spines(axis=axes[i, 2])
+            axes[i, 1].set_title(f'Image ID: {results["image_ids"][i]}')
             axes[i, 2].set_xlabel(
-                f"Image ID: {results['image_ids'][i]}\n"
                 f"Pupil Center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
                 labelpad=0,
                 fontsize=tick_fontsize,
             )
 
-        axes[0, 0].set_title("Targets", fontsize=label_fontsize)
-        axes[0, 1].set_title("Predictions", fontsize=label_fontsize)
+        axes[0, 0].legend(
+            frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
+        )
+        axes[0, 1].legend(
+            frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
+        )
         axes[num_samples // 2, 0].set_ylabel("Response", fontsize=label_fontsize)
         axes[num_samples - 1, 1].set_xlabel("Neurons", fontsize=label_fontsize)
 
