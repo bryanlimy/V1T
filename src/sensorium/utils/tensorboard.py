@@ -67,12 +67,14 @@ def set_right_label(axis: matplotlib.axes.Axes, label: str, fontsize: int = None
 def set_xticks(
     axis: matplotlib.axes.Axes,
     ticks_loc: t.Union[np.ndarray, list],
-    ticks: t.Union[np.ndarray, list],
+    ticks: t.Union[np.ndarray, list] = None,
     label: str = "",
     tick_fontsize: int = None,
     label_fontsize: int = None,
 ):
     axis.set_xticks(ticks_loc)
+    if ticks is None:
+        ticks = ticks_loc
     axis.set_xticklabels(ticks, fontsize=tick_fontsize)
     if label:
         axis.set_xlabel(label, fontsize=label_fontsize)
@@ -81,12 +83,14 @@ def set_xticks(
 def set_yticks(
     axis: matplotlib.axes.Axes,
     ticks_loc: t.Union[np.ndarray, list],
-    ticks: t.Union[np.ndarray, list],
+    ticks: t.Union[np.ndarray, list] = None,
     label: str = "",
     tick_fontsize: int = None,
     label_fontsize: int = None,
 ):
     axis.set_yticks(ticks_loc)
+    if ticks is None:
+        ticks = ticks_loc
     axis.set_yticklabels(ticks, fontsize=tick_fontsize)
     if label:
         axis.set_ylabel(label, fontsize=label_fontsize)
@@ -122,8 +126,8 @@ class Summary(object):
         if not os.path.isdir(self.plots_dir):
             os.makedirs(self.plots_dir)
 
-        # if platform.system() == "Darwin" and args.verbose > 2:
-        #     matplotlib.use("TkAgg")
+        if platform.system() == "Darwin" and args.verbose > 2:
+            matplotlib.use("TkAgg")
 
     def get_writer(self, mode: int = 0):
         """Get SummaryWriter
@@ -206,51 +210,73 @@ class Summary(object):
     def plot_image_response(
         self,
         tag: str,
-        results: t.Dict[str, torch.Tensor],
+        results: t.Dict[str, np.ndarray],
         step: int = 0,
         mode: int = 1,
-        num_samples: int = 3,
     ):
-        """Plot 3 image-prediction-response for each mouse"""
+        """Plot image-prediction-response for each mouse"""
+        num_samples = len(results["images"])
         label_fontsize, tick_fontsize = 12, 10
         figure, axes = plt.subplots(
             nrows=num_samples,
             ncols=3,
-            gridspec_kw={"wspace": 0.1, "hspace": 0.2},
+            gridspec_kw={"wspace": 0.05, "hspace": 0.4},
             figsize=(10, 2 * num_samples),
             dpi=self.dpi,
         )
-
-        x_axis = np.arange(results["predictions"].shape[1])
+        num_neurons = results["predictions"].shape[1]
+        x_axis = np.arange(num_neurons)
 
         for i in range(num_samples):
-            image = results["images"][i].numpy()
-            target = results["targets"][i].numpy()
-            prediction = results["predictions"][i].numpy()
-            y_max = np.ceil(max(np.max(target), np.max(prediction)))
+            image = results["images"][i]
+            target = results["targets"][i]
+            prediction = results["predictions"][i]
+            pupil_center = results["pupil_center"][i]
             axes[i, 0].scatter(x=x_axis, y=target, s=2, alpha=0.8, color="orangered")
-            axes[i, 0].set_ylim(bottom=0, top=y_max)
             axes[i, 1].scatter(
                 x=x_axis, y=prediction, s=2, alpha=0.8, color="dodgerblue"
             )
-            axes[i, 1].set_ylim(bottom=0, top=y_max)
+            y_max = np.ceil(max(np.max(target), np.max(prediction)))
+            set_yticks(
+                axes[i, 0],
+                ticks_loc=[0, y_max],
+                tick_fontsize=tick_fontsize,
+            )
+            axes[i, 0].set_ylim(0, y_max)
+            axes[i, 1].set_ylim(0, y_max)
             axes[i, 1].set_yticks([])
-            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255, aspect="auto")
+            if i == num_samples - 1:
+                x_ticks = np.linspace(0, num_neurons, num=3, dtype=int)
+                set_xticks(
+                    axis=axes[i, 0],
+                    ticks_loc=x_ticks,
+                    tick_fontsize=tick_fontsize,
+                )
+                set_xticks(
+                    axis=axes[i, 1],
+                    ticks_loc=x_ticks,
+                    tick_fontsize=tick_fontsize,
+                )
+            else:
+                axes[i, 0].set_xticks([])
+                axes[i, 1].set_xticks([])
+            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255)
             axes[i, 2].set_xticks([])
             axes[i, 2].set_yticks([])
             remove_top_right_spines(axis=axes[i, 0])
             remove_top_right_spines(axis=axes[i, 1])
             remove_spines(axis=axes[i, 2])
             axes[i, 2].set_xlabel(
-                f"Image ID: {results['image_ids'][i]}",
+                f"Image ID: {results['image_ids'][i]}\n"
+                f"Pupil Center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
                 labelpad=0,
                 fontsize=tick_fontsize,
             )
 
         axes[0, 0].set_title("Targets", fontsize=label_fontsize)
         axes[0, 1].set_title("Predictions", fontsize=label_fontsize)
-        axes[1, 0].set_ylabel("Response", fontsize=label_fontsize)
-        axes[2, 1].set_xlabel("Neurons", fontsize=label_fontsize)
+        axes[num_samples // 2, 0].set_ylabel("Response", fontsize=label_fontsize)
+        axes[num_samples - 1, 1].set_xlabel("Neurons", fontsize=label_fontsize)
 
         self.figure(
             tag=tag,

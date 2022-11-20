@@ -3,27 +3,26 @@ import typing as t
 from torch import nn
 from einops import repeat
 from torchvision import transforms
-from torch.utils.data import DataLoader
 from torch.nn import functional as F
+from torch.utils.data import DataLoader
 
 
-class MLP(nn.Module):
+class ImageShifter(nn.Module):
     def __init__(
         self,
         args,
         max_shift: float,
-        in_features: int = 2,
         hidden_features: int = 10,
         num_layers: int = 1,
-        name: str = "PupilShifter",
+        name: str = "ImageShifter",
     ):
-        super(MLP, self).__init__()
+        super(ImageShifter, self).__init__()
         assert 0 <= max_shift <= 1
         self.name = name
         self.device = args.device
-        self.max_shift = torch.tensor(max_shift, device=self.device)
-        self.reg_scale = torch.tensor(args.shifter_reg_scale, device=self.device)
-        out_features = in_features
+        self.register_buffer("max_shift", torch.tensor(max_shift))
+        self.register_buffer("reg_scale", torch.tensor(args.shifter_reg_scale))
+        out_features = 2
         layers = []
         for _ in range(num_layers - 1):
             layers.extend(
@@ -46,10 +45,8 @@ class MLP(nn.Module):
 
 
 class Cropper(nn.Module):
-    def __init__(self, args, ds: t.Dict[int, DataLoader]):
+    def __init__(self, args, ds: t.Dict[int, DataLoader], use_shifter: bool):
         super().__init__()
-        mouse_ids = list(ds.keys())
-        self.use_shifter = args.use_shifter
         self.input_shape = args.input_shape
         c, in_h, in_w = args.input_shape
         out_h, out_w = in_h, in_w
@@ -62,24 +59,24 @@ class Cropper(nn.Module):
 
         self.build_grid()
 
-        if args.use_shifter:
+        if use_shifter:
             max_shift = (1 - self.crop_scale) / 2
             self.add_module(
-                name="shifter",
+                name="image_shifter",
                 module=nn.ModuleDict(
                     {
-                        str(mouse_id): MLP(
+                        str(mouse_id): ImageShifter(
                             args,
                             max_shift=max_shift,
-                            in_features=2,
                             num_layers=3,
+                            name=f"Mouse{mouse_id}ImageShifter",
                         )
-                        for mouse_id in mouse_ids
+                        for mouse_id in list(ds.keys())
                     }
                 ),
             )
         else:
-            self.shifter = None
+            self.image_shifter = None
 
         if args.resize_image == 1:
             out_h, out_w = 36, 64
@@ -97,6 +94,9 @@ class Cropper(nn.Module):
         grid = grid.unsqueeze(0)
         self.register_buffer("grid", grid)
 
+    def regularizer(self, mouse_id: int):
+        return 0 if self.shifter is None else self.shifter[str(mouse_id)].regularizer()
+
     def forward(
         self,
         inputs: torch.Tensor,
@@ -105,9 +105,9 @@ class Cropper(nn.Module):
     ):
         batch_size = inputs.size(0)
         grid = repeat(self.grid, "1 c h w -> b c h w", b=batch_size)
-        if self.shifter is not None:
-            shifts = self.shifter[str(mouse_id)](pupil_center)
-            grid = grid + repeat(shifts, "b d -> b 1 1 d")
+        if self.image_shifter is not None:
+            shifts = self.image_shifter[str(mouse_id)](pupil_center)
+            grid = grid + shifts[:, None, None, :]
         outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
         outputs = self.resize(outputs)
         return outputs

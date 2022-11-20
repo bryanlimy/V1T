@@ -5,10 +5,11 @@ import typing as t
 from torch import nn
 from torch.utils.data import DataLoader
 
-from sensorium.models import shifter, cropper
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
+from sensorium.models.cropper import Cropper
+from sensorium.models.core_shifter import CoreShifters
 
 
 def get_model_info(
@@ -34,6 +35,14 @@ def get_model_info(
 
 
 class Model(nn.Module):
+    """
+    args.shift_mode:
+        0 - disable shifter
+        1 - shift input to core module
+        2 - shift input to readout module
+        3 - shift input to both core and readout module
+    """
+
     def __init__(self, args, ds: t.Dict[int, DataLoader], name: str = "Model"):
         super(Model, self).__init__()
         assert isinstance(
@@ -43,15 +52,25 @@ class Model(nn.Module):
         self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
+        assert args.shift_mode in (0, 1, 2, 3)
+        self.shift_mode = args.shift_mode
 
-        self.initialize_cropper(args, ds=ds)
-        self.initialize_core(args, input_shape=self.cropper.output_shape)
-        self.initialize_readouts(args, ds=ds)
-
-        if args.use_shifter and False:
+        self.add_module(
+            "cropper",
+            module=Cropper(
+                args,
+                ds=ds,
+                use_shifter=self.shift_mode in (1, 3),
+            ),
+        )
+        self.add_module(
+            name="core",
+            module=get_core(args)(args, input_shape=self.cropper.output_shape),
+        )
+        if self.shift_mode in (2, 3):
             self.add_module(
-                "shifter",
-                module=shifter.MLPShifter(
+                "core_shifter",
+                module=CoreShifters(
                     args,
                     mouse_ids=list(ds.keys()),
                     input_channels=2,
@@ -60,17 +79,7 @@ class Model(nn.Module):
                 ),
             )
         else:
-            self.shifter = None
-
-        self.elu = nn.ELU()
-
-    def initialize_core(self, args, input_shape: t.Tuple[int, int, int]):
-        self.add_module(
-            name="core",
-            module=get_core(args)(args, input_shape=input_shape),
-        )
-
-    def initialize_readouts(self, args, ds: t.Dict[int, DataLoader]):
+            self.core_shifter = None
         self.add_module(
             name="readouts",
             module=Readouts(
@@ -82,14 +91,14 @@ class Model(nn.Module):
             ),
         )
 
-    def initialize_cropper(self, args, ds: t.Dict[int, DataLoader]):
-        self.add_module("cropper", module=cropper.Cropper(args, ds=ds))
+        self.elu = nn.ELU()
 
     def regularizer(self, mouse_id: int):
         reg = self.core.regularizer()
         reg += self.readouts.regularizer(mouse_id=mouse_id)
-        if self.shifter is not None:
-            reg += self.shifter.regularizer(mouse_id=mouse_id)
+        reg += self.cropper.regularizer(mouse_id=mouse_id)
+        if self.core_shifter is not None:
+            reg += self.core_shifter.regularizer(mouse_id=mouse_id)
         return reg
 
     def forward(
@@ -101,13 +110,10 @@ class Model(nn.Module):
     ):
         images = self.cropper(inputs, mouse_id=mouse_id, pupil_center=pupil_center)
         outputs = self.core(images)
-        # shift = (
-        #     None
-        #     if self.shifter is None
-        #     else self.shifter(mouse_id=mouse_id, pupil_center=pupil_center)
-        # )
-        shift = None
-        outputs = self.readouts(outputs, mouse_id=mouse_id, shift=shift)
+        shifts = None
+        if self.core_shifter is not None:
+            shifts = self.core_shifter(pupil_center, mouse_id=mouse_id)
+        outputs = self.readouts(outputs, mouse_id=mouse_id, shifts=shifts)
         if activate:
             outputs = self.elu(outputs) + 1
         return outputs, images

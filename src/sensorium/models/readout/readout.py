@@ -87,6 +87,6 @@ class Readouts(nn.ModuleDict):
         self,
         inputs: torch.Tensor,
         mouse_id: torch.Union[int, torch.Tensor],
-        shift: torch.Tensor = None,
+        shifts: torch.Tensor = None,
     ):
-        return self[str(mouse_id)](inputs, shift=shift)
+        return self[str(mouse_id)](inputs, shifts=shifts)

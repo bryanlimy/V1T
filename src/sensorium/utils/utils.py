@@ -38,12 +38,10 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
             - mouse_id
                 - predictions: torch.Tensor, predictions given images
                 - targets: torch.Tensor, the ground-truth responses
-                - images: torch.Tensor, the natural images
                 - trial_ids: torch.Tensor, trial ID of the responses
                 - image_ids: torch.Tensor, image ID of the responses
     """
     results = {
-        "images": [],
         "predictions": [],
         "targets": [],
         "trial_ids": [],
@@ -60,15 +58,12 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
             )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
-            results["images"].append(images.cpu())
             results["image_ids"].append(data["image_id"])
             results["trial_ids"].append(data["trial_id"])
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
     }
-    # convert images to their original range for plotting
-    results["images"] = ds.dataset.i_transform_image(results["images"])
     return results
 
 
@@ -117,14 +112,6 @@ def evaluate(
             results["feve"][mouse_id] = mouse_metric.feve(per_neuron=True)
 
     if summary is not None:
-        # create image-response pair plots
-        for mouse_id in outputs.keys():
-            summary.plot_image_response(
-                tag=f"image_response/mouse{mouse_id}",
-                results=outputs[mouse_id],
-                step=epoch,
-                mode=mode,
-            )
         # create box plot for each metric
         for metric, values in results.items():
             if values:
@@ -177,6 +164,51 @@ def evaluate(
         yaml.save(os.path.join(save_result, "evaluation.yaml"), data=results)
 
     return overall_result
+
+
+def plot_samples(
+    model: nn.Module,
+    ds: t.Dict[int, DataLoader],
+    summary: tensorboard.Summary,
+    epoch: int,
+    mode: int = 1,
+    num_samples: int = 3,
+):
+    device = model.device
+    for mouse_id, mouse_ds in ds.items():
+        results = {
+            "images": [],
+            "targets": [],
+            "predictions": [],
+            "pupil_center": [],
+            "behavior": [],
+            "image_ids": [],
+        }
+        with torch.no_grad():
+            for data in mouse_ds:
+                images = data["image"]
+                predictions, _ = model(
+                    images.to(device),
+                    mouse_id=mouse_id,
+                    pupil_center=data["pupil_center"].to(device),
+                )
+                images = mouse_ds.dataset.i_transform_image(images)
+                predictions = predictions.cpu()
+                for i in range(len(predictions)):
+                    results["images"].append(images[i])
+                    results["targets"].append(data["response"][i])
+                    results["predictions"].append(predictions[i])
+                    results["pupil_center"].append(data["pupil_center"][i])
+                    results["behavior"].append(data["behavior"][i])
+                    results["image_ids"].append(data["image_id"][i])
+                    if len(results["images"]) == num_samples:
+                        break
+                if len(results["images"]) == num_samples:
+                    break
+        results = {k: torch.stack(v, dim=0).numpy() for k, v in results.items()}
+        summary.plot_image_response(
+            f"image_response/mouse{mouse_id}", results=results, step=epoch, mode=mode
+        )
 
 
 def update_dict(target: dict, source: dict, replace: bool = False):

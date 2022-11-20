@@ -139,7 +139,7 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    logger = Logger(args)
+    Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
     utils.get_batch_size(args)
@@ -168,10 +168,20 @@ def main(args):
         },
         {"params": model.readouts.parameters(), "name": "readouts"},
     ]
-    if model.cropper is not None:
-        params.append({"params": model.cropper.parameters(), "name": "cropper"})
-    if model.shifter is not None:
-        params.append({"params": model.shifter.parameters(), "name": "shifter"})
+    if model.cropper.image_shifter is not None:
+        params.append(
+            {
+                "params": model.cropper.parameters(),
+                "name": "cropper",
+            }
+        )
+    if model.core_shifter is not None:
+        params.append(
+            {
+                "params": model.core_shifter.parameters(),
+                "name": "core_shifter",
+            }
+        )
     optimizer = torch.optim.Adam(
         params=params,
         lr=args.lr,
@@ -185,6 +195,8 @@ def main(args):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
+    utils.plot_samples(model, ds=val_ds, summary=summary, epoch=epoch)
+    exit()
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -217,6 +229,8 @@ def main(args):
                 step=epoch,
                 mode=0,
             )
+        if epoch % 10 == 0:
+            utils.plot_samples(model, ds=val_ds, summary=summary, epoch=epoch)
         if args.verbose:
             print(
                 f'Train\t\t\tloss: {train_result["loss"]:.04f}\t\t'
@@ -244,6 +258,7 @@ def main(args):
         print_result=True,
         save_result=args.output_dir,
     )
+    utils.plot_samples(model, ds=test_ds, summary=summary, epoch=epoch, mode=2)
 
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
@@ -396,7 +411,17 @@ if __name__ == "__main__":
         required=True,
         help="The readout module to use.",
     )
-    parser.add_argument("--use_shifter", action="store_true")
+    parser.add_argument(
+        "--shift_mode",
+        type=int,
+        default=2,
+        choices=[0, 1, 2, 3],
+        help="shifter mode: "
+        "0 - disable shifter, "
+        "1 - shift input to core module, "
+        "2 - shift input to readout module"
+        "3 - shift input to both core and readout module",
+    )
 
     temp_args = parser.parse_known_args()[0]
 
@@ -446,7 +471,7 @@ if __name__ == "__main__":
         parser.add_argument("--readout_reg_scale", type=float, default=0.0)
 
     # hyper-parameters for shifter module
-    if temp_args.use_shifter or temp_args.include_behaviour:
+    if temp_args.shift_mode in (1, 2, 3):
         parser.add_argument("--shifter_reg_scale", type=float, default=0.0)
 
     del temp_args
