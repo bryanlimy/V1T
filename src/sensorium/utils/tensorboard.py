@@ -309,7 +309,7 @@ class Summary(object):
             axes[i, 2].set_xlabel(
                 f"Pupil Center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
                 labelpad=0,
-                fontsize=tick_font_size,
+                fontsize=tick_fontsize,
             )
 
         axes[0, 0].legend(
