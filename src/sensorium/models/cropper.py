@@ -95,7 +95,11 @@ class Cropper(nn.Module):
         self.register_buffer("grid", grid)
 
     def regularizer(self, mouse_id: int):
-        return 0 if self.shifter is None else self.shifter[str(mouse_id)].regularizer()
+        return (
+            0
+            if self.image_shifter is None
+            else self.image_shifter[str(mouse_id)].regularizer()
+        )
 
     def forward(
         self,

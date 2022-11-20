@@ -216,7 +216,7 @@ class Summary(object):
     ):
         """Plot image-prediction-response for each mouse"""
         num_samples = len(results["images"])
-        label_fontsize, tick_fontsize = 10, 8
+        label_fontsize, tick_fontsize = 10, 9
         figure, axes = plt.subplots(
             nrows=num_samples,
             ncols=3,
@@ -303,11 +303,13 @@ class Summary(object):
             axes[i, 2].set_xticks([])
             axes[i, 2].set_yticks([])
             remove_spines(axis=axes[i, 2])
-            axes[i, 1].set_title(f'Image ID: {results["image_ids"][i]}')
+            axes[i, 1].set_title(
+                f'Image ID: {results["image_ids"][i]}', fontsize=label_fontsize
+            )
             axes[i, 2].set_xlabel(
                 f"Pupil Center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
                 labelpad=0,
-                fontsize=tick_fontsize,
+                fontsize=tick_font_size,
             )
 
         axes[0, 0].legend(
