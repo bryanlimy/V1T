@@ -305,7 +305,7 @@ class Summary(object):
 
             sub_figures[i].suptitle(
                 f"Image ID: {results['image_ids'][i]}\n"
-                f"dilation: {behavior[0]:.02f}, "
+                f"pupil dilation: {behavior[0]:.02f}, "
                 f"derivative: {behavior[1]:.02f}, "
                 f"speed: {behavior[2]:.02f}, "
                 f"pupil center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
