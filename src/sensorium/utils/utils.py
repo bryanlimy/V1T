@@ -55,6 +55,7 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
                 data["image"].to(device),
                 mouse_id=mouse_id,
                 pupil_center=data["pupil_center"].to(device),
+                behavior=data["behavior"].to(device),
             )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
@@ -194,6 +195,7 @@ def plot_samples(
                     images.to(device),
                     mouse_id=mouse_id,
                     pupil_center=data["pupil_center"].to(device),
+                    behavior=data["behavior"].to(device),
                 )
                 images = mouse_ds.dataset.i_transform_image(images)
                 crop_images = mouse_ds.dataset.i_transform_image(crop_images.cpu())

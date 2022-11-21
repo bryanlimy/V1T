@@ -157,8 +157,8 @@ class MiceDataset(Dataset):
         self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
-        self.include_behaviour = args.include_behaviour
-        if self.include_behaviour and mouse_id == 0:
+        self.include_behavior = args.include_behavior
+        if self.include_behavior and mouse_id == 0:
             raise ValueError("Mouse 0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
@@ -176,8 +176,8 @@ class MiceDataset(Dataset):
 
         image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
         # include the 3 behaviour data as channel of the image
-        if self.include_behaviour:
-            image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
+        # if self.include_behaviour:
+        #     image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
         self.image_shape = image_shape
 
     def __len__(self):
@@ -209,7 +209,7 @@ class MiceDataset(Dataset):
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
-        if self.include_behaviour:
+        if self.include_behavior:
             image = (
                 torch.unsqueeze(image[0], dim=0)
                 if len(image.shape) == 3
@@ -274,10 +274,10 @@ class MiceDataset(Dataset):
         data["response"] = self.transform_response(data["response"])
         data["behavior"] = self.transform_behavior(data["behavior"])
         data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
-        if self.include_behaviour:
-            data["image"] = self.add_behavior_to_image(
-                image=data["image"], behavior=data["behavior"]
-            )
+        # if self.include_behaviour:
+        #     data["image"] = self.add_behavior_to_image(
+        #         image=data["image"], behavior=data["behavior"]
+        #     )
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
@@ -308,7 +308,7 @@ def get_training_ds(
             sets where keys are the mouse IDs.
     """
     if mouse_ids is None:
-        mouse_ids = list(range(1, 7)) if args.include_behaviour else list(range(0, 7))
+        mouse_ids = list(range(1, 7)) if args.include_behavior else list(range(0, 7))
 
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}

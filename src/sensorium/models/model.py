@@ -60,6 +60,7 @@ class Model(nn.Module):
             module=ImageCropper(
                 args,
                 ds=ds,
+                include_behavior=args.include_behavior,
                 use_shifter=self.shift_mode in (1, 3),
             ),
         )
@@ -109,10 +110,14 @@ class Model(nn.Module):
         inputs: torch.Tensor,
         mouse_id: torch.Union[int, torch.Tensor],
         pupil_center: torch.Tensor,
+        behavior: torch.Tensor,
         activate: bool = True,
     ):
         images, image_grids = self.image_cropper(
-            inputs, mouse_id=mouse_id, pupil_center=pupil_center
+            inputs,
+            mouse_id=mouse_id,
+            pupil_center=pupil_center,
+            behavior=behavior,
         )
         outputs = self.core(images)
         shifts = None
@@ -135,6 +140,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
             torch.randn(args.batch_size, *model.input_shape),  # images
             mouse_id,  # mouse ID
             torch.randn(args.batch_size, 2),  # pupil centers
+            torch.randn(args.batch_size, 3),  # behavior
         ],
         filename=os.path.join(args.output_dir, "model.txt"),
         summary=summary,

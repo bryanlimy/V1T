@@ -45,11 +45,23 @@ class ImageShifter(nn.Module):
 
 
 class ImageCropper(nn.Module):
-    def __init__(self, args, ds: t.Dict[int, DataLoader], use_shifter: bool):
+    def __init__(
+        self,
+        args,
+        ds: t.Dict[int, DataLoader],
+        include_behavior: bool,
+        use_shifter: bool,
+    ):
         super().__init__()
+
         self.input_shape = args.input_shape
         c, in_h, in_w = args.input_shape
         out_h, out_w = in_h, in_w
+
+        self.include_behavior = include_behavior
+        # include the 3 behaviour data as channel of the image
+        if self.include_behavior:
+            c += 3
 
         self.crop_scale = args.center_crop
         self.crop_h, self.crop_w = in_h, in_w
@@ -106,6 +118,7 @@ class ImageCropper(nn.Module):
         inputs: torch.Tensor,
         mouse_id: int,
         pupil_center: torch.Tensor,
+        behavior: torch.Tensor,
     ):
         batch_size = inputs.size(0)
         grid = repeat(self.grid, "1 c h w -> b c h w", b=batch_size)
@@ -114,4 +127,13 @@ class ImageCropper(nn.Module):
             grid = grid + shifts[:, None, None, :]
         outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
         outputs = self.resize(outputs)
+        if self.include_behavior:
+            _, _, h, w = outputs.shape
+            behavior = repeat(
+                behavior,
+                "b d -> b d h w",
+                h=outputs.size(2),
+                w=outputs.size(3),
+            )
+            outputs = torch.concatenate((outputs, behavior), dim=1)
         return outputs, grid

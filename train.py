@@ -40,8 +40,12 @@ def train_step(
     device = model.device
     images = data["image"].to(device)
     responses = data["response"].to(device)
-    pupil_center = data["pupil_center"].to(device)
-    outputs, _, _ = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+    outputs, _, _ = model(
+        images,
+        mouse_id=mouse_id,
+        pupil_center=data["pupil_center"].to(device),
+        behavior=data["behavior"].to(device),
+    )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
@@ -98,8 +102,12 @@ def validation_step(
     result, device = {}, model.device
     images = data["image"].to(device)
     responses = data["response"].to(device)
-    pupil_center = data["pupil_center"].to(device)
-    outputs, _, _ = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+    outputs, _, _ = model(
+        images,
+        mouse_id=mouse_id,
+        pupil_center=data["pupil_center"].to(device),
+        behavior=data["behavior"].to(device),
+    )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
@@ -172,7 +180,7 @@ def main(args):
         params.append(
             {
                 "params": model.image_cropper.parameters(),
-                "name": "cropper",
+                "name": "image_cropper",
             }
         )
     if model.core_shifter is not None:
@@ -286,9 +294,9 @@ if __name__ == "__main__":
         help="Mouse to use for training.",
     )
     parser.add_argument(
-        "--include_behaviour",
+        "--include_behavior",
         action="store_true",
-        help="include behaviour data into input as additional channels.",
+        help="include behavior data into input as additional channels.",
     )
     parser.add_argument(
         "--center_crop",
