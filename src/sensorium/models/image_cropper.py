@@ -68,9 +68,7 @@ class ImageCropper(nn.Module):
         if self.crop_scale < 1:
             out_h = self.crop_h = int(in_h * self.crop_scale)
             out_w = self.crop_w = int(in_w * self.crop_scale)
-
         self.build_grid()
-
         if use_shifter:
             max_shift = 1 - self.crop_scale
             self.add_module(
@@ -90,9 +88,10 @@ class ImageCropper(nn.Module):
         else:
             self.image_shifter = None
 
+        self.resize = None
         if args.resize_image == 1:
             out_h, out_w = 36, 64
-        self.resize = transforms.Resize(size=(out_h, out_w), antialias=False)
+            self.resize = transforms.Resize(size=(out_h, out_w), antialias=False)
 
         self.output_shape = (c, out_h, out_w)
 
@@ -120,13 +119,13 @@ class ImageCropper(nn.Module):
         pupil_center: torch.Tensor,
         behavior: torch.Tensor,
     ):
-        batch_size = inputs.size(0)
-        grid = repeat(self.grid, "1 c h w -> b c h w", b=batch_size)
+        grid = repeat(self.grid, "1 c h w -> b c h w", b=inputs.size(0))
         if self.image_shifter is not None:
             shifts = self.image_shifter[str(mouse_id)](pupil_center)
             grid = grid + shifts[:, None, None, :]
         outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
-        outputs = self.resize(outputs)
+        if self.resize is not None:
+            outputs = self.resize(outputs)
         if self.include_behavior:
             _, _, h, w = outputs.shape
             behavior = repeat(
