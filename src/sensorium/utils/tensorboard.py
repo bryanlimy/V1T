@@ -96,6 +96,12 @@ def set_yticks(
         axis.set_ylabel(label, fontsize=label_fontsize)
 
 
+def set_ticks_params(
+    axis: matplotlib.axes.Axes, length: int = PARAMS_LENGTH, pad: int = PARAMS_PAD
+):
+    axis.tick_params(axis="both", which="both", length=length, pad=pad, colors="black")
+
+
 def save_figure(figure: plt.Figure, filename: str, dpi: int = 120, close: bool = True):
     dirname = os.path.dirname(filename)
     if dirname and not os.path.exists(dirname):
@@ -216,18 +222,10 @@ class Summary(object):
     ):
         """Plot image-prediction-response for each mouse"""
         num_samples = len(results["images"])
+        wspace, hspace = 0.1, 1.0
         label_fontsize, tick_fontsize = 10, 9
-        figure, axes = plt.subplots(
-            nrows=num_samples,
-            ncols=3,
-            gridspec_kw={
-                "width_ratios": [0.6, 0.6, 1],
-                "wspace": 0.1,
-                "hspace": 0.4,
-            },
-            figsize=(6, 2 * num_samples),
-            dpi=self.dpi,
-        )
+        figure = plt.figure(figsize=(10, 1.8 * num_samples), dpi=self.dpi)
+        sub_figures = figure.subfigures(nrows=num_samples, ncols=1, hspace=hspace)
         num_neurons = results["predictions"].shape[1]
         x_axis = np.arange(num_neurons)
 
@@ -238,12 +236,23 @@ class Summary(object):
         image_grids = np.round(image_grids, 0)
 
         for i in range(num_samples):
+            axes = sub_figures[i].subplots(
+                nrows=1,
+                ncols=4,
+                gridspec_kw={
+                    "width_ratios": [0.5, 0.5, 1, 1],
+                    "wspace": wspace,
+                    "hspace": hspace,
+                },
+            )
             image = results["images"][i]
+            crop_image = results["crop_images"][i]
             image_grid = image_grids[i]
             target = results["targets"][i]
             prediction = results["predictions"][i]
             pupil_center = results["pupil_center"][i]
-            axes[i, 0].scatter(
+            behavior = results["behaviors"][i]
+            axes[0].scatter(
                 x=x_axis,
                 y=target,
                 s=2,
@@ -251,7 +260,7 @@ class Summary(object):
                 color="orangered",
                 label="target",
             )
-            axes[i, 1].scatter(
+            axes[1].scatter(
                 x=x_axis,
                 y=prediction,
                 s=2,
@@ -261,35 +270,20 @@ class Summary(object):
             )
             y_max = np.ceil(max(np.max(target), np.max(prediction)))
             set_yticks(
-                axes[i, 0],
+                axes[0],
                 ticks_loc=np.linspace(0, y_max, 3, dtype=int),
                 tick_fontsize=tick_fontsize,
             )
-            axes[i, 0].set_ylim(0, y_max)
-            axes[i, 1].set_ylim(0, y_max)
-            axes[i, 1].set_yticks([])
-            if i == num_samples - 1:
-                x_ticks = np.linspace(0, num_neurons, num=3, dtype=int)
-                set_xticks(
-                    axis=axes[i, 0],
-                    ticks_loc=x_ticks,
-                    tick_fontsize=tick_fontsize,
-                )
-                set_xticks(
-                    axis=axes[i, 1],
-                    ticks_loc=x_ticks,
-                    tick_fontsize=tick_fontsize,
-                )
-            else:
-                axes[i, 0].set_xticks([])
-                axes[i, 1].set_xticks([])
-            remove_top_right_spines(axis=axes[i, 0])
-            remove_top_right_spines(axis=axes[i, 1])
+            axes[0].set_ylim(0, y_max)
+            axes[1].set_ylim(0, y_max)
+            axes[1].set_yticks([])
+            remove_top_right_spines(axis=axes[0])
+            remove_top_right_spines(axis=axes[1])
 
             # plot image
-            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255)
+            axes[2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255)
             # define crop grid rectangle box
-            axes[i, 2].add_patch(
+            axes[2].add_patch(
                 matplotlib.patches.Rectangle(
                     image_grid[-1, 0],
                     width=image_grid.shape[1],
@@ -297,29 +291,56 @@ class Summary(object):
                     alpha=0.8,
                     edgecolor="red",
                     facecolor="none",
-                    linewidth=1.5,
+                    linewidth=1,
                 )
             )
-            axes[i, 2].set_xticks([])
-            axes[i, 2].set_yticks([])
-            remove_spines(axis=axes[i, 2])
-            axes[i, 1].set_title(
-                f'Image ID: {results["image_ids"][i]}', fontsize=label_fontsize
-            )
-            axes[i, 2].set_xlabel(
-                f"Pupil Center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
-                labelpad=0,
-                fontsize=tick_fontsize,
-            )
+            axes[2].set_xticks([])
+            axes[2].set_yticks([])
+            remove_spines(axis=axes[2])
+            axes[3].imshow(crop_image[0], cmap=GRAY, vmin=0, vmax=255)
+            axes[3].set_xticks([])
+            axes[3].set_yticks([])
+            remove_spines(axis=axes[3])
 
-        axes[0, 0].legend(
-            frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
-        )
-        axes[0, 1].legend(
-            frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
-        )
-        axes[num_samples // 2, 0].set_ylabel("Response", fontsize=label_fontsize)
-        axes[num_samples - 1, 1].set_xlabel("Neurons", fontsize=label_fontsize)
+            sub_figures[i].suptitle(
+                f"Image ID: {results['image_ids'][i]}\n"
+                f"pupil center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}], "
+                f"dilation: {behavior[0]:.02f}, derivative: {behavior[1]:.02f}, "
+                f"speed: {behavior[2]:.02f}",
+                y=1.05,
+                fontsize=label_fontsize,
+            )
+            if i == 0:
+                axes[0].legend(
+                    frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
+                )
+                axes[1].legend(
+                    frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
+                )
+            if i == num_samples // 2:
+                axes[0].set_ylabel("Standardized responses", fontsize=label_fontsize)
+            if i == num_samples - 1:
+                x_ticks = np.linspace(0, num_neurons, num=3, dtype=int)
+                set_xticks(
+                    axis=axes[0],
+                    ticks_loc=x_ticks,
+                    tick_fontsize=tick_fontsize,
+                )
+                set_xticks(
+                    axis=axes[1],
+                    ticks_loc=x_ticks,
+                    label="Neurons",
+                    tick_fontsize=tick_fontsize,
+                    label_fontsize=label_fontsize,
+                )
+                axes[2].set_xlabel("Model input", fontsize=label_fontsize)
+                axes[3].set_xlabel("Core input", fontsize=label_fontsize)
+                sub_figures[i].align_ylabels(axes)
+            else:
+                axes[0].set_xticks([])
+                axes[1].set_xticks([])
+            for ax in axes:
+                set_ticks_params(axis=ax, pad=1, length=2)
 
         self.figure(
             tag=tag,

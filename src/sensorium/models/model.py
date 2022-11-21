@@ -111,7 +111,7 @@ class Model(nn.Module):
         pupil_center: torch.Tensor,
         activate: bool = True,
     ):
-        images, image_grid = self.image_cropper(
+        images, image_grids = self.image_cropper(
             inputs, mouse_id=mouse_id, pupil_center=pupil_center
         )
         outputs = self.core(images)
@@ -121,7 +121,7 @@ class Model(nn.Module):
         outputs = self.readouts(outputs, mouse_id=mouse_id, shifts=shifts)
         if activate:
             outputs = self.elu(outputs) + 1
-        return outputs, image_grid
+        return outputs, images, image_grids
 
 
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
