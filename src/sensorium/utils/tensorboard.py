@@ -234,12 +234,12 @@ class Summary(object):
         # the (x, y) coordinates in crop_grids are in range [-1, 1]
         # need to convert to [0, 144] and [0, 256] in height and width
         _, _, h, w = results["images"].shape
-        crop_grids = [w, -h] * (results["crop_grids"] + [1, -1]) / 2
-        crop_grids = np.round(crop_grids, 0)
+        image_grids = [w, -h] * (results["image_grids"] + [1, -1]) / 2
+        image_grids = np.round(image_grids, 0)
 
         for i in range(num_samples):
             image = results["images"][i]
-            crop_grid = crop_grids[i]
+            image_grid = image_grids[i]
             target = results["targets"][i]
             prediction = results["predictions"][i]
             pupil_center = results["pupil_center"][i]
@@ -291,9 +291,9 @@ class Summary(object):
             # define crop grid rectangle box
             axes[i, 2].add_patch(
                 matplotlib.patches.Rectangle(
-                    crop_grid[-1, 0],
-                    width=crop_grid.shape[1],
-                    height=crop_grid.shape[0],
+                    image_grid[-1, 0],
+                    width=image_grid.shape[1],
+                    height=image_grid.shape[0],
                     alpha=0.8,
                     edgecolor="red",
                     facecolor="none",

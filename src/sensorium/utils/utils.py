@@ -179,7 +179,7 @@ def plot_samples(
     for mouse_id, mouse_ds in ds.items():
         results = {
             "images": [],
-            "crop_grids": [],
+            "image_grids": [],
             "targets": [],
             "predictions": [],
             "pupil_center": [],
@@ -189,17 +189,17 @@ def plot_samples(
         with torch.no_grad():
             for data in mouse_ds:
                 images = data["image"]
-                predictions, crop_grids = model(
+                predictions, image_grids = model(
                     images.to(device),
                     mouse_id=mouse_id,
                     pupil_center=data["pupil_center"].to(device),
                 )
                 images = mouse_ds.dataset.i_transform_image(images)
-                crop_grids = crop_grids.cpu()
+                image_grids = image_grids.cpu()
                 predictions = predictions.cpu()
                 for i in range(len(predictions)):
                     results["images"].append(images[i])
-                    results["crop_grids"].append(crop_grids[i])
+                    results["image_grids"].append(image_grids[i])
                     results["targets"].append(data["response"][i])
                     results["predictions"].append(predictions[i])
                     results["pupil_center"].append(data["pupil_center"][i])

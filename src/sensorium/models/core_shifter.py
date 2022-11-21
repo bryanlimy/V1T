@@ -16,7 +16,7 @@ class CoreShifter(nn.Module):
         super(CoreShifter, self).__init__()
         self.name = name
         self.device = args.device
-        self.reg_scale = torch.tensor(args.shifter_reg_scale, device=self.device)
+        self.register_buffer("reg_scale", torch.tensor(args.shifter_reg_scale))
         out_features = in_features
         layers = []
         for _ in range(num_layers - 1):
@@ -33,9 +33,7 @@ class CoreShifter(nn.Module):
     def regularizer(self):
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
-    def forward(self, pupil_center: torch.Tensor, trial_idx: torch.Tensor = None):
-        if trial_idx is not None:
-            pupil_center = torch.cat((pupil_center, trial_idx), dim=1)
+    def forward(self, pupil_center: torch.Tensor):
         return self.mlp(pupil_center)
 
 
@@ -48,7 +46,7 @@ class CoreShifters(ModuleDict):
         hidden_features: int = 5,
         num_layers: int = 3,
     ):
-        super().__init__()
+        super(CoreShifters, self).__init__()
         for mouse_id in mouse_ids:
             self.add_module(
                 name=str(mouse_id),
@@ -64,10 +62,5 @@ class CoreShifters(ModuleDict):
     def regularizer(self, mouse_id: int):
         return self[str(mouse_id)].regularizer()
 
-    def forward(
-        self,
-        pupil_center: torch.Tensor,
-        mouse_id: int,
-        trial_idx: torch.Tensor = None,
-    ):
-        return self[str(mouse_id)](pupil_center, trial_idx)
+    def forward(self, pupil_center: torch.Tensor, mouse_id: int):
+        return self[str(mouse_id)](pupil_center)

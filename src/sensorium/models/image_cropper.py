@@ -44,7 +44,7 @@ class ImageShifter(nn.Module):
         return shifts
 
 
-class Cropper(nn.Module):
+class ImageCropper(nn.Module):
     def __init__(self, args, ds: t.Dict[int, DataLoader], use_shifter: bool):
         super().__init__()
         self.input_shape = args.input_shape

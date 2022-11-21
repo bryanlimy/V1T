@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
-from sensorium.models.cropper import Cropper
+from sensorium.models.image_cropper import ImageCropper
 from sensorium.models.core_shifter import CoreShifters
 
 
@@ -56,8 +56,8 @@ class Model(nn.Module):
         self.shift_mode = args.shift_mode
 
         self.add_module(
-            "cropper",
-            module=Cropper(
+            "image_cropper",
+            module=ImageCropper(
                 args,
                 ds=ds,
                 use_shifter=self.shift_mode in (1, 3),
@@ -65,7 +65,10 @@ class Model(nn.Module):
         )
         self.add_module(
             name="core",
-            module=get_core(args)(args, input_shape=self.cropper.output_shape),
+            module=get_core(args)(
+                args,
+                input_shape=self.image_cropper.output_shape,
+            ),
         )
         if self.shift_mode in (2, 3):
             self.add_module(
@@ -96,7 +99,7 @@ class Model(nn.Module):
     def regularizer(self, mouse_id: int):
         reg = self.core.regularizer()
         reg += self.readouts.regularizer(mouse_id=mouse_id)
-        reg += self.cropper.regularizer(mouse_id=mouse_id)
+        reg += self.image_cropper.regularizer(mouse_id=mouse_id)
         if self.core_shifter is not None:
             reg += self.core_shifter.regularizer(mouse_id=mouse_id)
         return reg
@@ -108,7 +111,7 @@ class Model(nn.Module):
         pupil_center: torch.Tensor,
         activate: bool = True,
     ):
-        images, crop_grid = self.cropper(
+        images, image_grid = self.image_cropper(
             inputs, mouse_id=mouse_id, pupil_center=pupil_center
         )
         outputs = self.core(images)
@@ -118,7 +121,7 @@ class Model(nn.Module):
         outputs = self.readouts(outputs, mouse_id=mouse_id, shifts=shifts)
         if activate:
             outputs = self.elu(outputs) + 1
-        return outputs, crop_grid
+        return outputs, image_grid
 
 
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):

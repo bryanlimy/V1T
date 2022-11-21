@@ -163,7 +163,7 @@ class ViTCore(Core):
         name: str = "ViTCore",
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
-        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
+        self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
 
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,

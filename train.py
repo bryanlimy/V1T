@@ -168,10 +168,10 @@ def main(args):
         },
         {"params": model.readouts.parameters(), "name": "readouts"},
     ]
-    if model.cropper.image_shifter is not None:
+    if model.image_cropper.image_shifter is not None:
         params.append(
             {
-                "params": model.cropper.parameters(),
+                "params": model.image_cropper.parameters(),
                 "name": "cropper",
             }
         )

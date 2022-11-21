@@ -358,8 +358,8 @@ class Stacked2dCore(Core, nn.Module):
         regularizer_config = dict(padding=laplace_padding)
         self._input_weights_regularizer = LaplaceL2norm(**regularizer_config)
         self.num_layers = args.num_layers
-        self.gamma_input = torch.tensor(args.core_reg_input, device=args.device)
-        self.gamma_hidden = torch.tensor(args.core_reg_hidden, device=args.device)
+        self.register_buffer("gamma_input", torch.tensor(args.core_reg_input))
+        self.register_buffer("gamma_hidden", torch.tensor(args.core_reg_hidden))
         self.input_channels = self.input_shape[0]
         self.hidden_channels = hidden_channels
         self.skip = skip
@@ -573,10 +573,6 @@ class Stacked2dCore(Core, nn.Module):
         term1 = self.gamma_hidden * self.group_sparsity()
         term2 = self.gamma_input * self.laplace()
         return term1 + term2
-
-    @property
-    def outchannels(self):
-        return len(self.features) * self.hidden_channels
 
     def forward(self, inputs: torch.Tensor):
         outputs = []
