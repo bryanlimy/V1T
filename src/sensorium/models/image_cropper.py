@@ -99,9 +99,9 @@ class ImageCropper(nn.Module):
         _, in_h, in_w = self.input_shape
         h_pixels = torch.linspace(-self.crop_scale, self.crop_scale, self.crop_h)
         w_pixels = torch.linspace(-self.crop_scale, self.crop_scale, self.crop_w)
-        mesh_x, mesh_y = torch.meshgrid(h_pixels, w_pixels, indexing="ij")
+        mesh_y, mesh_x = torch.meshgrid(h_pixels, w_pixels, indexing="ij")
+        # grid_sample uses (x, y) coordinates
         grid = torch.stack((mesh_x, mesh_y), dim=2)
-        grid = torch.flip(grid, dims=(2,))  # grid_sample uses (x, y) coordinates
         grid = grid.unsqueeze(0)
         self.register_buffer("grid", grid)
 

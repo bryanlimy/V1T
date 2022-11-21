@@ -231,8 +231,9 @@ class Summary(object):
 
         # the (x, y) coordinates in crop_grids are in range [-1, 1]
         # need to convert to [0, 144] and [0, 256] in height and width
+        # matplotlib assume top left corner of the image is (0, 0)
         _, _, h, w = results["images"].shape
-        image_grids = [w, -h] * (results["image_grids"] + [1, -1]) / 2
+        image_grids = [w, h] * (results["image_grids"] + 1) / 2
         image_grids = np.round(image_grids, 0)
 
         for i in range(num_samples):
@@ -282,16 +283,16 @@ class Summary(object):
 
             # plot image
             axes[2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255)
-            # define crop grid rectangle box
+            # overlay the cropping grid as a red rectangle box
             axes[2].add_patch(
                 matplotlib.patches.Rectangle(
-                    image_grid[-1, 0],
+                    image_grid[0, 0],
                     width=image_grid.shape[1],
                     height=image_grid.shape[0],
-                    alpha=0.8,
+                    alpha=1,
                     edgecolor="red",
                     facecolor="none",
-                    linewidth=1,
+                    linewidth=2,
                 )
             )
             axes[2].set_xticks([])
@@ -304,9 +305,10 @@ class Summary(object):
 
             sub_figures[i].suptitle(
                 f"Image ID: {results['image_ids'][i]}\n"
-                f"pupil center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}], "
-                f"dilation: {behavior[0]:.02f}, derivative: {behavior[1]:.02f}, "
-                f"speed: {behavior[2]:.02f}",
+                f"dilation: {behavior[0]:.02f}, "
+                f"derivative: {behavior[1]:.02f}, "
+                f"speed: {behavior[2]:.02f}, "
+                f"pupil center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
                 y=1.05,
                 fontsize=label_fontsize,
             )
