@@ -234,9 +234,8 @@ class Summary(object):
         # the (x, y) coordinates in crop_grids are in range [-1, 1]
         # need to convert to [0, 144] and [0, 256] in height and width
         _, _, h, w = results["images"].shape
-        crop_grids = results["crop_grids"]
-        crop_grids[..., 0] = w * (crop_grids[..., 0] + 1) / 2
-        crop_grids[..., 1] = -h * (crop_grids[..., 1] - 1) / 2
+        crop_grids = [w, -h] * (results["crop_grids"] + [1, -1]) / 2
+        crop_grids = np.round(crop_grids, 0)
 
         for i in range(num_samples):
             image = results["images"][i]
@@ -295,9 +294,10 @@ class Summary(object):
                     crop_grid[-1, 0],
                     width=crop_grid.shape[1],
                     height=crop_grid.shape[0],
-                    linewidth=1,
+                    alpha=0.8,
                     edgecolor="red",
                     facecolor="none",
+                    linewidth=1.5,
                 )
             )
             axes[i, 2].set_xticks([])
