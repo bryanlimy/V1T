@@ -135,5 +135,5 @@ class ImageCropper(nn.Module):
                 h=outputs.size(2),
                 w=outputs.size(3),
             )
-            outputs = torch.concatenate((outputs, behavior), dim=1)
+            outputs = torch.concat((outputs, behavior), dim=1)
         return outputs, grid
