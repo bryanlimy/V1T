@@ -76,7 +76,7 @@ def correlation(
     y1: t.Union[torch.Tensor, np.ndarray],
     y2: t.Union[torch.Tensor, np.ndarray],
     dim: t.Union[None, int, t.Tuple[int]] = -1,
-    eps: float = 1e-8,
+    eps: t.Union[torch.Tensor, float] = 1e-8,
     **kwargs,
 ):
     return (
@@ -100,24 +100,19 @@ class Loss(_Loss):
         super(Loss, self).__init__(
             size_average=size_average, reduce=reduce, reduction=reduction
         )
-        self._device = args.device
-        self._ds_scale = args.ds_scale
-        self._get_ds_sizes(ds)
-
-    def _get_ds_sizes(self, ds: t.Dict[int, DataLoader]):
-        self._ds_sizes = {
-            mouse_id: torch.tensor(
-                len(mouse_ds.dataset), dtype=torch.int32, device=self._device
-            )
+        self.device = args.device
+        self.ds_scale = args.ds_scale
+        self.ds_sizes = {
+            mouse_id: torch.tensor(len(mouse_ds.dataset), device=self.device)
             for mouse_id, mouse_ds in ds.items()
         }
 
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
-        loss_scale = (
-            torch.sqrt(self._ds_sizes[mouse_id] / batch_size) if self._ds_scale else 1.0
-        )
-        return loss_scale * loss
+        if self.ds_scale:
+            loss_scale = torch.sqrt(self.ds_sizes[mouse_id] / batch_size)
+            loss = loss_scale * loss
+        return loss
 
 
 @register("msse")
@@ -140,7 +135,7 @@ class MSSE(Loss):
 class PoissonLoss(Loss):
     def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-12):
         super(PoissonLoss, self).__init__(args, ds=ds)
-        self.eps = torch.tensor(eps, device=args.device)
+        self.eps = torch.tensor(eps, dtype=torch.float32, device=self.device)
 
     def forward(
         self,
@@ -158,15 +153,18 @@ class PoissonLoss(Loss):
 class Correlation(Loss):
     """single trial correlation"""
 
+    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-8):
+        super(Correlation, self).__init__(args, ds=ds)
+        self.eps = torch.tensor(eps, dtype=torch.float32, device=self.device)
+
     def forward(
         self,
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
         mouse_id: int,
-        eps: float = 1e-8,
     ):
         num_neurons = y_true.size(1)
-        corr = correlation(y1=y_true, y2=y_pred, dim=0, eps=eps)
+        corr = correlation(y1=y_true, y2=y_pred, dim=0, eps=self.eps)
         loss = num_neurons - torch.sum(corr)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss

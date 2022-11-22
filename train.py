@@ -167,31 +167,8 @@ def main(args):
     if args.pretrain_core:
         utils.load_pretrain_core(args, model=model)
 
-    # separate learning rates for different modules
-    params = [
-        {
-            "params": model.core.parameters(),
-            "lr": args.core_lr_scale * args.lr,
-            "name": "core",
-        },
-        {"params": model.readouts.parameters(), "name": "readouts"},
-    ]
-    if model.image_cropper.image_shifter is not None:
-        params.append(
-            {
-                "params": model.image_cropper.parameters(),
-                "name": "image_cropper",
-            }
-        )
-    if model.core_shifter is not None:
-        params.append(
-            {
-                "params": model.core_shifter.parameters(),
-                "name": "core_shifter",
-            }
-        )
     optimizer = torch.optim.Adam(
-        params=params,
+        params=model.get_parameters(core_lr=args.core_lr_scale * args.lr),
         lr=args.lr,
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
@@ -343,6 +320,7 @@ if __name__ == "__main__":
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--mixed_precision", action="store_true")
 
     # optimizer settings
     parser.add_argument("--adam_beta1", type=float, default=0.9)

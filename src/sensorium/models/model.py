@@ -97,6 +97,32 @@ class Model(nn.Module):
 
         self.elu = nn.ELU()
 
+    def get_parameters(self, core_lr: float):
+        # separate learning rate for core module from the rest
+        params = [
+            {
+                "params": self.core.parameters(),
+                "lr": core_lr,
+                "name": "core",
+            },
+            {"params": self.readouts.parameters(), "name": "readouts"},
+        ]
+        if self.image_cropper.image_shifter is not None:
+            params.append(
+                {
+                    "params": self.image_cropper.parameters(),
+                    "name": "image_cropper",
+                }
+            )
+        if self.core_shifter is not None:
+            params.append(
+                {
+                    "params": self.core_shifter.parameters(),
+                    "name": "core_shifter",
+                }
+            )
+        return params
+
     def regularizer(self, mouse_id: int):
         reg = self.core.regularizer()
         reg += self.readouts.regularizer(mouse_id=mouse_id)

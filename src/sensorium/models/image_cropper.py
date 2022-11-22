@@ -119,11 +119,13 @@ class ImageCropper(nn.Module):
         pupil_center: torch.Tensor,
         behavior: torch.Tensor,
     ):
+        import numpy as np
+
         grid = repeat(self.grid, "1 c h w -> b c h w", b=inputs.size(0))
         if self.image_shifter is not None:
             shifts = self.image_shifter[str(mouse_id)](pupil_center)
             grid = grid + shifts[:, None, None, :]
-        outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
+        outputs = F.grid_sample(inputs, grid=grid, mode="nearest", align_corners=True)
         if self.resize is not None:
             outputs = self.resize(outputs)
         if self.include_behavior:
