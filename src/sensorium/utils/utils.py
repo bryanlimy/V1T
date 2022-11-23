@@ -378,10 +378,11 @@ def get_batch_size(
             try:
                 for _ in range(num_iterations):
                     targets = torch.rand(*(batch_size, *output_shape), device=device)
-                    outputs = model(
+                    outputs, _, _ = model(
                         torch.rand(*(batch_size, *args.input_shape), device=device),
                         mouse_id=mouse_id,
                         pupil_center=torch.rand(batch_size, 2, device=device),
+                        behavior=torch.rand(batch_size, 3, device=device),
                     )
                     loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
                     loss += model.regularizer(mouse_id=mouse_id)
