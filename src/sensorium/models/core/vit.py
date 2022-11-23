@@ -20,20 +20,12 @@ class Image2Patches(nn.Module):
         super(Image2Patches, self).__init__()
         c, h, w = image_shape
         self.input_shape = image_shape
-        # set the target number of patches to match the spatial dimension of Stacked2D
-        num_patches = self.target_patches = (h - 8) * (w - 8)
-        patch_dim = patch_size * patch_size * c
-        padding, unfold_patches = self.find_pad_size(image_shape, patch_size=patch_size)
-        self.register_buffer(
-            "patch_idx",
-            tensor=torch.linspace(
-                start=0,
-                end=unfold_patches,
-                steps=num_patches,
-                dtype=torch.long,
-            ),
+        num_patches = self.unfold_dim(
+            h, w, patch_size=patch_size, padding=0, stride=patch_size
         )
-        self.unfold = nn.Unfold(kernel_size=patch_size, padding=padding, stride=1)
+        patch_dim = patch_size * patch_size * c
+
+        self.unfold = nn.Unfold(kernel_size=patch_size, stride=patch_size)
         self.rearrange = Rearrange("b c l -> b l c")
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
@@ -44,29 +36,13 @@ class Image2Patches(nn.Module):
         self.output_shape = (num_patches, emb_dim)
 
     @staticmethod
-    def unfold_dim(h: int, w: int, patch_size: int, padding: int, stride: int = 1):
+    def unfold_dim(h: int, w: int, patch_size: int, padding: int, stride: int):
         l = lambda s: math.floor(((s + 2 * padding - patch_size) / stride) + 1)
         return l(h) * l(w)
-
-    def find_pad_size(self, input_shape: t.Tuple[int, int, int], patch_size: int):
-        """
-        Find the padding such that patches after nn.Unfold matches
-        self.target_patches
-        """
-        c, h, w = input_shape
-        padding = 0
-        while (
-            unfold_patches := self.unfold_dim(
-                h, w, patch_size=patch_size, padding=padding
-            )
-        ) < self.target_patches:
-            padding += 1
-        return padding, unfold_patches
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         patches = self.unfold(inputs)
-        patches = patches[..., self.patch_idx]
         patches = self.rearrange(patches)
         outputs = self.linear(patches)
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
@@ -189,25 +165,27 @@ class ViTCore(Core):
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
-
+        _, h, w = input_shape
+        patch_size = args.patch_size
+        emb_dim = args.emb_dim
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
-            patch_size=args.patch_size,
-            emb_dim=args.emb_dim,
+            patch_size=patch_size,
+            emb_dim=emb_dim,
             dropout=args.dropout,
         )
         self.transformer = Transformer(
-            emb_dim=args.emb_dim,
+            emb_dim=emb_dim,
             num_blocks=args.num_blocks,
             num_heads=args.num_heads,
             mlp_dim=args.mlp_dim,
             dropout=args.dropout,
         )
-
-        _, h, w = input_shape
-        new_h, new_w = h - 8, w - 8
-        self.reshape = Rearrange("b (lh lw) c -> b c lh lw", lh=new_h, lw=new_w)
-        self.output_shape = (args.emb_dim, new_h, new_w)
+        self.rearrange = Rearrange("b l c -> b c l")
+        self.fold = nn.Fold(
+            output_size=(h, w), kernel_size=patch_size, stride=patch_size
+        )
+        self.output_shape = (emb_dim // patch_size**2, h, w)
 
     def regularizer(self):
         """L1 regularization"""
@@ -217,5 +195,6 @@ class ViTCore(Core):
         outputs = self.patch_embedding(inputs)
         outputs = self.transformer(outputs)
         outputs = outputs[:, 1:, :]  # remove CLS token
-        outputs = self.reshape(outputs)
+        outputs = self.rearrange(outputs)
+        outputs = self.fold(outputs)
         return outputs
