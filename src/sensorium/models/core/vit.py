@@ -21,10 +21,21 @@ class Image2Patches(nn.Module):
         super(Image2Patches, self).__init__()
         c, h, w = image_shape
         self.input_shape = image_shape
-        num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
+
+        # calculate the padding needed to unfold image into target number of patches
+        target_patches, padding = (h - 8) * (w - 8), 0
+        while (
+            num_patches := self.unfold_dim(h, w, patch_size, padding, stride)
+        ) < target_patches:
+            padding += 1
         patch_dim = patch_size * patch_size * c
 
-        self.unfold = nn.Unfold(kernel_size=patch_size, stride=stride)
+        self.unfold = nn.Unfold(kernel_size=patch_size, padding=padding, stride=stride)
+        self.register_buffer(
+            "patch_idx",
+            torch.linspace(0, num_patches, steps=target_patches, dtype=torch.long),
+        )
+        num_patches = target_patches
         self.rearrange = Rearrange("b c l -> b l c")
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
@@ -35,13 +46,14 @@ class Image2Patches(nn.Module):
         self.output_shape = (num_patches, emb_dim)
 
     @staticmethod
-    def unfold_dim(h: int, w: int, patch_size: int, stride: int):
-        l = lambda s: math.floor(((s - patch_size) / stride) + 1)
+    def unfold_dim(h: int, w: int, patch_size: int, padding: int, stride: int):
+        l = lambda s: math.floor(((s + 2 * padding - patch_size) / stride) + 1)
         return l(h) * l(w)
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         patches = self.unfold(inputs)
+        patches = patches[..., self.patch_idx]
         patches = self.rearrange(patches)
         outputs = self.linear(patches)
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
@@ -182,9 +194,10 @@ class ViTCore(Core):
             mlp_dim=args.mlp_dim,
             dropout=args.dropout,
         )
-        self.rearrange = Rearrange("b l c -> b c l")
-        self.fold = nn.Fold(output_size=(h, w), kernel_size=patch_size, stride=stride)
-        self.output_shape = (emb_dim // patch_size**2, h, w)
+        # match the output shape of stacked2d core
+        h, w = h - 8, w - 8
+        self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
+        self.output_shape = (emb_dim, h, w)
 
     def regularizer(self):
         """L1 regularization"""
@@ -195,5 +208,4 @@ class ViTCore(Core):
         outputs = self.transformer(outputs)
         outputs = outputs[:, 1:, :]  # remove CLS token
         outputs = self.rearrange(outputs)
-        outputs = self.fold(outputs)
         return outputs
