@@ -14,34 +14,72 @@ class Image2Patches(nn.Module):
         self,
         image_shape: t.Tuple[int, int, int],
         patch_size: int,
-        stride: int,
         emb_dim: int,
         dropout: float = 0.0,
     ):
         super(Image2Patches, self).__init__()
         c, h, w = image_shape
-        self.patch_size = patch_size
-        self.stride = stride
+        self.input_shape = image_shape
+        # set the target number of patches to match the spatial dimension of Stacked2D
+        num_patches = self.target_patches = (h - 8) * (w - 8)
+        padding, unfold_patches = self.find_pad_size(image_shape, patch_size=patch_size)
+        self.register_buffer(
+            "patch_idx",
+            tensor=torch.linspace(
+                start=0,
+                end=unfold_patches,
+                steps=num_patches,
+                dtype=torch.long,
+            ),
+        )
 
-        self.unfold = nn.Unfold(kernel_size=patch_size, stride=stride)
-        self.rearrange = Rearrange("b c n -> b n c")
+        self.unfold = nn.Unfold(kernel_size=patch_size, padding=padding, stride=1)
+        self.rearrange = Rearrange("b c l -> b l c")
         patch_dim = patch_size * patch_size * c
-        num_patches = self.new_dim(image_shape[1]) * self.new_dim(image_shape[2])
 
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
 
-        self.pos_embedding = nn.Parameter(torch.randn(num_patches + 1, emb_dim))
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
+        num_patches += 1
+
+        self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
         self.dropout = nn.Dropout(p=dropout)
 
         self.num_patches = num_patches
+        self.output_shape = (num_patches, emb_dim)
 
-    def new_dim(self, size: int):
-        return int(((size - (self.patch_size - 1) - 1) / self.stride) + 1)
+    @staticmethod
+    def unfold_dim(h: int, w: int, patch_size: int, padding: int, stride: int = 1):
+        l = lambda s: math.floor(((s + 2 * padding - patch_size) / stride) + 1)
+        return l(h) * l(w)
+
+    def find_pad_size(self, input_shape: t.Tuple[int, int, int], patch_size: int):
+        """
+        Find the padding such that patches after nn.Unfold matches
+        self.target_patches
+        """
+        c, h, w = input_shape
+        padding = 0
+        while (
+            unfold_patches := self.unfold_dim(
+                h, w, patch_size=patch_size, padding=padding
+            )
+        ) < self.target_patches:
+            padding += 1
+        return padding, unfold_patches
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         patches = self.unfold(inputs)
+        # sample number of patches to match target_patches
+        patch_idx = torch.linspace(
+            0,
+            patches.size(2),
+            steps=self.target_patches,
+            dtype=torch.long,
+            device=inputs.device,
+        )
+        patches = patches[..., patch_idx]
         patches = self.rearrange(patches)
         outputs = self.linear(patches)
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
@@ -168,12 +206,9 @@ class ViTCore(Core):
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
             patch_size=args.patch_size,
-            stride=1 if max(input_shape) < 100 else args.patch_size,
             emb_dim=args.emb_dim,
             dropout=args.dropout,
         )
-        num_patches = self.patch_embedding.num_patches
-
         self.transformer = Transformer(
             emb_dim=args.emb_dim,
             num_blocks=args.num_blocks,
@@ -182,18 +217,10 @@ class ViTCore(Core):
             dropout=args.dropout,
         )
 
-        # calculate latent height and width based on num_patches
-        new_h, new_w = self.find_shape(num_patches)
+        _, h, w = input_shape
+        new_h, new_w = h - 8, w - 8
         self.reshape = Rearrange("b (lh lw) c -> b c lh lw", lh=new_h, lw=new_w)
         self.output_shape = (args.emb_dim, new_h, new_w)
-
-    @staticmethod
-    def find_shape(num_patches: int):
-        dim1 = math.ceil(math.sqrt(num_patches))
-        while num_patches % dim1 != 0 and dim1 > 0:
-            dim1 -= 1
-        dim2 = num_patches // dim1
-        return (dim1, dim2)
 
     def regularizer(self):
         """L1 regularization"""
