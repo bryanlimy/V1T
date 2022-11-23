@@ -22,6 +22,7 @@ class Image2Patches(nn.Module):
         self.input_shape = image_shape
         # set the target number of patches to match the spatial dimension of Stacked2D
         num_patches = self.target_patches = (h - 8) * (w - 8)
+        patch_dim = patch_size * patch_size * c
         padding, unfold_patches = self.find_pad_size(image_shape, patch_size=patch_size)
         self.register_buffer(
             "patch_idx",
@@ -32,19 +33,13 @@ class Image2Patches(nn.Module):
                 dtype=torch.long,
             ),
         )
-
         self.unfold = nn.Unfold(kernel_size=patch_size, padding=padding, stride=1)
         self.rearrange = Rearrange("b c l -> b l c")
-        patch_dim = patch_size * patch_size * c
-
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
-
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
-
         self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
         self.dropout = nn.Dropout(p=dropout)
-
         self.num_patches = num_patches
         self.output_shape = (num_patches, emb_dim)
 
