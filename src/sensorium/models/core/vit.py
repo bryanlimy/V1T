@@ -71,15 +71,7 @@ class Image2Patches(nn.Module):
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         patches = self.unfold(inputs)
-        # sample number of patches to match target_patches
-        patch_idx = torch.linspace(
-            0,
-            patches.size(2),
-            steps=self.target_patches,
-            dtype=torch.long,
-            device=inputs.device,
-        )
-        patches = patches[..., patch_idx]
+        patches = patches[..., self.patch_idx]
         patches = self.rearrange(patches)
         outputs = self.linear(patches)
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
