@@ -14,18 +14,17 @@ class Image2Patches(nn.Module):
         self,
         image_shape: t.Tuple[int, int, int],
         patch_size: int,
+        stride: int,
         emb_dim: int,
         dropout: float = 0.0,
     ):
         super(Image2Patches, self).__init__()
         c, h, w = image_shape
         self.input_shape = image_shape
-        num_patches = self.unfold_dim(
-            h, w, patch_size=patch_size, padding=0, stride=patch_size
-        )
+        num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
         patch_dim = patch_size * patch_size * c
 
-        self.unfold = nn.Unfold(kernel_size=patch_size, stride=patch_size)
+        self.unfold = nn.Unfold(kernel_size=patch_size, stride=stride)
         self.rearrange = Rearrange("b c l -> b l c")
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
@@ -36,8 +35,8 @@ class Image2Patches(nn.Module):
         self.output_shape = (num_patches, emb_dim)
 
     @staticmethod
-    def unfold_dim(h: int, w: int, patch_size: int, padding: int, stride: int):
-        l = lambda s: math.floor(((s + 2 * padding - patch_size) / stride) + 1)
+    def unfold_dim(h: int, w: int, patch_size: int, stride: int):
+        l = lambda s: math.floor(((s - patch_size) / stride) + 1)
         return l(h) * l(w)
 
     def forward(self, inputs: torch.Tensor):
@@ -167,10 +166,12 @@ class ViTCore(Core):
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
         _, h, w = input_shape
         patch_size = args.patch_size
+        stride = 1
         emb_dim = args.emb_dim
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
             patch_size=patch_size,
+            stride=stride,
             emb_dim=emb_dim,
             dropout=args.dropout,
         )
@@ -182,9 +183,7 @@ class ViTCore(Core):
             dropout=args.dropout,
         )
         self.rearrange = Rearrange("b l c -> b c l")
-        self.fold = nn.Fold(
-            output_size=(h, w), kernel_size=patch_size, stride=patch_size
-        )
+        self.fold = nn.Fold(output_size=(h, w), kernel_size=patch_size, stride=stride)
         self.output_shape = (emb_dim // patch_size**2, h, w)
 
     def regularizer(self):
