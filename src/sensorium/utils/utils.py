@@ -349,7 +349,9 @@ def get_batch_size(
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
         assert args.batch_size > 1
     else:
-        device, mouse_id = args.device, 2
+        if torch.cuda.device_count():
+            device = "cuda:0"
+        mouse_id = 2
         train_ds, _, _ = data.get_training_ds(
             args,
             data_dir=args.dataset,

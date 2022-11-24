@@ -161,6 +161,7 @@ class DataParallel(nn.DataParallel):
         super(DataParallel, self).__init__(module=module, **kwargs)
         self.module = module
         self.device = module.device
+        self.input_shape = module.input_shape
         self.output_shapes = self.module.output_shapes
 
     def get_parameters(self, core_lr: float):
@@ -204,8 +205,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
     )
 
-    num_gpus = torch.cuda.device_count()
-    if num_gpus > 1:
+    if torch.cuda.device_count() > 1:
         model = DataParallel(model)
     model.to(args.device)
 
