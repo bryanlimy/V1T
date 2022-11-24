@@ -349,7 +349,8 @@ def get_batch_size(
     if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
         assert args.batch_size > 1
     else:
-        if torch.cuda.device_count():
+        num_gpus = torch.cuda.device_count()
+        if num_gpus > 1:
             device = "cuda:0"
         mouse_id = 2
         train_ds, _, _ = data.get_training_ds(
@@ -401,4 +402,6 @@ def get_batch_size(
         torch.cuda.empty_cache()
         if args.verbose > 1:
             print(f"set batch size: {batch_size}")
+        if num_gpus > 1:
+            batch_size *= num_gpus
         args.batch_size = batch_size
