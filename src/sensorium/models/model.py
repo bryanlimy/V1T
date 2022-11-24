@@ -162,7 +162,7 @@ class DataParallel(nn.DataParallel):
         self.module = module
 
     def get_parameters(self):
-        return self.module.get_parameter()
+        return self.module.get_parameters()
 
 
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
