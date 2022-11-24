@@ -358,7 +358,7 @@ def get_batch_size(
             data_dir=args.dataset,
             mouse_ids=[mouse_id],
             batch_size=1,
-            device=device,
+            device=args.device,
         )
 
         output_shape = (train_ds[mouse_id].dataset.num_neurons,)
