@@ -161,9 +161,13 @@ class DataParallel(nn.DataParallel):
         super(DataParallel, self).__init__(module=module, **kwargs)
         self.module = module
         self.device = module.device
+        self.output_shapes = self.module.output_shapes
 
     def get_parameters(self, core_lr: float):
-        return self.module.get_parameters(core_lr=core_lr)
+        return self.module.get_parameters(core_lr)
+
+    def regularizer(self, mouse_id: int):
+        return self.module.regularizer(mouse_id)
 
 
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
