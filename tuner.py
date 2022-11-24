@@ -15,7 +15,7 @@ from ray.tune.search.bohb import TuneBOHB
 from ray.tune.schedulers import HyperBandForBOHB
 
 import train as trainer
-from sensorium.utils import utils
+from sensorium.utils import utils, logger
 
 
 def get_timestamp():
@@ -92,19 +92,21 @@ def train_function(
 def get_search_space(args):
     # default search space
     search_space = {
-        "include_behaviour": args.include_behaviour,
+        "include_behavior": args.include_behavior,
+        "center_crop": tune.uniform(0, 1),
+        "resize_image": 1,
+        "shift_mode": tune.choice([0, 1, 2, 3]),
         "disable_grid_predictor": tune.choice([True, False]),
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
-        "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
-        "lr": tune.loguniform(1e-5, 1e-2),
-        "ds_scale": tune.choice([True, False]),
-        "crop_mode": 1,
         "adam_beta1": tune.loguniform(1e-10, 1.0),
         "adam_beta2": tune.loguniform(1e-10, 1.0),
         "adam_eps": tune.loguniform(1e-10, 1),
+        "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
+        "lr": tune.loguniform(1e-5, 1e-2),
+        "ds_scale": tune.choice([True, False]),
         "core_lr_scale": tune.uniform(0, 1),
-        "use_shifter": tune.choice([True, False]),
+        "shift_reg_scale": tune.uniform(0, 1),
     }
 
     if args.core == "vit":
@@ -112,7 +114,7 @@ def get_search_space(args):
             {
                 "core": "vit",
                 "patch_size": tune.randint(1, 10),
-                "num_layers": tune.randint(1, 8),
+                "num_blocks": tune.randint(1, 8),
                 "emb_dim": tune.randint(8, 128),
                 "num_heads": tune.randint(1, 16),
                 "mlp_dim": tune.randint(8, 128),
@@ -123,30 +125,30 @@ def get_search_space(args):
         )
         points_to_evaluate = [
             {
-                "dropout": 0.25,
-                "patch_size": 4,
-                "emb_dim": 64,
-                "num_heads": 3,
-                "mlp_dim": 64,
-                "num_layers": 3,
-                "dim_head": 64,
-                "disable_grid_predictor": False,
-                "grid_predictor_dim": 2,
-                "bias_mode": 0,
-                "criterion": "poisson",
-                "lr": 1e-3,
-                "core_reg_scale": 0,
-                "readout_reg_scale": 0.0076,
-                "shifter_reg_scale": 0,
-                "ds_scale": True,
+                "center_crop": 1.0,
                 "adam_beta1": 0.9,
                 "adam_beta2": 0.999,
                 "adam_eps": 1e-8,
+                "criterion": "poisson",
+                "lr": 1e-3,
+                "ds_scale": True,
                 "core_lr_scale": 1,
-                "use_shifter": False,
+                "shift_mode": 2,
+                "patch_size": 4,
+                "num_blocks": 3,
+                "emb_dim": 64,
+                "num_heads": 3,
+                "mlp_dim": 64,
+                "dropout": 0.2,
+                "core_reg_scale": 0,
+                "disable_grid_predictor": False,
+                "grid_predictor_dim": 2,
+                "bias_mode": 0,
+                "readout_reg_scale": 0.0076,
+                "shifter_reg_scale": 0,
             }
         ]
-        evaluated_rewards = [0.29188114404678345]
+        evaluated_rewards = [0.40398114919662476]
     elif args.core == "stacked2d":
         search_space.update(
             {
@@ -165,7 +167,7 @@ def get_search_space(args):
                 "grid_predictor_dim": 2,
                 "bias_mode": 0,
                 "criterion": "poisson",
-                "lr": 1e-3,
+                "lr": 9e-3,
                 "core_reg_input": 6.3831,
                 "core_reg_hidden": 0.0,
                 "readout_reg_scale": 0.0076,
@@ -245,10 +247,10 @@ def main(args):
         },
         parameter_columns={
             "criterion": "criterion",
-            "num_layers": "layers",
+            "num_blocks": "layers",
             "dropout": "dropout",
             "bias_mode": "bias_mode",
-            "use_shifter": "shifter",
+            "shift_mode": "shift_mode",
             "disable_grid_predictor": "grid_predictor",
             "grid_predictor_dim": "grid_dim",
         },
@@ -265,9 +267,7 @@ def main(args):
         else f"{get_timestamp()}-{args.core}"
     )
 
-    sys.stdout = utils.Logger(
-        filename=os.path.join(args.output_dir, experiment_name, "output.log")
-    )
+    logger.Logger(args)
 
     results = tune.run(
         partial(
@@ -331,7 +331,7 @@ if __name__ == "__main__":
         help="Mouse to use for training.",
     )
     parser.add_argument(
-        "--include_behaviour",
+        "--include_behavior",
         action="store_true",
         help="include behaviour data into input as additional channels.",
     )
@@ -357,7 +357,7 @@ if __name__ == "__main__":
     # training settings
     parser.add_argument("--batch_size", type=int, default=0)
     parser.add_argument(
-        "--epochs", default=200, type=int, help="maximum epochs to train the model."
+        "--epochs", default=400, type=int, help="maximum epochs to train the model."
     )
     parser.add_argument(
         "--device",
