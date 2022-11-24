@@ -157,7 +157,6 @@ class Model(nn.Module):
 
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
     model = Model(args, ds=ds)
-    model.to(args.device)
 
     mouse_id = list(args.output_shapes.keys())[0]
     model_info = get_model_info(
@@ -189,5 +188,9 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
         summary=summary,
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
     )
+
+    if torch.cuda.device_count() > 1:
+        model = torch.nn.parallel.DistributedDataParallel(module=model)
+    model.to(args.device)
 
     return model
