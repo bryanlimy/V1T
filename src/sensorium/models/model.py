@@ -160,6 +160,7 @@ class DataParallel(nn.DataParallel):
     def __init__(self, module: Model, **kwargs):
         super(DataParallel, self).__init__(module=module, **kwargs)
         self.module = module
+        self.device = module.device
 
     def get_parameters(self, core_lr: float):
         return self.module.get_parameters(core_lr=core_lr)
