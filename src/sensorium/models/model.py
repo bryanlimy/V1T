@@ -192,8 +192,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
 
     num_gpus = torch.cuda.device_count()
     if num_gpus > 1:
-        torch.distributed.init_process_group(backend="nccl", world_size=num_gpus)
-        model = torch.nn.parallel.DistributedDataParallel(module=model)
+        model = nn.DataParallel(model)
     model.to(args.device)
 
     return model
