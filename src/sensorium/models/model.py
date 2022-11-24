@@ -157,12 +157,12 @@ class Model(nn.Module):
 
 
 class DataParallel(nn.DataParallel):
-    def __init__(self, module, **kwargs):
+    def __init__(self, module: Model, **kwargs):
         super(DataParallel, self).__init__(module=module, **kwargs)
         self.module = module
 
-    def get_parameters(self):
-        return self.module.get_parameters()
+    def get_parameters(self, core_lr: float):
+        return self.module.get_parameters(core_lr=core_lr)
 
 
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
