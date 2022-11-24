@@ -156,6 +156,15 @@ class Model(nn.Module):
         return outputs, images, image_grids
 
 
+class DataParallel(nn.DataParallel):
+    def __init__(self, module, kwargs):
+        super(DataParallel, self).__init__(module=module, **kwargs)
+        self.module = module
+
+    def get_parameters(self):
+        return self.module.get_parameter()
+
+
 def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
     model = Model(args, ds=ds)
 
@@ -192,7 +201,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
 
     num_gpus = torch.cuda.device_count()
     if num_gpus > 1:
-        model = nn.DataParallel(model)
+        model = DataParallel(model)
     model.to(args.device)
 
     return model
