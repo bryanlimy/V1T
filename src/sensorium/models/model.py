@@ -3,6 +3,7 @@ import torch
 import torchinfo
 import typing as t
 from torch import nn
+import torch.distributed
 from torch.utils.data import DataLoader
 
 from sensorium.utils import tensorboard
@@ -190,6 +191,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     )
 
     if torch.cuda.device_count() > 1:
+        torch.distributed.init_process_group(backend="nccl")
         model = torch.nn.parallel.DistributedDataParallel(module=model)
     model.to(args.device)
 
