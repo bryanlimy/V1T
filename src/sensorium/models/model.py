@@ -157,7 +157,7 @@ class Model(nn.Module):
 
 
 class DataParallel(nn.DataParallel):
-    def __init__(self, module, kwargs):
+    def __init__(self, module, **kwargs):
         super(DataParallel, self).__init__(module=module, **kwargs)
         self.module = module
 
