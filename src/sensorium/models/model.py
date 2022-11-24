@@ -190,8 +190,9 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
     )
 
-    if torch.cuda.device_count() > 1:
-        torch.distributed.init_process_group(backend="nccl")
+    num_gpus = torch.cuda.device_count()
+    if num_gpus > 1:
+        torch.distributed.init_process_group(backend="nccl", world_size=num_gpus)
         model = torch.nn.parallel.DistributedDataParallel(module=model)
     model.to(args.device)
 
