@@ -402,6 +402,5 @@ def get_batch_size(
         torch.cuda.empty_cache()
         if args.verbose > 1:
             print(f"set batch size: {batch_size}")
-        if num_gpus > 1:
-            batch_size *= num_gpus
+        batch_size *= num_gpus
         args.batch_size = batch_size
