@@ -106,6 +106,7 @@ def get_search_space(args):
         "lr": tune.loguniform(1e-5, 1e-2),
         "ds_scale": tune.choice([True, False]),
         "core_lr_scale": tune.uniform(0, 1),
+        "readout_reg_scale": tune.uniform(0, 1),
         "shifter_reg_scale": tune.uniform(0, 1),
     }
 
