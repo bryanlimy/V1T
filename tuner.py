@@ -102,7 +102,7 @@ def get_search_space(args):
         "adam_beta1": tune.loguniform(1e-10, 1.0),
         "adam_beta2": tune.loguniform(1e-10, 1.0),
         "adam_eps": tune.loguniform(1e-10, 1),
-        "criterion": tune.choice(["rmsse", "poisson", "correlation"]),
+        "criterion": tune.choice(["msse", "poisson", "correlation"]),
         "lr": tune.loguniform(1e-5, 1e-2),
         "ds_scale": tune.choice([True, False]),
         "core_lr_scale": tune.uniform(0, 1),
