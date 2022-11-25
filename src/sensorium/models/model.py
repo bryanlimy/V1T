@@ -205,8 +205,8 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
     )
 
-    if torch.cuda.device_count() > 1:
-        model = DataParallel(model)
+    # if torch.cuda.device_count() > 1:
+    #     model = DataParallel(model)
     model.to(args.device)
 
     return model
