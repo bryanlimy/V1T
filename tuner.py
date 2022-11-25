@@ -106,7 +106,7 @@ def get_search_space(args):
         "lr": tune.loguniform(1e-5, 1e-2),
         "ds_scale": tune.choice([True, False]),
         "core_lr_scale": tune.uniform(0, 1),
-        "shift_reg_scale": tune.uniform(0, 1),
+        "shifter_reg_scale": tune.uniform(0, 1),
     }
 
     if args.core == "vit":
@@ -118,7 +118,6 @@ def get_search_space(args):
                 "emb_dim": tune.randint(8, 128),
                 "num_heads": tune.randint(1, 16),
                 "mlp_dim": tune.randint(8, 128),
-                "dim_head": tune.randint(8, 128),
                 "dropout": tune.uniform(0, 0.8),
                 "core_reg_scale": tune.uniform(0, 1),
             }
@@ -267,7 +266,7 @@ def main(args):
         else f"{get_timestamp()}-{args.core}"
     )
 
-    logger.Logger(args)
+    # logger.Logger(args)
 
     results = tune.run(
         partial(
