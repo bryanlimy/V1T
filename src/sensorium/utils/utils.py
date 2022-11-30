@@ -396,6 +396,7 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
+    batch_size = max(1, batch_size - 2)
     if args.verbose > 1:
         print(f"set batch size to {batch_size}")
     args.batch_size = batch_size
