@@ -140,6 +140,9 @@ class Transformer(nn.Module):
             self.layers.append(
                 nn.ModuleList(
                     [
+                        nn.Sequential(
+                            nn.Linear(in_features=3, out_features=emb_dim), nn.Tanh()
+                        ),
                         PreNorm(
                             dim=emb_dim,
                             fn=Attention(
@@ -158,9 +161,12 @@ class Transformer(nn.Module):
                 )
             )
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
         outputs = inputs
-        for attn, ff in self.layers:
+        for bff, attn, ff in self.layers:
+            b_outputs = bff(behavior)
+            b_outputs = repeat(b_outputs, "b d -> b l d", l=outputs.size(1))
+            outputs = outputs + b_outputs
             outputs = attn(outputs) + outputs
             outputs = ff(outputs) + outputs
         return outputs
@@ -206,14 +212,14 @@ class ViTCore(Core):
 
     def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
         outputs = self.patch_embedding(inputs)
-        if self.include_behavior:
-            behavior = repeat(behavior, "b c -> b c d", d=outputs.size(-1))
-            outputs = torch.cat((behavior, outputs), dim=1)
-        outputs = self.transformer(outputs)
-        # outputs = outputs[:, 1:, :]  # remove CLS token
-        if self.include_behavior:
-            outputs = outputs[:, 4:, :]
-        else:
-            outputs = outputs[:, 1:, :]
+        # if self.include_behavior:
+        #     behavior = repeat(behavior, "b c -> b c d", d=outputs.size(-1))
+        #     outputs = torch.cat((behavior, outputs), dim=1)
+        outputs = self.transformer(outputs, behavior=behavior)
+        outputs = outputs[:, 1:, :]  # remove CLS token
+        # if self.include_behavior:
+        #     outputs = outputs[:, 4:, :]
+        # else:
+        #     outputs = outputs[:, 1:, :]
         outputs = self.rearrange(outputs)
         return outputs
