@@ -347,7 +347,7 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
         data_dir=args.dataset,
         mouse_ids=mouse_ids,
         batch_size=1,
-        device=args.device,
+        device=device,
     )
 
     image_shape, output_shapes = args.input_shape, args.output_shapes
