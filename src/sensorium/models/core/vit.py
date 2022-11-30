@@ -22,20 +22,10 @@ class Image2Patches(nn.Module):
         c, h, w = image_shape
         self.input_shape = image_shape
 
-        # calculate the padding needed to unfold image into target number of patches
-        target_patches, padding = (h - 8) * (w - 8), 0
-        while (
-            num_patches := self.unfold_dim(h, w, patch_size, padding, stride)
-        ) < target_patches:
-            padding += 1
+        self.unfold = nn.Unfold(kernel_size=patch_size, stride=stride)
+        num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
         patch_dim = patch_size * patch_size * c
 
-        self.unfold = nn.Unfold(kernel_size=patch_size, padding=padding, stride=stride)
-        self.register_buffer(
-            "patch_idx",
-            torch.linspace(0, num_patches, steps=target_patches, dtype=torch.long),
-        )
-        num_patches = target_patches
         self.rearrange = Rearrange("b c l -> b l c")
         self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
@@ -46,14 +36,13 @@ class Image2Patches(nn.Module):
         self.output_shape = (num_patches, emb_dim)
 
     @staticmethod
-    def unfold_dim(h: int, w: int, patch_size: int, padding: int, stride: int):
+    def unfold_dim(h: int, w: int, patch_size: int, padding: int = 0, stride: int = 1):
         l = lambda s: math.floor(((s + 2 * padding - patch_size) / stride) + 1)
         return l(h) * l(w)
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         patches = self.unfold(inputs)
-        patches = patches[..., self.patch_idx]
         patches = self.rearrange(patches)
         outputs = self.linear(patches)
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
@@ -141,9 +130,7 @@ class Transformer(nn.Module):
                 nn.ModuleList(
                     [
                         nn.Sequential(
-                            nn.Linear(in_features=3, out_features=32),
-                            nn.Tanh(),
-                            nn.Linear(in_features=32, out_features=3),
+                            nn.Linear(in_features=3, out_features=emb_dim),
                             nn.Tanh(),
                         ),
                         PreNorm(
@@ -167,11 +154,9 @@ class Transformer(nn.Module):
     def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
         outputs = inputs
         for bff, attn, ff in self.layers:
-            behavior = bff(behavior)
-            # b_outputs = repeat(b_outputs, "b d -> b 1 d")
-            # outputs = outputs + b_outputs
-            behavior = repeat(behavior, "b d -> b l d", l=outputs.size(1))
-            outputs = torch.cat((outputs, behavior), dim=-1)
+            b_outputs = bff(behavior)
+            b_outputs = repeat(b_outputs, "b d -> b 1 d")
+            outputs = outputs + b_outputs
             outputs = attn(outputs) + outputs
             outputs = ff(outputs) + outputs
         return outputs
@@ -187,7 +172,6 @@ class ViTCore(Core):
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
-        _, h, w = input_shape
         self.include_behavior = args.include_behavior
         patch_size = args.patch_size
         stride = 1
@@ -206,10 +190,19 @@ class ViTCore(Core):
             mlp_dim=args.mlp_dim,
             dropout=args.dropout,
         )
-        # match the output shape of stacked2d core
-        h, w = h - 8, w - 8
+
+        # calculate latent height and width based on num_patches
+        h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
         self.output_shape = (emb_dim, h, w)
+
+    @staticmethod
+    def find_shape(num_patches: int):
+        dim1 = math.ceil(math.sqrt(num_patches))
+        while num_patches % dim1 != 0 and dim1 > 0:
+            dim1 -= 1
+        dim2 = num_patches // dim1
+        return (dim1, dim2)
 
     def regularizer(self):
         """L1 regularization"""
@@ -217,14 +210,7 @@ class ViTCore(Core):
 
     def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
         outputs = self.patch_embedding(inputs)
-        # if self.include_behavior:
-        #     behavior = repeat(behavior, "b c -> b c d", d=outputs.size(-1))
-        #     outputs = torch.cat((behavior, outputs), dim=1)
         outputs = self.transformer(outputs, behavior=behavior)
         outputs = outputs[:, 1:, :]  # remove CLS token
-        # if self.include_behavior:
-        #     outputs = outputs[:, 4:, :]
-        # else:
-        #     outputs = outputs[:, 1:, :]
         outputs = self.rearrange(outputs)
         return outputs
