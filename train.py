@@ -224,10 +224,8 @@ def main(args):
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
-
         if tune.is_session_enabled():
             session.report(metrics=val_result)
-
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 

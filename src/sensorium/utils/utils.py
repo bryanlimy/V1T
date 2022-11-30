@@ -335,11 +335,7 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def get_batch_size(
-    args,
-    max_batch_size: int = None,
-    num_iterations: int = 5,
-):
+def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     """
     Calculate the maximum batch size that can fill the GPU memory if CUDA device
     is set and args.batch_size is not set.
@@ -373,7 +369,7 @@ def get_batch_size(
                 batch_size = max_batch_size
                 break
             if batch_size >= ds_size:
-                batch_size = batch_size // 2
+                batch_size = batch_size - 2
                 break
             try:
                 for _ in range(num_iterations):
@@ -389,11 +385,11 @@ def get_batch_size(
                     loss.backward()
                     optimizer.step()
                     optimizer.zero_grad()
-                batch_size = batch_size * 2
+                batch_size = 2 if batch_size == 1 else batch_size + 2
             except RuntimeError:
                 if args.verbose > 1:
                     print(f"OOM at batch size: {batch_size}")
-                batch_size = batch_size // 2
+                batch_size = batch_size - 2
                 break
         del train_ds, model, optimizer, criterion
         torch.cuda.empty_cache()
