@@ -141,10 +141,9 @@ class Transformer(nn.Module):
                 nn.ModuleList(
                     [
                         nn.Sequential(
-                            nn.Linear(in_features=3, out_features=emb_dim),
+                            nn.Linear(in_features=3, out_features=32),
                             nn.Tanh(),
-                            nn.Dropout(p=dropout),
-                            nn.Linear(in_features=emb_dim, out_features=emb_dim),
+                            nn.Linear(in_features=32, out_features=3),
                             nn.Tanh(),
                         ),
                         PreNorm(
@@ -168,9 +167,11 @@ class Transformer(nn.Module):
     def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
         outputs = inputs
         for bff, attn, ff in self.layers:
-            b_outputs = bff(behavior)
-            b_outputs = repeat(b_outputs, "b d -> b 1 d")
-            outputs = outputs + b_outputs
+            behavior = bff(behavior)
+            # b_outputs = repeat(b_outputs, "b d -> b 1 d")
+            # outputs = outputs + b_outputs
+            behavior = repeat(behavior, "b d -> b l d", l=outputs.size(1))
+            outputs = torch.cat((outputs, behavior), dim=-1)
             outputs = attn(outputs) + outputs
             outputs = ff(outputs) + outputs
         return outputs
