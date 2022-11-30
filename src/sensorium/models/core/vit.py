@@ -141,7 +141,11 @@ class Transformer(nn.Module):
                 nn.ModuleList(
                     [
                         nn.Sequential(
-                            nn.Linear(in_features=3, out_features=emb_dim), nn.Tanh()
+                            nn.Linear(in_features=3, out_features=emb_dim),
+                            nn.GELU(),
+                            nn.Dropout(p=dropout),
+                            nn.Linear(in_features=emb_dim, out_features=emb_dim),
+                            nn.GELU(),
                         ),
                         PreNorm(
                             dim=emb_dim,
@@ -165,7 +169,7 @@ class Transformer(nn.Module):
         outputs = inputs
         for bff, attn, ff in self.layers:
             b_outputs = bff(behavior)
-            b_outputs = repeat(b_outputs, "b d -> b l d", l=outputs.size(1))
+            b_outputs = repeat(b_outputs, "b d -> b 1 d")
             outputs = outputs + b_outputs
             outputs = attn(outputs) + outputs
             outputs = ff(outputs) + outputs
