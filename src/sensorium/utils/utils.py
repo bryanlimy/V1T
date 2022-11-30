@@ -366,7 +366,7 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
             batch_size = max_batch_size
             break
         if batch_size >= ds_size:
-            batch_size = batch_size - 4
+            batch_size //= 2
             break
         try:
             for _ in range(num_iterations):
@@ -387,11 +387,11 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            batch_size = 2 if batch_size == 1 else batch_size + 2
+            batch_size *= 2
         except RuntimeError:
             if args.verbose > 1:
                 print(f"OOM at batch size {batch_size}")
-            batch_size = batch_size - 4
+            batch_size //= 2
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
