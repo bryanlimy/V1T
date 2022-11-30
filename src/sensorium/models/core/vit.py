@@ -177,6 +177,7 @@ class ViTCore(Core):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
         _, h, w = input_shape
+        self.include_behavior = args.include_behavior
         patch_size = args.patch_size
         stride = 1
         emb_dim = args.emb_dim
@@ -203,9 +204,16 @@ class ViTCore(Core):
         """L1 regularization"""
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
         outputs = self.patch_embedding(inputs)
+        if self.include_behavior:
+            behavior = repeat(behavior, "b c -> b c d", d=outputs.size(-1))
+            outputs = torch.cat((behavior, outputs), dim=1)
         outputs = self.transformer(outputs)
-        outputs = outputs[:, 1:, :]  # remove CLS token
+        # outputs = outputs[:, 1:, :]  # remove CLS token
+        if self.include_behavior:
+            outputs = outputs[:, 4:, :]
+        else:
+            outputs = outputs[:, 1:, :]
         outputs = self.rearrange(outputs)
         return outputs

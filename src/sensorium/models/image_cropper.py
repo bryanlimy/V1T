@@ -60,8 +60,8 @@ class ImageCropper(nn.Module):
 
         self.include_behavior = include_behavior
         # include the 3 behaviour data as channel of the image
-        if self.include_behavior:
-            c += 3
+        # if self.include_behavior:
+        #     c += 3
 
         self.crop_scale = args.center_crop
         self.crop_h, self.crop_w = in_h, in_w
@@ -119,8 +119,6 @@ class ImageCropper(nn.Module):
         pupil_center: torch.Tensor,
         behavior: torch.Tensor,
     ):
-        import numpy as np
-
         grid = repeat(self.grid, "1 c h w -> b c h w", b=inputs.size(0))
         if self.image_shifter is not None:
             shifts = self.image_shifter[str(mouse_id)](pupil_center)
@@ -128,13 +126,13 @@ class ImageCropper(nn.Module):
         outputs = F.grid_sample(inputs, grid=grid, mode="nearest", align_corners=True)
         if self.resize is not None:
             outputs = self.resize(outputs)
-        if self.include_behavior:
-            _, _, h, w = outputs.shape
-            behavior = repeat(
-                behavior,
-                "b d -> b d h w",
-                h=outputs.size(2),
-                w=outputs.size(3),
-            )
-            outputs = torch.concat((outputs, behavior), dim=1)
+        # if self.include_behavior:
+        #     _, _, h, w = outputs.shape
+        #     behavior = repeat(
+        #         behavior,
+        #         "b d -> b d h w",
+        #         h=outputs.size(2),
+        #         w=outputs.size(3),
+        #     )
+        #     outputs = torch.concat((outputs, behavior), dim=1)
         return outputs, grid
