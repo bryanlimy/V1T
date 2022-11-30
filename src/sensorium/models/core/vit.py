@@ -142,10 +142,10 @@ class Transformer(nn.Module):
                     [
                         nn.Sequential(
                             nn.Linear(in_features=3, out_features=emb_dim),
-                            nn.GELU(),
+                            nn.Tanh(),
                             nn.Dropout(p=dropout),
                             nn.Linear(in_features=emb_dim, out_features=emb_dim),
-                            nn.GELU(),
+                            nn.Tanh(),
                         ),
                         PreNorm(
                             dim=emb_dim,
