@@ -350,7 +350,7 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
         device=args.device,
     )
 
-    output_shapes = args.output_shapes
+    image_shape, output_shapes = args.input_shape, args.output_shapes
     model = Model(args, ds=train_ds)
     model.to(device)
     model.train(True)
@@ -371,7 +371,7 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
             for _ in range(num_iterations):
                 for mouse_id in mouse_ids:  # accumulate gradient
                     outputs, _, _ = model(
-                        torch.rand(*(batch_size, *args.input_shape), device=device),
+                        torch.rand(*(batch_size, *image_shape), device=device),
                         mouse_id=mouse_id,
                         pupil_center=torch.rand(batch_size, 2, device=device),
                         behavior=torch.rand(batch_size, 3, device=device),
@@ -383,18 +383,19 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
                         y_pred=outputs,
                         mouse_id=mouse_id,
                     )
-                    loss += model.regularizer(mouse_id=mouse_id)
-                    loss.backward()
+                    reg_loss = model.regularizer(mouse_id=mouse_id)
+                    total_loss = loss + reg_loss
+                    total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
             batch_size = 2 if batch_size == 1 else batch_size + 2
         except RuntimeError:
             if args.verbose > 1:
-                print(f"OOM at batch size: {batch_size}")
+                print(f"OOM at batch size {batch_size}")
             batch_size = batch_size - 2
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
     if args.verbose > 1:
-        print(f"set batch size: {batch_size}")
+        print(f"set batch size to {batch_size}")
     args.batch_size = batch_size

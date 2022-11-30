@@ -38,10 +38,9 @@ def train_step(
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
-    images = data["image"].to(device)
     responses = data["response"].to(device)
     outputs, _, _ = model(
-        images,
+        data["image"].to(device),
         mouse_id=mouse_id,
         pupil_center=data["pupil_center"].to(device),
         behavior=data["behavior"].to(device),
