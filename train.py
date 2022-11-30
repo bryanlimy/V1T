@@ -152,7 +152,7 @@ def main(args):
 
     if args.mouse_ids is None:
         args.mouse_ids = list(range(1 if args.include_behavior else 0, 7))
-    if args.batch_size == 0:
+    if args.batch_size == 0 and "cuda" in args.device.type:
         utils.auto_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
