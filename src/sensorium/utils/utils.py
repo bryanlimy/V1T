@@ -358,6 +358,7 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     criterion = losses.get_criterion(args, ds=train_ds)
 
     ds_size = len(train_ds[mouse_ids[0]].dataset)
+    random_input = lambda size: torch.rand(*size, device=device)
 
     batch_size = 1
     while True:
@@ -365,21 +366,19 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
             batch_size = max_batch_size
             break
         if batch_size >= ds_size:
-            batch_size = batch_size - 2
+            batch_size = batch_size - 4
             break
         try:
             for _ in range(num_iterations):
                 for mouse_id in mouse_ids:  # accumulate gradient
                     outputs, _, _ = model(
-                        torch.rand(*(batch_size, *image_shape), device=device),
+                        random_input((batch_size, *image_shape)),
                         mouse_id=mouse_id,
-                        pupil_center=torch.rand(batch_size, 2, device=device),
-                        behavior=torch.rand(batch_size, 3, device=device),
+                        pupil_center=random_input((batch_size, 2)),
+                        behavior=random_input((batch_size, 3)),
                     )
                     loss = criterion(
-                        y_true=torch.rand(
-                            *(batch_size, *output_shapes[mouse_id]), device=device
-                        ),
+                        y_true=random_input((batch_size, *output_shapes[mouse_id])),
                         y_pred=outputs,
                         mouse_id=mouse_id,
                     )
@@ -392,11 +391,11 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
         except RuntimeError:
             if args.verbose > 1:
                 print(f"OOM at batch size {batch_size}")
-            batch_size = batch_size - 2
+            batch_size = batch_size - 4
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
-    batch_size = max(1, batch_size - 2)
+    batch_size = max(1, batch_size)
     if args.verbose > 1:
         print(f"set batch size to {batch_size}")
     args.batch_size = batch_size
