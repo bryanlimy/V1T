@@ -335,64 +335,66 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def get_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
+def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     """
     Calculate the maximum batch size that can fill the GPU memory if CUDA device
     is set and args.batch_size is not set.
     """
-    device = args.device.type
+    device, mouse_ids = args.device, args.mouse_ids
 
-    if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
-        assert args.batch_size > 1
-    else:
-        mouse_id = 2
-        train_ds, _, _ = data.get_training_ds(
-            args,
-            data_dir=args.dataset,
-            mouse_ids=[mouse_id],
-            batch_size=1,
-            device=args.device,
-        )
+    train_ds, _, _ = data.get_training_ds(
+        args,
+        data_dir=args.dataset,
+        mouse_ids=mouse_ids,
+        batch_size=1,
+        device=args.device,
+    )
 
-        output_shape = (train_ds[mouse_id].dataset.num_neurons,)
-        model = Model(args, ds=train_ds)
-        model.to(device)
-        model.train(True)
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-        criterion = losses.get_criterion(args, ds=train_ds)
+    output_shapes = args.output_shapes
+    model = Model(args, ds=train_ds)
+    model.to(device)
+    model.train(True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    criterion = losses.get_criterion(args, ds=train_ds)
 
-        ds_size = len(train_ds[mouse_id].dataset)
+    ds_size = len(train_ds[mouse_ids[0]].dataset)
 
-        batch_size = 1
-        while True:
-            if max_batch_size is not None and batch_size >= max_batch_size:
-                batch_size = max_batch_size
-                break
-            if batch_size >= ds_size:
-                batch_size = batch_size - 2
-                break
-            try:
-                for _ in range(num_iterations):
-                    targets = torch.rand(*(batch_size, *output_shape), device=device)
+    batch_size = 1
+    while True:
+        if max_batch_size is not None and batch_size >= max_batch_size:
+            batch_size = max_batch_size
+            break
+        if batch_size >= ds_size:
+            batch_size = batch_size - 2
+            break
+        try:
+            for _ in range(num_iterations):
+                for mouse_id in mouse_ids:  # accumulate gradient
                     outputs, _, _ = model(
                         torch.rand(*(batch_size, *args.input_shape), device=device),
                         mouse_id=mouse_id,
                         pupil_center=torch.rand(batch_size, 2, device=device),
                         behavior=torch.rand(batch_size, 3, device=device),
                     )
-                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
+                    loss = criterion(
+                        y_true=torch.rand(
+                            *(batch_size, *output_shapes[mouse_id]), device=device
+                        ),
+                        y_pred=outputs,
+                        mouse_id=mouse_id,
+                    )
                     loss += model.regularizer(mouse_id=mouse_id)
                     loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-                batch_size = 2 if batch_size == 1 else batch_size + 2
-            except RuntimeError:
-                if args.verbose > 1:
-                    print(f"OOM at batch size: {batch_size}")
-                batch_size = batch_size - 2
-                break
-        del train_ds, model, optimizer, criterion
-        torch.cuda.empty_cache()
-        if args.verbose > 1:
-            print(f"set batch size: {batch_size}")
-        args.batch_size = batch_size
+                optimizer.step()
+                optimizer.zero_grad()
+            batch_size = 2 if batch_size == 1 else batch_size + 2
+        except RuntimeError:
+            if args.verbose > 1:
+                print(f"OOM at batch size: {batch_size}")
+            batch_size = batch_size - 2
+            break
+    del train_ds, model, optimizer, criterion
+    torch.cuda.empty_cache()
+    if args.verbose > 1:
+        print(f"set batch size: {batch_size}")
+    args.batch_size = batch_size

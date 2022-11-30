@@ -287,7 +287,7 @@ class MiceDataset(Dataset):
 def get_training_ds(
     args,
     data_dir: str,
-    mouse_ids: t.List[int] = None,
+    mouse_ids: t.List[int],
     batch_size: int = 1,
     device: torch.device = torch.device("cpu"),
 ):
@@ -307,9 +307,6 @@ def get_training_ds(
         test_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the test
             sets where keys are the mouse IDs.
     """
-    if mouse_ids is None:
-        mouse_ids = list(range(1, 7)) if args.include_behavior else list(range(0, 7))
-
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}
     if device.type in ("cuda", "mps"):
