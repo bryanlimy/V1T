@@ -125,11 +125,12 @@ class Transformer(nn.Module):
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
-        for i in range(2, num_blocks + 2):
+        for _ in range(num_blocks):
             self.blocks.append(
                 nn.ModuleList(
                     [
                         nn.Sequential(
+                            nn.LayerNorm(3),
                             nn.Linear(in_features=3, out_features=emb_dim // 2),
                             nn.Tanh(),
                             nn.Dropout(p=dropout),
@@ -137,17 +138,17 @@ class Transformer(nn.Module):
                             nn.Tanh(),
                         ),
                         PreNorm(
-                            dim=emb_dim * i,
+                            dim=emb_dim,
                             fn=Attention(
-                                emb_dim=emb_dim * i,
+                                emb_dim=emb_dim,
                                 num_heads=num_heads,
                                 dropout=dropout,
                             ),
                         ),
                         PreNorm(
-                            dim=emb_dim * i,
+                            dim=emb_dim,
                             fn=FeedForward(
-                                dim=emb_dim * i,
+                                dim=emb_dim,
                                 hidden_dim=mlp_dim,
                                 dropout=dropout,
                             ),
@@ -161,8 +162,8 @@ class Transformer(nn.Module):
         for bff, attn, ff in self.blocks:
             b_outputs = bff(behaviors)
             b_outputs = repeat(b_outputs, "b d -> b l d", l=outputs.size(1))
-            # outputs = outputs + b_outputs
-            outputs = torch.cat((outputs, b_outputs), dim=-1)
+            outputs = outputs + b_outputs
+            # outputs = torch.cat((outputs, b_outputs), dim=-1)
             outputs = attn(outputs) + outputs
             outputs = ff(outputs) + outputs
         return outputs
@@ -198,7 +199,7 @@ class ViTCore(Core):
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
-        self.output_shape = (emb_dim * (args.num_blocks + 1), h, w)
+        self.output_shape = (emb_dim, h, w)
 
     @staticmethod
     def find_shape(num_patches: int):
