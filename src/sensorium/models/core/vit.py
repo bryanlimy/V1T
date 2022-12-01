@@ -124,9 +124,9 @@ class Transformer(nn.Module):
         dropout: float = 0.0,
     ):
         super().__init__()
-        self.layers = nn.ModuleList([])
-        for _ in range(num_blocks):
-            self.layers.append(
+        self.blocks = nn.ModuleList([])
+        for i in range(2, num_blocks + 2):
+            self.blocks.append(
                 nn.ModuleList(
                     [
                         nn.Sequential(
@@ -137,17 +137,19 @@ class Transformer(nn.Module):
                             nn.Tanh(),
                         ),
                         PreNorm(
-                            dim=emb_dim,
+                            dim=emb_dim * i,
                             fn=Attention(
-                                emb_dim=emb_dim,
+                                emb_dim=emb_dim * i,
                                 num_heads=num_heads,
                                 dropout=dropout,
                             ),
                         ),
                         PreNorm(
-                            dim=emb_dim,
+                            dim=emb_dim * i,
                             fn=FeedForward(
-                                dim=emb_dim, hidden_dim=mlp_dim, dropout=dropout
+                                dim=emb_dim * i,
+                                hidden_dim=mlp_dim,
+                                dropout=dropout,
                             ),
                         ),
                     ]
@@ -156,10 +158,11 @@ class Transformer(nn.Module):
 
     def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
         outputs = inputs
-        for bff, attn, ff in self.layers:
+        for bff, attn, ff in self.blocks:
             b_outputs = bff(behavior)
-            b_outputs = repeat(b_outputs, "b d -> b 1 d")
-            outputs = outputs + b_outputs
+            b_outputs = repeat(b_outputs, "b d -> b l d", l=outputs.size(1))
+            # outputs = outputs + b_outputs
+            outputs = torch.cat((outputs, b_outputs), dim=-1)
             outputs = attn(outputs) + outputs
             outputs = ff(outputs) + outputs
         return outputs
@@ -195,7 +198,7 @@ class ViTCore(Core):
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
-        self.output_shape = (emb_dim, h, w)
+        self.output_shape = (emb_dim * (args.num_blocks + 1), h, w)
 
     @staticmethod
     def find_shape(num_patches: int):
