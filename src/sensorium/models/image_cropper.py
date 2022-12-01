@@ -38,8 +38,8 @@ class ImageShifter(nn.Module):
     def regularizer(self):
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
-    def forward(self, pupil_center: torch.Tensor):
-        shifts = self.mlp(pupil_center)
+    def forward(self, pupil_centers: torch.Tensor):
+        shifts = self.mlp(pupil_centers)
         shifts = shifts * self.max_shift
         return shifts
 
@@ -116,12 +116,12 @@ class ImageCropper(nn.Module):
         self,
         inputs: torch.Tensor,
         mouse_id: int,
-        pupil_center: torch.Tensor,
-        behavior: torch.Tensor,
+        pupil_centers: torch.Tensor,
+        behaviors: torch.Tensor,
     ):
         grid = repeat(self.grid, "1 c h w -> b c h w", b=inputs.size(0))
         if self.image_shifter is not None:
-            shifts = self.image_shifter[str(mouse_id)](pupil_center)
+            shifts = self.image_shifter[str(mouse_id)](pupil_centers)
             grid = grid + shifts[:, None, None, :]
         outputs = F.grid_sample(inputs, grid=grid, mode="nearest", align_corners=True)
         if self.resize is not None:

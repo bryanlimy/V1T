@@ -62,5 +62,5 @@ class CoreShifters(ModuleDict):
     def regularizer(self, mouse_id: int):
         return self[str(mouse_id)].regularizer()
 
-    def forward(self, pupil_center: torch.Tensor, mouse_id: int):
-        return self[str(mouse_id)](pupil_center)
+    def forward(self, pupil_centers: torch.Tensor, mouse_id: int):
+        return self[str(mouse_id)](pupil_centers)

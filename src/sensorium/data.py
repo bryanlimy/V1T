@@ -174,11 +174,7 @@ class MiceDataset(Dataset):
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
-        image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
-        # include the 3 behaviour data as channel of the image
-        # if self.include_behaviour:
-        #     image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
-        self.image_shape = image_shape
+        self.image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
 
     def __len__(self):
         return len(self.indexes)
@@ -247,14 +243,6 @@ class MiceDataset(Dataset):
     def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response / self._response_precision
 
-    def add_behavior_to_image(self, image: np.ndarray, behavior: np.ndarray):
-        # broadcast each behavior variable to (height, width)
-        behaviour = np.tile(behavior, reps=(image.shape[1], image.shape[2], 1))
-        # transpose to (channel, height, width)
-        behaviour = np.transpose(behaviour, axes=[2, 0, 1])
-        image = np.concatenate((image, behaviour), axis=0)
-        return image
-
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
 
@@ -274,10 +262,6 @@ class MiceDataset(Dataset):
         data["response"] = self.transform_response(data["response"])
         data["behavior"] = self.transform_behavior(data["behavior"])
         data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
-        # if self.include_behaviour:
-        #     data["image"] = self.add_behavior_to_image(
-        #         image=data["image"], behavior=data["behavior"]
-        #     )
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id

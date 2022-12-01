@@ -52,10 +52,10 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
     with torch.no_grad():
         for data in ds:
             predictions, _, _ = model(
-                data["image"].to(device),
+                inputs=data["image"].to(device),
                 mouse_id=mouse_id,
-                pupil_center=data["pupil_center"].to(device),
-                behavior=data["behavior"].to(device),
+                pupil_centers=data["pupil_center"].to(device),
+                behaviors=data["behavior"].to(device),
             )
             results["predictions"].append(predictions.cpu())
             results["targets"].append(data["response"])
@@ -192,10 +192,10 @@ def plot_samples(
             for data in mouse_ds:
                 images = data["image"]
                 predictions, crop_images, image_grids = model(
-                    images.to(device),
+                    inputs=images.to(device),
                     mouse_id=mouse_id,
-                    pupil_center=data["pupil_center"].to(device),
-                    behavior=data["behavior"].to(device),
+                    pupil_centers=data["pupil_center"].to(device),
+                    behaviors=data["behavior"].to(device),
                 )
                 images = mouse_ds.dataset.i_transform_image(images)
                 crop_images = mouse_ds.dataset.i_transform_image(crop_images.cpu())
@@ -372,10 +372,10 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
             for _ in range(num_iterations):
                 for mouse_id in mouse_ids:  # accumulate gradient
                     outputs, _, _ = model(
-                        random_input((batch_size, *image_shape)),
+                        inputs=random_input((batch_size, *image_shape)),
                         mouse_id=mouse_id,
-                        pupil_center=random_input((batch_size, 2)),
-                        behavior=random_input((batch_size, 3)),
+                        pupil_centers=random_input((batch_size, 2)),
+                        behaviors=random_input((batch_size, 3)),
                     )
                     loss = criterion(
                         y_true=random_input((batch_size, *output_shapes[mouse_id])),

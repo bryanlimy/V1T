@@ -40,10 +40,10 @@ def train_step(
     device = model.device
     responses = data["response"].to(device)
     outputs, _, _ = model(
-        data["image"].to(device),
+        inputs=data["image"].to(device),
         mouse_id=mouse_id,
-        pupil_center=data["pupil_center"].to(device),
-        behavior=data["behavior"].to(device),
+        pupil_centers=data["pupil_center"].to(device),
+        behaviors=data["behavior"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
@@ -102,10 +102,10 @@ def validation_step(
     images = data["image"].to(device)
     responses = data["response"].to(device)
     outputs, _, _ = model(
-        images,
+        inputs=images,
         mouse_id=mouse_id,
-        pupil_center=data["pupil_center"].to(device),
-        behavior=data["behavior"].to(device),
+        pupil_centers=data["pupil_center"].to(device),
+        behaviors=data["behavior"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()

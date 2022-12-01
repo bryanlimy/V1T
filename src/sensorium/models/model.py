@@ -136,20 +136,20 @@ class Model(nn.Module):
         self,
         inputs: torch.Tensor,
         mouse_id: torch.Union[int, torch.Tensor],
-        pupil_center: torch.Tensor,
-        behavior: torch.Tensor,
+        pupil_centers: torch.Tensor,
+        behaviors: torch.Tensor,
         activate: bool = True,
     ):
         images, image_grids = self.image_cropper(
             inputs,
             mouse_id=mouse_id,
-            pupil_center=pupil_center,
-            behavior=behavior,
+            pupil_centers=pupil_centers,
+            behaviors=behaviors,
         )
-        outputs = self.core(images, behavior=behavior)
+        outputs = self.core(images, behaviors=behaviors)
         shifts = None
         if self.core_shifter is not None:
-            shifts = self.core_shifter(pupil_center, mouse_id=mouse_id)
+            shifts = self.core_shifter(pupil_centers, mouse_id=mouse_id)
         outputs = self.readouts(outputs, mouse_id=mouse_id, shifts=shifts)
         if activate:
             outputs = self.elu(outputs) + 1
@@ -181,7 +181,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
             torch.randn(args.batch_size, *model.input_shape),  # images
             mouse_id,  # mouse ID
             torch.randn(args.batch_size, 2),  # pupil centers
-            torch.randn(args.batch_size, 3),  # behavior
+            torch.randn(args.batch_size, 3),  # behaviors
         ],
         filename=os.path.join(args.output_dir, "model.txt"),
         summary=summary,

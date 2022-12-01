@@ -156,10 +156,10 @@ class Transformer(nn.Module):
                 )
             )
 
-    def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         outputs = inputs
         for bff, attn, ff in self.blocks:
-            b_outputs = bff(behavior)
+            b_outputs = bff(behaviors)
             b_outputs = repeat(b_outputs, "b d -> b l d", l=outputs.size(1))
             # outputs = outputs + b_outputs
             outputs = torch.cat((outputs, b_outputs), dim=-1)
@@ -212,9 +212,9 @@ class ViTCore(Core):
         """L1 regularization"""
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
-    def forward(self, inputs: torch.Tensor, behavior: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         outputs = self.patch_embedding(inputs)
-        outputs = self.transformer(outputs, behavior=behavior)
+        outputs = self.transformer(outputs, behaviors=behaviors)
         outputs = outputs[:, 1:, :]  # remove CLS token
         outputs = self.rearrange(outputs)
         return outputs
