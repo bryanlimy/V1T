@@ -130,7 +130,10 @@ class Transformer(nn.Module):
                 nn.ModuleList(
                     [
                         nn.Sequential(
-                            nn.Linear(in_features=3, out_features=emb_dim),
+                            nn.Linear(in_features=3, out_features=emb_dim // 2),
+                            nn.Tanh(),
+                            nn.Dropout(p=dropout),
+                            nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
                             nn.Tanh(),
                         ),
                         PreNorm(
@@ -173,13 +176,11 @@ class ViTCore(Core):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
         self.include_behavior = args.include_behavior
-        patch_size = args.patch_size
-        stride = 1
         emb_dim = args.emb_dim
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
-            patch_size=patch_size,
-            stride=stride,
+            patch_size=args.patch_size,
+            stride=1,
             emb_dim=emb_dim,
             dropout=args.dropout,
         )
