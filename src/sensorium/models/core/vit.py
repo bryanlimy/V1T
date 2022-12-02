@@ -130,12 +130,10 @@ class Transformer(nn.Module):
                 nn.ModuleList(
                     [
                         nn.Sequential(
-                            nn.LayerNorm(3),
                             nn.Linear(in_features=3, out_features=emb_dim // 2),
-                            nn.Tanh(),
+                            nn.GELU(),
                             nn.Dropout(p=dropout),
                             nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
-                            nn.Tanh(),
                         ),
                         PreNorm(
                             dim=emb_dim,
