@@ -131,9 +131,10 @@ class Transformer(nn.Module):
                     [
                         nn.Sequential(
                             nn.Linear(in_features=3, out_features=emb_dim // 2),
-                            nn.GELU(),
+                            nn.Tanh(),
                             nn.Dropout(p=dropout),
                             nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
+                            nn.Tanh(),
                         ),
                         PreNorm(
                             dim=emb_dim,
@@ -159,7 +160,7 @@ class Transformer(nn.Module):
         outputs = inputs
         for bff, attn, ff in self.blocks:
             b_outputs = bff(behaviors)
-            b_outputs = repeat(b_outputs, "b d -> b l d", l=outputs.size(1))
+            b_outputs = repeat(b_outputs, "b d -> b 1 d")
             outputs = outputs + b_outputs
             # outputs = torch.cat((outputs, b_outputs), dim=-1)
             outputs = attn(outputs) + outputs
