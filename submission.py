@@ -60,10 +60,10 @@ def inference(
     model.requires_grad_(False)
     for data in tqdm(ds, desc=desc, disable=args.verbose < 2):
         predictions, _, _ = model(
-            data["image"].to(device),
+            inputs=data["image"].to(device),
             mouse_id=mouse_id,
-            pupil_center=data["pupil_center"].to(device),
-            behavior=data["behavior"].to(device),
+            pupil_centers=data["pupil_center"].to(device),
+            behaviors=data["behavior"].to(device),
         )
         results["predictions"].extend(predictions.cpu().numpy().tolist())
         results["image_ids"].extend(data["image_id"].numpy().tolist())
