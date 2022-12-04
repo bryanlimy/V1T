@@ -22,6 +22,9 @@ class Core(nn.Module):
         self.input_shape = input_shape
         self.name = name
         self.device = args.device
+        self.behavior_mode = args.behavior_mode
+        if args.core != "vit":
+            assert self.behavior_mode != 2
 
     def initialize(self):
         raise NotImplementedError("Initialize function has not been implemented")

@@ -1,4 +1,4 @@
-__all__ = ["conv", "get_core", "linear", "stacked2d", "mixer", "random", "stn", "vit"]
+__all__ = ["conv", "linear", "stacked2d", "mixer", "random", "stn", "vit"]
 
 from .conv import ConvCore
 from .core import get_core

@@ -157,8 +157,8 @@ class MiceDataset(Dataset):
         self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
-        self.include_behavior = args.include_behavior
-        if self.include_behavior and mouse_id == 0:
+        self.behavior_mode = args.behavior_mode
+        if self.behavior_mode and mouse_id == 0:
             raise ValueError("Mouse 0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
@@ -205,7 +205,7 @@ class MiceDataset(Dataset):
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
-        if self.include_behavior:
+        if self.behavior_mode == 1:
             image = (
                 torch.unsqueeze(image[0], dim=0)
                 if len(image.shape) == 3

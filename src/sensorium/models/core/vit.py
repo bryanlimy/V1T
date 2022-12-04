@@ -121,50 +121,56 @@ class Transformer(nn.Module):
         num_blocks: int,
         num_heads: int,
         mlp_dim: int,
-        dropout: float = 0.0,
+        dropout: float,
+        behavior_mode: int,
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
         for _ in range(num_blocks):
-            self.blocks.append(
-                nn.ModuleList(
-                    [
-                        nn.Sequential(
-                            nn.Linear(in_features=3, out_features=emb_dim // 2),
+            block = nn.ModuleDict(
+                {
+                    "attn": PreNorm(
+                        dim=emb_dim,
+                        fn=Attention(
+                            emb_dim=emb_dim,
+                            num_heads=num_heads,
+                            dropout=dropout,
+                        ),
+                    ),
+                    "ff": PreNorm(
+                        dim=emb_dim,
+                        fn=FeedForward(
+                            dim=emb_dim,
+                            hidden_dim=mlp_dim,
+                            dropout=dropout,
+                        ),
+                    ),
+                }
+            )
+            if behavior_mode == 2:
+                block.update(
+                    {
+                        "bff": nn.Sequential(
+                            nn.Linear(in_features=3, out_features=emb_dim),
                             nn.Tanh(),
                             nn.Dropout(p=dropout),
-                            nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
+                            nn.Linear(in_features=emb_dim, out_features=emb_dim),
                             nn.Tanh(),
-                        ),
-                        PreNorm(
-                            dim=emb_dim,
-                            fn=Attention(
-                                emb_dim=emb_dim,
-                                num_heads=num_heads,
-                                dropout=dropout,
-                            ),
-                        ),
-                        PreNorm(
-                            dim=emb_dim,
-                            fn=FeedForward(
-                                dim=emb_dim,
-                                hidden_dim=mlp_dim,
-                                dropout=dropout,
-                            ),
-                        ),
-                    ]
+                        )
+                    }
                 )
-            )
+            self.blocks.append(block)
 
     def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         outputs = inputs
-        for bff, attn, ff in self.blocks:
-            b_outputs = bff(behaviors)
-            b_outputs = repeat(b_outputs, "b d -> b 1 d")
-            outputs = outputs + b_outputs
-            # outputs = torch.cat((outputs, b_outputs), dim=-1)
-            outputs = attn(outputs) + outputs
-            outputs = ff(outputs) + outputs
+        for block in self.blocks:
+            if "bff" in block:
+                b_latent = block["bff"](behaviors)
+                b_latent = repeat(b_latent, "b d -> b 1 d")
+                outputs = outputs + b_latent
+                # outputs = torch.cat((outputs, b_latent), dim=-1)
+            outputs = block["attn"](outputs) + outputs
+            outputs = block["ff"](outputs) + outputs
         return outputs
 
 
@@ -178,7 +184,6 @@ class ViTCore(Core):
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
-        self.include_behavior = args.include_behavior
         emb_dim = args.emb_dim
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
@@ -193,6 +198,7 @@ class ViTCore(Core):
             num_heads=args.num_heads,
             mlp_dim=args.mlp_dim,
             dropout=args.dropout,
+            behavior_mode=args.behavior_mode,
         )
 
         # calculate latent height and width based on num_patches

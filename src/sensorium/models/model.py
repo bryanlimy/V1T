@@ -61,7 +61,6 @@ class Model(nn.Module):
             module=ImageCropper(
                 args,
                 ds=ds,
-                include_behavior=args.include_behavior,
                 use_shifter=self.shift_mode in (1, 3),
             ),
         )

@@ -151,7 +151,7 @@ def main(args):
     utils.get_device(args)
 
     if args.mouse_ids is None:
-        args.mouse_ids = list(range(1 if args.include_behavior else 0, 7))
+        args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
     if args.batch_size == 0 and "cuda" in args.device.type:
         utils.auto_batch_size(args)
 
@@ -272,9 +272,13 @@ if __name__ == "__main__":
         help="Mouse to use for training.",
     )
     parser.add_argument(
-        "--include_behavior",
-        action="store_true",
-        help="include behavior data into input as additional channels.",
+        "--behavior_mode",
+        type=int,
+        choices=[0, 1, 2],
+        help="behavior mode:"
+        "0: do not include behavior"
+        "1: concat behavior with natural image"
+        "2: add latent behavior variables to each ViT block",
     )
     parser.add_argument(
         "--center_crop",

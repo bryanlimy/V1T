@@ -49,7 +49,6 @@ class ImageCropper(nn.Module):
         self,
         args,
         ds: t.Dict[int, DataLoader],
-        include_behavior: bool,
         use_shifter: bool,
     ):
         super().__init__()
@@ -58,10 +57,9 @@ class ImageCropper(nn.Module):
         c, in_h, in_w = args.input_shape
         out_h, out_w = in_h, in_w
 
-        self.include_behavior = include_behavior
-        # include the 3 behaviour data as channel of the image
-        # if self.include_behavior:
-        #     c += 3
+        self.behavior_mode = args.behavior_mode
+        if self.behavior_mode == 1:
+            c += 3  # include the behavior variables as channel
 
         self.crop_scale = args.center_crop
         self.crop_h, self.crop_w = in_h, in_w
@@ -126,13 +124,8 @@ class ImageCropper(nn.Module):
         outputs = F.grid_sample(inputs, grid=grid, mode="nearest", align_corners=True)
         if self.resize is not None:
             outputs = self.resize(outputs)
-        # if self.include_behavior:
-        #     _, _, h, w = outputs.shape
-        #     behavior = repeat(
-        #         behavior,
-        #         "b d -> b d h w",
-        #         h=outputs.size(2),
-        #         w=outputs.size(3),
-        #     )
-        #     outputs = torch.concat((outputs, behavior), dim=1)
+        if self.behavior_mode == 1:
+            _, _, h, w = outputs.shape
+            behaviors = repeat(behaviors, "b d -> b d h w", h=h, w=w)
+            outputs = torch.concat((outputs, behaviors), dim=1)
         return outputs, grid
