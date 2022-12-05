@@ -128,8 +128,8 @@ class Scheduler:
                 self.load_state_dict(ckpt["scheduler"])
             if self.verbose:
                 print(
-                    f"\nLoaded checkpoint (epoch {epoch}, "
-                    f"corr: {ckpt['value']:.04f}) from {filename}.\n"
+                    f"\nLoaded checkpoint from epoch {epoch} "
+                    f"(correlation: {ckpt['value']:.04f}).\n"
                 )
         elif force:
             raise FileNotFoundError(f"Cannot find checkpoint in {self.checkpoint_dir}.")
