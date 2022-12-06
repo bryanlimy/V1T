@@ -31,19 +31,19 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 def train_step(
     mouse_id: int,
-    data: t.Dict[str, torch.Tensor],
+    batch: t.Dict[str, torch.Tensor],
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
-    responses = data["response"].to(device)
+    responses = batch["response"].to(device)
     outputs, _, _ = model(
-        inputs=data["image"].to(device),
+        inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=data["pupil_center"].to(device),
-        behaviors=data["behavior"].to(device),
+        pupil_centers=batch["pupil_center"].to(device),
+        behaviors=batch["behavior"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
@@ -77,12 +77,12 @@ def train(
     update_frequency = len(mouse_ids)
     model.train(True)
     model.requires_grad_(True)
-    for i, (mouse_id, mouse_data) in tqdm(
+    for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
         result = train_step(
             mouse_id=mouse_id,
-            data=mouse_data,
+            batch=mouse_batch,
             model=model,
             optimizer=optimizer,
             criterion=criterion,
@@ -94,18 +94,17 @@ def train(
 
 def validation_step(
     mouse_id: int,
-    data: t.Dict[str, torch.Tensor],
+    batch: t.Dict[str, torch.Tensor],
     model: nn.Module,
     criterion: losses.Loss,
 ) -> t.Dict[str, torch.Tensor]:
     result, device = {}, model.device
-    images = data["image"].to(device)
-    responses = data["response"].to(device)
+    responses = batch["response"].to(device)
     outputs, _, _ = model(
-        inputs=images,
+        inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=data["pupil_center"].to(device),
-        behaviors=data["behavior"].to(device),
+        pupil_centers=batch["pupil_center"].to(device),
+        behaviors=batch["behavior"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
@@ -127,10 +126,10 @@ def validate(
         with torch.no_grad():
             for mouse_id, mouse_ds in ds.items():
                 mouse_result = {}
-                for data in mouse_ds:
+                for batch in mouse_ds:
                     result = validation_step(
                         mouse_id=mouse_id,
-                        data=data,
+                        batch=batch,
                         model=model,
                         criterion=criterion,
                     )
