@@ -272,6 +272,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--behavior_mode",
+        required=True,
         type=int,
         choices=[0, 1, 2],
         help="behavior mode:"
