@@ -55,7 +55,7 @@ class Image2Patches(nn.Module):
 class PreNorm(nn.Module):
     def __init__(self, dim: int, fn: nn.Module):
         super(PreNorm, self).__init__()
-        self.norm = nn.LayerNorm(dim)
+        self.norm = nn.LayerNorm(dim, eps=1e-4)
         self.fn = fn
 
     def forward(self, inputs: torch.Tensor, **kwargs):
