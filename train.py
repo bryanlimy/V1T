@@ -40,7 +40,6 @@ def train_step(
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
-    print(f"autocast enable: {scaler.is_enabled()}")
     with autocast(enabled=scaler.is_enabled()):
         responses = batch["response"].to(device)
         outputs, _, _ = model(
@@ -49,13 +48,9 @@ def train_step(
             pupil_centers=batch["pupil_center"].to(device),
             behaviors=batch["behavior"].to(device),
         )
-        print(f"train output dtype: {outputs.dtype}")
         loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        print(f"train loss dtype: {loss.dtype}")
         reg_loss = model.regularizer(mouse_id=mouse_id)
-        print(f"train reg_loss dtype: {reg_loss.dtype}")
         total_loss = loss + reg_loss
-        print(f"train total_loss dtype: {total_loss.dtype}\n\n")
     scaler.scale(total_loss).backward()  # calculate and accumulate gradients
     if update:
         scaler.step(optimizer)
