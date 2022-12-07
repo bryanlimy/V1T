@@ -194,7 +194,7 @@ class ViTCore(Core):
             patch_size=args.patch_size,
             stride=1,
             emb_dim=emb_dim,
-            dropout=args.dropout,
+            dropout=args.p_dropout,
         )
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
@@ -202,7 +202,7 @@ class ViTCore(Core):
             num_blocks=args.num_blocks,
             num_heads=args.num_heads,
             mlp_dim=args.mlp_dim,
-            dropout=args.dropout,
+            dropout=args.t_dropout,
             behavior_mode=args.behavior_mode,
         )
 
