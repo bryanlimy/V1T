@@ -22,3 +22,4 @@ scikit-image
 jupyter_http_over_ws
 hpbandster
 ConfigSpace
+opencv-python

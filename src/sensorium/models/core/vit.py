@@ -38,6 +38,7 @@ class Image2Patches(nn.Module):
     @staticmethod
     def unfold_dim(h: int, w: int, patch_size: int, padding: int = 0, stride: int = 1):
         l = lambda s: math.floor(((s + 2 * padding - patch_size) / stride) + 1)
+        l_h, h_w = l(h), l(w)
         return l(h) * l(w)
 
     def forward(self, inputs: torch.Tensor):
