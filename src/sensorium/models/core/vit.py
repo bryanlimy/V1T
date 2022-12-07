@@ -126,7 +126,7 @@ class Transformer(nn.Module):
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
-        for _ in range(num_blocks):
+        for i in range(num_blocks):
             block = nn.ModuleDict(
                 {
                     "attn": PreNorm(
@@ -147,7 +147,7 @@ class Transformer(nn.Module):
                     ),
                 }
             )
-            if behavior_mode == 2:
+            if behavior_mode == 2 and i == 0:
                 block.update(
                     {
                         "bff": nn.Sequential(

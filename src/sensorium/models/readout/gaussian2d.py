@@ -254,12 +254,6 @@ class Gaussian2DReadout(Readout):
                 eye-tracking data
         """
         batch_size, c, w, h = inputs.size()
-        c_in, w_in, h_in = self.input_shape
-        if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError(
-                f"shape mismatch between expected ({self.input_shape}) and "
-                f"received ({inputs.size()}) inputs."
-            )
         features = self.features.view(1, c, self.num_neurons)
         bias = self.bias
 
@@ -270,9 +264,9 @@ class Gaussian2DReadout(Readout):
             grid = grid + shifts[:, None, None, :]
 
         outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
-        outputs = torch.squeeze(outputs, dim=-1) * features
+        outputs = torch.squeeze(outputs, dim=-1)
+        outputs = outputs * features
         outputs = torch.sum(outputs, dim=1)
-        outputs = outputs.view(batch_size, self.num_neurons)
 
         if bias is not None:
             outputs = outputs + bias
