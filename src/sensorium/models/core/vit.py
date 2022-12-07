@@ -104,14 +104,12 @@ class Attention(nn.Module):
     def forward(self, inputs: torch.Tensor):
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
         q, k, v = map(
-            lambda t: rearrange(t, "b n (h d) -> b h n d", h=self.num_heads), qkv
+            lambda t: rearrange(t, "b n (h d) -> b h n d", h=self.num_heads),
+            qkv,
         )
-
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
-
         attn = self.attend(dots)
         attn = self.dropout(attn)
-
         outputs = torch.matmul(attn, v)
         outputs = rearrange(outputs, "b h n d -> b n (h d)")
         outputs = self.projection(outputs)
@@ -132,7 +130,7 @@ class Transformer(nn.Module):
         super().__init__()
         self.blocks = nn.ModuleList([])
         for i in range(num_blocks):
-            emb_dim += 3
+            # emb_dim += 3
             block = nn.ModuleDict(
                 {
                     "attn": PreNorm(
@@ -153,28 +151,28 @@ class Transformer(nn.Module):
                     ),
                 }
             )
-            # if behavior_mode == 2:
-            #     block.update(
-            #         {
-            #             "bff": nn.Sequential(
-            #                 nn.Linear(in_features=3, out_features=emb_dim // 2),
-            #                 nn.Tanh(),
-            #                 nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
-            #             )
-            #         }
-            #     )
+            if behavior_mode == 2:
+                block.update(
+                    {
+                        "bff": nn.Sequential(
+                            nn.Linear(in_features=3, out_features=emb_dim // 2),
+                            nn.Tanh(),
+                            nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
+                        )
+                    }
+                )
             self.blocks.append(block)
         self.output_shape = (input_shape[0], emb_dim)
 
     def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         outputs = inputs
-        behaviors = repeat(behaviors, "b d -> b l d", l=outputs.size(1))
+        # behaviors = repeat(behaviors, "b d -> b l d", l=outputs.size(1))
         for block in self.blocks:
-            # if "bff" in block:
-            #     b_latent = block["bff"](behaviors)
-            #     b_latent = repeat(b_latent, "b d -> b 1 d")
-            #     outputs = outputs + b_latent
-            outputs = torch.cat((outputs, behaviors), dim=-1)
+            if "bff" in block:
+                b_latent = block["bff"](behaviors)
+                b_latent = repeat(b_latent, "b d -> b 1 d")
+                outputs = outputs + b_latent
+            # outputs = torch.cat((outputs, behaviors), dim=-1)
             outputs = block["attn"](outputs) + outputs
             outputs = block["ff"](outputs) + outputs
         return outputs
