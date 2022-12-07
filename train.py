@@ -434,7 +434,7 @@ if __name__ == "__main__":
         parser.add_argument("--num_heads", type=int, default=3)
         parser.add_argument("--mlp_dim", type=int, default=64)
         parser.add_argument(
-            "--p_dropout", type=float, default=0.2, help="image patch dropout"
+            "--p_dropout", type=float, default=0.2, help="patch embeddings dropout"
         )
         parser.add_argument(
             "--t_dropout", type=float, default=0.2, help="ViT block dropout"

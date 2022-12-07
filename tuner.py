@@ -92,10 +92,8 @@ def train_function(
 def get_search_space(args):
     # default search space
     search_space = {
-        "include_behavior": args.include_behavior,
         "center_crop": tune.uniform(0, 1),
         "resize_image": 1,
-        "shift_mode": tune.choice([0, 1, 2, 3]),
         "disable_grid_predictor": tune.choice([True, False]),
         "grid_predictor_dim": tune.choice([2, 3]),
         "bias_mode": tune.choice([0, 1, 2]),
@@ -109,6 +107,13 @@ def get_search_space(args):
         "readout_reg_scale": tune.uniform(0, 1),
         "shifter_reg_scale": tune.uniform(0, 1),
     }
+    if args.include_behavior:
+        search_space.update(
+            {
+                "behavior_mode": tune.choice([1, 2]),
+                "shift_mode": tune.choice([0, 1, 2, 3]),
+            }
+        )
 
     if args.core == "vit":
         search_space.update(
@@ -116,10 +121,11 @@ def get_search_space(args):
                 "core": "vit",
                 "patch_size": tune.randint(1, 10),
                 "num_blocks": tune.randint(1, 8),
-                "emb_dim": tune.randint(8, 128),
+                "emb_dim": tune.randint(8, 512),
                 "num_heads": tune.randint(1, 16),
-                "mlp_dim": tune.randint(8, 128),
-                "dropout": tune.uniform(0, 0.8),
+                "mlp_dim": tune.randint(8, 512),
+                "p_dropout": tune.uniform(0, 0.5),
+                "t_dropout": tune.uniform(0, 0.5),
                 "core_reg_scale": tune.uniform(0, 1),
             }
         )
@@ -139,16 +145,18 @@ def get_search_space(args):
                 "emb_dim": 64,
                 "num_heads": 3,
                 "mlp_dim": 64,
-                "dropout": 0.2,
+                "p_dropout": 0.2,
+                "t_dropout": 0.2,
                 "core_reg_scale": 0,
                 "disable_grid_predictor": False,
                 "grid_predictor_dim": 2,
                 "bias_mode": 0,
                 "readout_reg_scale": 0.0076,
                 "shifter_reg_scale": 0,
+                "behavior_mode": 2,
             }
         ]
-        evaluated_rewards = [0.40398114919662476]
+        evaluated_rewards = [0.4380]
     elif args.core == "stacked2d":
         search_space.update(
             {
