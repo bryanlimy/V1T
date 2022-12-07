@@ -63,13 +63,17 @@ class PreNorm(nn.Module):
 
 
 class FeedForward(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int, dropout: float = 0.0):
+    def __init__(
+        self, in_dim: int, hidden_dim: int, out_dim: int = None, dropout: float = 0.0
+    ):
         super(FeedForward, self).__init__()
+        if out_dim is None:
+            out_dim = in_dim
         self.net = nn.Sequential(
-            nn.Linear(in_features=dim, out_features=hidden_dim),
+            nn.Linear(in_features=in_dim, out_features=hidden_dim),
             nn.GELU(),
             nn.Dropout(p=dropout),
-            nn.Linear(in_features=hidden_dim, out_features=dim),
+            nn.Linear(in_features=hidden_dim, out_features=out_dim),
             nn.Dropout(p=dropout),
         )
 
@@ -117,6 +121,7 @@ class Attention(nn.Module):
 class Transformer(nn.Module):
     def __init__(
         self,
+        input_shape: t.Tuple[int, int],
         emb_dim: int,
         num_blocks: int,
         num_heads: int,
@@ -127,6 +132,7 @@ class Transformer(nn.Module):
         super().__init__()
         self.blocks = nn.ModuleList([])
         for i in range(num_blocks):
+            emb_dim += 3
             block = nn.ModuleDict(
                 {
                     "attn": PreNorm(
@@ -140,32 +146,35 @@ class Transformer(nn.Module):
                     "ff": PreNorm(
                         dim=emb_dim,
                         fn=FeedForward(
-                            dim=emb_dim,
+                            in_dim=emb_dim,
                             hidden_dim=mlp_dim,
                             dropout=dropout,
                         ),
                     ),
                 }
             )
-            if behavior_mode == 2 and i == 0:
-                block.update(
-                    {
-                        "bff": nn.Sequential(
-                            nn.Linear(in_features=3, out_features=emb_dim // 2),
-                            nn.Tanh(),
-                            nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
-                        )
-                    }
-                )
+            # if behavior_mode == 2:
+            #     block.update(
+            #         {
+            #             "bff": nn.Sequential(
+            #                 nn.Linear(in_features=3, out_features=emb_dim // 2),
+            #                 nn.Tanh(),
+            #                 nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
+            #             )
+            #         }
+            #     )
             self.blocks.append(block)
+        self.output_shape = (input_shape[0], emb_dim)
 
     def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         outputs = inputs
+        behaviors = repeat(behaviors, "b d -> b l d", l=outputs.size(1))
         for block in self.blocks:
-            if "bff" in block:
-                b_latent = block["bff"](behaviors)
-                b_latent = repeat(b_latent, "b d -> b 1 d")
-                outputs = outputs + b_latent
+            # if "bff" in block:
+            #     b_latent = block["bff"](behaviors)
+            #     b_latent = repeat(b_latent, "b d -> b 1 d")
+            #     outputs = outputs + b_latent
+            outputs = torch.cat((outputs, behaviors), dim=-1)
             outputs = block["attn"](outputs) + outputs
             outputs = block["ff"](outputs) + outputs
         return outputs
@@ -190,6 +199,7 @@ class ViTCore(Core):
             dropout=args.dropout,
         )
         self.transformer = Transformer(
+            input_shape=self.patch_embedding.output_shape,
             emb_dim=emb_dim,
             num_blocks=args.num_blocks,
             num_heads=args.num_heads,
@@ -201,7 +211,7 @@ class ViTCore(Core):
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
-        self.output_shape = (emb_dim, h, w)
+        self.output_shape = (self.transformer.output_shape[-1], h, w)
 
     @staticmethod
     def find_shape(num_patches: int):
