@@ -186,7 +186,9 @@ def main(args):
         eps=args.adam_eps,
     )
     scaler = torch.cuda.amp.GradScaler(enabled=args.amp and "cuda" in args.device.type)
-    scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
+    scheduler = Scheduler(
+        args, model=model, optimizer=optimizer, scaler=scaler, mode="max"
+    )
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
