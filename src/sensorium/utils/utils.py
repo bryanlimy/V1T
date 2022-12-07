@@ -341,6 +341,7 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     is set and args.batch_size is not set.
     """
     device, mouse_ids = args.device, args.mouse_ids
+    assert "cuda" in device.type
 
     train_ds, _, _ = data.get_training_ds(
         args,
