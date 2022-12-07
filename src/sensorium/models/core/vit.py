@@ -97,6 +97,7 @@ class Attention(nn.Module):
             nn.Dropout(p=dropout),
         )
 
+    @torch.cuda.amp.autocast(enabled=torch.cuda.is_available(), dtype=torch.float32)
     def forward(self, inputs: torch.Tensor):
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
         q, k, v = map(
