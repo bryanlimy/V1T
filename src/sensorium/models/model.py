@@ -131,6 +131,7 @@ class Model(nn.Module):
             reg += self.core_shifter.regularizer(mouse_id=mouse_id)
         return reg
 
+    @torch.cuda.amp.autocast(enabled=torch.cuda.is_available())
     def forward(
         self,
         inputs: torch.Tensor,

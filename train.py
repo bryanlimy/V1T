@@ -40,17 +40,16 @@ def train_step(
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
-    with autocast(enabled=scaler.is_enabled()):
-        responses = batch["response"].to(device)
-        outputs, _, _ = model(
-            inputs=batch["image"].to(device),
-            mouse_id=mouse_id,
-            pupil_centers=batch["pupil_center"].to(device),
-            behaviors=batch["behavior"].to(device),
-        )
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        reg_loss = model.regularizer(mouse_id=mouse_id)
-        total_loss = loss + reg_loss
+    responses = batch["response"].to(device, non_blocking=True)
+    outputs, _, _ = model(
+        inputs=batch["image"].to(device, non_blocking=True),
+        mouse_id=mouse_id,
+        pupil_centers=batch["pupil_center"].to(device, non_blocking=True),
+        behaviors=batch["behavior"].to(device, non_blocking=True),
+    )
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = loss + reg_loss
     scaler.scale(total_loss).backward()  # calculate and accumulate gradients
     if update:
         scaler.step(optimizer)
@@ -103,49 +102,45 @@ def validation_step(
     batch: t.Dict[str, torch.Tensor],
     model: nn.Module,
     criterion: losses.Loss,
-    scaler: GradScaler,
 ) -> t.Dict[str, torch.Tensor]:
     result, device = {}, model.device
-    with autocast(enabled=scaler.is_enabled()):
-        responses = batch["response"].to(device)
-        outputs, _, _ = model(
-            inputs=batch["image"].to(device),
-            mouse_id=mouse_id,
-            pupil_centers=batch["pupil_center"].to(device),
-            behaviors=batch["behavior"].to(device),
-        )
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    responses = batch["response"].to(device, non_blocking=True)
+    outputs, _, _ = model(
+        inputs=batch["image"].to(device, non_blocking=True),
+        mouse_id=mouse_id,
+        pupil_centers=batch["pupil_center"].to(device, non_blocking=True),
+        behaviors=batch["behavior"].to(device, non_blocking=True),
+    )
+    loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
     result.update(compute_metrics(y_true=responses, y_pred=outputs))
     return result
 
 
+@torch.no_grad()
 def validate(
     args,
     ds: t.Dict[int, DataLoader],
     model: nn.Module,
     criterion: losses.Loss,
-    scaler: GradScaler,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
     results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose < 2) as pbar:
-        with torch.no_grad():
-            for mouse_id, mouse_ds in ds.items():
-                mouse_result = {}
-                for batch in mouse_ds:
-                    result = validation_step(
-                        mouse_id=mouse_id,
-                        batch=batch,
-                        model=model,
-                        criterion=criterion,
-                        scaler=scaler,
-                    )
-                    utils.update_dict(mouse_result, result)
-                    pbar.update(1)
-                results[mouse_id] = mouse_result
+        for mouse_id, mouse_ds in ds.items():
+            mouse_result = {}
+            for batch in mouse_ds:
+                result = validation_step(
+                    mouse_id=mouse_id,
+                    batch=batch,
+                    model=model,
+                    criterion=criterion,
+                )
+                utils.update_dict(mouse_result, result)
+                pbar.update(1)
+            results[mouse_id] = mouse_result
     return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
 
 
@@ -217,7 +212,6 @@ def main(args):
             ds=val_ds,
             model=model,
             criterion=criterion,
-            scaler=scaler,
             epoch=epoch,
             summary=summary,
         )
