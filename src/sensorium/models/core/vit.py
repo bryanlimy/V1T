@@ -31,7 +31,7 @@ class Image2Patches(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
         self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
-        self.dropout = nn.Dropout(p=dropout)
+        # self.dropout = nn.Dropout(p=dropout)
         self.num_patches = num_patches
         self.output_shape = (num_patches, emb_dim)
 
@@ -48,7 +48,7 @@ class Image2Patches(nn.Module):
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
         outputs += self.pos_embedding
-        outputs = self.dropout(outputs)
+        # outputs = self.dropout(outputs)
         return outputs
 
 
@@ -151,10 +151,10 @@ class Transformer(nn.Module):
                 block.update(
                     {
                         "bff": nn.Sequential(
-                            nn.Linear(in_features=3, out_features=emb_dim),
+                            nn.Linear(in_features=3, out_features=emb_dim // 2),
                             nn.Tanh(),
                             nn.Dropout(p=dropout),
-                            nn.Linear(in_features=emb_dim, out_features=emb_dim),
+                            nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
                             nn.Tanh(),
                         )
                     }

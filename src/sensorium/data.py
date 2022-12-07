@@ -99,6 +99,7 @@ def load_mouse_metadata(mouse_dir: str):
         "image_id": load_trial("frame_image_id.npy").astype(np.int32),
         "tiers": load_trial("tiers.npy"),
         "trial_id": load_trial("trial_idx.npy"),
+        "frame_trial_ts": load_trial("frame_trial_ts.npy"),
         "stats": {
             "image": {k: load_stat("images", k) for k in stat_keys},
             "response": {k: load_stat("responses", k) for k in stat_keys},
