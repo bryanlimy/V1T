@@ -3,7 +3,6 @@ import typing as t
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.nn.modules.loss import _Loss
-from torch.cuda.amp import autocast
 
 REDUCTION = t.Literal["sum", "mean"]
 
@@ -107,7 +106,6 @@ class Loss(_Loss):
             for mouse_id, mouse_ds in ds.items()
         }
 
-    @autocast(dtype=torch.float32)
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
         if self.ds_scale:
@@ -120,7 +118,6 @@ class Loss(_Loss):
 class MSSE(Loss):
     """mean sum squared error"""
 
-    @autocast(dtype=torch.float32)
     def forward(
         self,
         y_true: torch.Tensor,
@@ -139,7 +136,6 @@ class PoissonLoss(Loss):
         super(PoissonLoss, self).__init__(args, ds=ds)
         self.eps = torch.tensor(eps, dtype=torch.float32, device=self.device)
 
-    @autocast(dtype=torch.float32)
     def forward(
         self,
         y_true: torch.Tensor,
@@ -160,7 +156,6 @@ class Correlation(Loss):
         super(Correlation, self).__init__(args, ds=ds)
         self.eps = torch.tensor(eps, dtype=torch.float32, device=self.device)
 
-    @autocast(dtype=torch.float32)
     def forward(
         self,
         y_true: torch.Tensor,

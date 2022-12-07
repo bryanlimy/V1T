@@ -9,7 +9,7 @@ from time import time
 from shutil import rmtree
 from ray.air import session
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
+
 
 from sensorium import losses, data
 from sensorium.models import get_model
@@ -36,7 +36,6 @@ def train_step(
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
-    scaler: GradScaler,
     update: bool,
 ) -> t.Dict[str, torch.Tensor]:
     device = model.device
@@ -50,11 +49,10 @@ def train_step(
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
-    scaler.scale(total_loss).backward()  # calculate and accumulate gradients
+    total_loss.backward()  # calculate and accumulate gradients
     if update:
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
     result = {
         "loss/loss": loss.item(),
         "loss/reg_loss": reg_loss.item(),
@@ -70,7 +68,6 @@ def train(
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
-    scaler: GradScaler,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
@@ -90,7 +87,6 @@ def train(
             model=model,
             optimizer=optimizer,
             criterion=criterion,
-            scaler=scaler,
             update=(i + 1) % update_frequency == 0,
         )
         utils.update_dict(results[mouse_id], result)
@@ -180,10 +176,7 @@ def main(args):
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
     )
-    scaler = torch.cuda.amp.GradScaler(enabled=args.amp and "cuda" in args.device.type)
-    scheduler = Scheduler(
-        args, model=model, optimizer=optimizer, scaler=scaler, mode="max"
-    )
+    scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
@@ -203,7 +196,6 @@ def main(args):
             model=model,
             optimizer=optimizer,
             criterion=criterion,
-            scaler=scaler,
             epoch=epoch,
             summary=summary,
         )
@@ -334,11 +326,6 @@ if __name__ == "__main__":
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--seed", type=int, default=1234)
-    parser.add_argument(
-        "--amp",
-        action="store_true",
-        help="automatic mixed precision, only available on CUDA device",
-    )
 
     # optimizer settings
     parser.add_argument("--adam_beta1", type=float, default=0.9)

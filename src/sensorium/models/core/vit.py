@@ -31,7 +31,7 @@ class Image2Patches(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
         self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
-        # self.dropout = nn.Dropout(p=dropout)
+        self.dropout = nn.Dropout(p=dropout)
         self.num_patches = num_patches
         self.output_shape = (num_patches, emb_dim)
 
@@ -48,14 +48,14 @@ class Image2Patches(nn.Module):
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
         outputs = torch.cat((cls_tokens, outputs), dim=1)
         outputs += self.pos_embedding
-        # outputs = self.dropout(outputs)
+        outputs = self.dropout(outputs)
         return outputs
 
 
 class PreNorm(nn.Module):
     def __init__(self, dim: int, fn: nn.Module):
         super(PreNorm, self).__init__()
-        self.norm = nn.LayerNorm(dim, eps=1e-4)
+        self.norm = nn.LayerNorm(dim)
         self.fn = fn
 
     def forward(self, inputs: torch.Tensor, **kwargs):
@@ -97,7 +97,6 @@ class Attention(nn.Module):
             nn.Dropout(p=dropout),
         )
 
-    @torch.cuda.amp.autocast(enabled=torch.cuda.is_available(), dtype=torch.float32)
     def forward(self, inputs: torch.Tensor):
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
         q, k, v = map(
@@ -154,9 +153,7 @@ class Transformer(nn.Module):
                         "bff": nn.Sequential(
                             nn.Linear(in_features=3, out_features=emb_dim // 2),
                             nn.Tanh(),
-                            nn.Dropout(p=dropout),
                             nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
-                            nn.Tanh(),
                         )
                     }
                 )
@@ -169,7 +166,6 @@ class Transformer(nn.Module):
                 b_latent = block["bff"](behaviors)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-                # outputs = torch.cat((outputs, b_latent), dim=-1)
             outputs = block["attn"](outputs) + outputs
             outputs = block["ff"](outputs) + outputs
         return outputs

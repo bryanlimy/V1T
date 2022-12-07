@@ -14,7 +14,6 @@ class Scheduler:
         args,
         model: nn.Module,
         optimizer: Optimizer = None,
-        scaler: GradScaler = None,
         mode: t.Literal["min", "max"] = "max",
         max_reduce: int = 3,
         lr_patience: int = 10,
@@ -22,7 +21,6 @@ class Scheduler:
         min_epochs: int = 0,
         save_optimizer: bool = True,
         save_scheduler: bool = True,
-        save_scaler: bool = True,
         module_names: t.List[str] = None,
     ):
         """
@@ -51,7 +49,6 @@ class Scheduler:
         self.mode = mode
         self.model = model
         self.optimizer = optimizer
-        self.scaler = scaler
         self.module_names = module_names
         self.max_reduce = max_reduce
         self.num_reduce = 0
@@ -67,7 +64,6 @@ class Scheduler:
             os.makedirs(self.checkpoint_dir)
         self.save_optimizer = save_optimizer
         self.save_scheduler = save_scheduler
-        self.save_scaler = save_scaler
         self.device = args.device
         self.verbose = args.verbose
 
@@ -96,8 +92,6 @@ class Scheduler:
             ckpt["optimizer"] = self.optimizer.state_dict()
         if self.save_scheduler:
             ckpt["scheduler"] = self.state_dict()
-        if self.save_scaler:
-            ckpt["scaler"] = self.scaler.state_dict()
         torch.save(ckpt, f=filename)
         if self.verbose:
             print(f"\nCheckpoint saved to {filename}.")
@@ -107,7 +101,6 @@ class Scheduler:
         force: bool = False,
         load_optimizer: bool = False,
         load_scheduler: bool = False,
-        load_scaler: bool = False,
     ) -> int:
         """
         Load the best model in self.checkpoint_dir and return the epoch
@@ -115,7 +108,6 @@ class Scheduler:
             force: bool, raise an error if checkpoint is not found.
             load_optimizer: bool, load optimizer from checkpoint.
             load_scheduler: bool, load scheduler from checkpoint.
-            load_scaler: bool, load GradScaler from checkpoint.
         Return:
             epoch: int, the number of epoch the model has been trained for,
                 return 0 if no checkpoint was found.
@@ -135,8 +127,6 @@ class Scheduler:
                 self.optimizer.load_state_dict(ckpt["optimizer"])
             if load_scheduler and "scheduler" in ckpt:
                 self.load_state_dict(ckpt["scheduler"])
-            if load_scaler and "scaler" in ckpt:
-                self.scaler.load_state_dict(ckpt["scaler"])
             if self.verbose:
                 print(
                     f"\nLoaded checkpoint from epoch {epoch} "
