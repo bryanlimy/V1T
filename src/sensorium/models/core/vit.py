@@ -157,7 +157,9 @@ class Transformer(nn.Module):
                         "bff": nn.Sequential(
                             nn.Linear(in_features=3, out_features=emb_dim // 2),
                             nn.Tanh(),
+                            nn.Dropout(p=dropout),
                             nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
+                            nn.Tanh(),
                         )
                     }
                 )
