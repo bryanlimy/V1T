@@ -3,3 +3,4 @@
 *.svg
 *.pkl
 *.h5
+plots/
