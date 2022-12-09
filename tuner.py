@@ -1,6 +1,4 @@
 import os
-import ray
-import sys
 import torch
 import argparse
 import typing as t
@@ -91,21 +89,37 @@ def train_function(
 
 def get_search_space(args):
     # default search space
+    # search_space = {
+    #     "center_crop": tune.uniform(0, 1),
+    #     "resize_image": 1,
+    #     "disable_grid_predictor": tune.choice([True, False]),
+    #     "grid_predictor_dim": tune.choice([2, 3]),
+    #     "bias_mode": tune.choice([0, 1, 2]),
+    #     "adam_beta1": tune.loguniform(1e-10, 1.0),
+    #     "adam_beta2": tune.loguniform(1e-10, 1.0),
+    #     "adam_eps": tune.loguniform(1e-10, 1),
+    #     "criterion": tune.choice(["msse", "poisson", "correlation"]),
+    #     "lr": tune.loguniform(1e-5, 1e-2),
+    #     "ds_scale": tune.choice([True, False]),
+    #     "core_lr_scale": tune.uniform(0, 1),
+    #     "readout_reg_scale": tune.uniform(0, 1),
+    #     "shifter_reg_scale": tune.uniform(0, 1),
+    # }
     search_space = {
-        "center_crop": tune.uniform(0, 1),
+        "center_crop": 1,
         "resize_image": 1,
-        "disable_grid_predictor": tune.choice([True, False]),
-        "grid_predictor_dim": tune.choice([2, 3]),
-        "bias_mode": tune.choice([0, 1, 2]),
-        "adam_beta1": tune.loguniform(1e-10, 1.0),
-        "adam_beta2": tune.loguniform(1e-10, 1.0),
-        "adam_eps": tune.loguniform(1e-10, 1),
-        "criterion": tune.choice(["msse", "poisson", "correlation"]),
+        "disable_grid_predictor": False,
+        "grid_predictor_dim": 2,
+        "bias_mode": 0,
+        "adam_beta1": 0.9,
+        "adam_beta2": 0.999,
+        "adam_eps": 1e-8,
+        "criterion": "poisson",
         "lr": tune.loguniform(1e-5, 1e-2),
-        "ds_scale": tune.choice([True, False]),
-        "core_lr_scale": tune.uniform(0, 1),
-        "readout_reg_scale": tune.uniform(0, 1),
-        "shifter_reg_scale": tune.uniform(0, 1),
+        "ds_scale": True,
+        "core_lr_scale": 1.0,
+        "readout_reg_scale": 0.0076,
+        "shifter_reg_scale": 0,
     }
     if args.include_behavior:
         search_space.update(
