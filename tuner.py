@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 import argparse
 import typing as t
@@ -145,15 +146,8 @@ def get_search_space(args):
         )
         points_to_evaluate = [
             {
-                "center_crop": 1.0,
-                "resize_image": 1,
-                "adam_beta1": 0.9,
-                "adam_beta2": 0.999,
-                "adam_eps": 1e-8,
-                "criterion": "poisson",
                 "lr": 1e-3,
-                "ds_scale": True,
-                "core_lr_scale": 1,
+                "behavior_mode": 2,
                 "shift_mode": 2,
                 "patch_size": 4,
                 "num_blocks": 3,
@@ -163,12 +157,6 @@ def get_search_space(args):
                 "p_dropout": 0.2,
                 "t_dropout": 0.2,
                 "core_reg_scale": 0,
-                "disable_grid_predictor": False,
-                "grid_predictor_dim": 2,
-                "bias_mode": 0,
-                "readout_reg_scale": 0.0076,
-                "shifter_reg_scale": 0,
-                "behavior_mode": 2,
             }
         ]
         evaluated_rewards = [0.4380]
@@ -290,7 +278,7 @@ def main(args):
         else f"{get_timestamp()}-{args.core}"
     )
 
-    # logger.Logger(args)
+    # sys.stdout = logger.Logger(args)
 
     results = tune.run(
         partial(
