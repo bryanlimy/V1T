@@ -106,7 +106,7 @@ def get_search_space(args):
     #     "shifter_reg_scale": tune.uniform(0, 1),
     # }
     search_space = {
-        "center_crop": 1,
+        "center_crop": 1.0,
         "resize_image": 1,
         "disable_grid_predictor": False,
         "grid_predictor_dim": 2,
@@ -146,6 +146,7 @@ def get_search_space(args):
         points_to_evaluate = [
             {
                 "center_crop": 1.0,
+                "resize_image": 1,
                 "adam_beta1": 0.9,
                 "adam_beta2": 0.999,
                 "adam_eps": 1e-8,
