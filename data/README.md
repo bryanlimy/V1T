@@ -1,21 +1,21 @@
 ## File structure
 ```
 data/
-    README.md
-    imagenet/
-      n01440764/
-      n01443537/
-      ...
-    lurz2020/
-      static20457-5-9-preproc0/
-    sensorium/
-      static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-      static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-      static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-      static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-      static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-      static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-      static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+  README.md
+  imagenet/
+    n01440764/
+    n01443537/
+    ...
+  lurz2020/
+    static20457-5-9-preproc0/
+  sensorium/
+    static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+    static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+    static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+    static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+    static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+    static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+    static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
       
 ```
 - The `data` folder should contain the ZIP files from [gin.g-node.org/cajal/Sensorium2022](https://gin.g-node.org/cajal/Sensorium2022) with their original filenames.
