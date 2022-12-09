@@ -275,11 +275,12 @@ if __name__ == "__main__":
         "--behavior_mode",
         required=True,
         type=int,
-        choices=[0, 1, 2],
+        choices=[0, 1, 2, 3],
         help="behavior mode:"
         "0: do not include behavior"
         "1: concat behavior with natural image"
-        "2: add latent behavior variables to each ViT block",
+        "2: add latent behavior variables to each ViT block"
+        "3: add latent behavior + pupil centers to each ViT block",
     )
     parser.add_argument(
         "--center_crop",

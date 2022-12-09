@@ -151,11 +151,14 @@ class Transformer(nn.Module):
                     ),
                 }
             )
-            if behavior_mode == 2:
+            if behavior_mode in (2, 3):
+                in_features = 3 if behavior_mode == 2 else 5
                 block.update(
                     {
                         "bff": nn.Sequential(
-                            nn.Linear(in_features=3, out_features=emb_dim // 2),
+                            nn.Linear(
+                                in_features=in_features, out_features=emb_dim // 2
+                            ),
                             nn.Tanh(),
                             nn.Dropout(p=dropout),
                             nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
@@ -168,13 +171,11 @@ class Transformer(nn.Module):
 
     def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         outputs = inputs
-        # behaviors = repeat(behaviors, "b d -> b l d", l=outputs.size(1))
         for block in self.blocks:
             if "bff" in block:
                 b_latent = block["bff"](behaviors)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            # outputs = torch.cat((outputs, behaviors), dim=-1)
             outputs = block["attn"](outputs) + outputs
             outputs = block["ff"](outputs) + outputs
         return outputs
@@ -191,6 +192,7 @@ class ViTCore(Core):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
         emb_dim = args.emb_dim
+        self.behavior_mode = args.behavior_mode
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
             patch_size=args.patch_size,
@@ -225,8 +227,15 @@ class ViTCore(Core):
         """L1 regularization"""
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
-    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+    ):
         outputs = self.patch_embedding(inputs)
+        if self.behavior_mode == 3:
+            behaviors = torch.cat((behaviors, pupil_centers), dim=-1)
         outputs = self.transformer(outputs, behaviors=behaviors)
         outputs = outputs[:, 1:, :]  # remove CLS token
         outputs = self.rearrange(outputs)
