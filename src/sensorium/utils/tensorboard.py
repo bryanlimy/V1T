@@ -308,7 +308,7 @@ class Summary(object):
                 f"pupil dilation: {behavior[0]:.02f}, "
                 f"derivative: {behavior[1]:.02f}, "
                 f"speed: {behavior[2]:.02f}, "
-                f"pupil center: [{pupil_center[0]:.02f}, {pupil_center[1]:.02f}]",
+                f"pupil center: ({pupil_center[0]:.02f}, {pupil_center[1]:.02f})",
                 y=1.05,
                 fontsize=label_fontsize,
             )
