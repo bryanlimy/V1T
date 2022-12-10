@@ -193,7 +193,7 @@ def plot_samples(
             "behaviors": [],
             "image_ids": [],
         }
-
+        i_transform_image = mouse_ds.dataset.i_transform_image
         for data in mouse_ds:
             images = data["image"]
             predictions, crop_images, image_grids = model(
@@ -202,8 +202,8 @@ def plot_samples(
                 pupil_centers=data["pupil_center"].to(device, non_blocking=True),
                 behaviors=data["behavior"].to(device, non_blocking=True),
             )
-            images = mouse_ds.dataset.i_transform_image(images)
-            crop_images = mouse_ds.dataset.i_transform_image(crop_images.cpu())
+            images = i_transform_image(images)
+            crop_images = i_transform_image(crop_images.cpu())
             image_grids = image_grids.cpu()
             predictions = predictions.cpu()
             for i in range(len(predictions)):
