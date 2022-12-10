@@ -37,8 +37,9 @@ def train_step(
     optimizer: torch.optim,
     criterion: losses.Loss,
     update: bool,
+    device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
-    device = model.device
+    model.to(device, non_blocking=True)
     responses = batch["response"].to(device, non_blocking=True)
     outputs, _, _ = model(
         inputs=batch["image"].to(device, non_blocking=True),
@@ -88,6 +89,7 @@ def train(
             optimizer=optimizer,
             criterion=criterion,
             update=(i + 1) % update_frequency == 0,
+            device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
@@ -98,8 +100,10 @@ def validation_step(
     batch: t.Dict[str, torch.Tensor],
     model: nn.Module,
     criterion: losses.Loss,
+    device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
-    result, device = {}, model.device
+    result = {}
+    model.to(device, non_blocking=True)
     responses = batch["response"].to(device, non_blocking=True)
     outputs, _, _ = model(
         inputs=batch["image"].to(device, non_blocking=True),
@@ -133,6 +137,7 @@ def validate(
                     batch=batch,
                     model=model,
                     criterion=criterion,
+                    device=args.device,
                 )
                 utils.update_dict(mouse_result, result)
                 pbar.update(1)
@@ -183,7 +188,13 @@ def main(args):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(model, ds=train_ds, summary=summary, epoch=epoch)
+    utils.plot_samples(
+        model,
+        ds=train_ds,
+        summary=summary,
+        epoch=epoch,
+        device=args.device,
+    )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -218,7 +229,13 @@ def main(args):
                 mode=0,
             )
         if epoch % 10 == 0:
-            utils.plot_samples(model, ds=val_ds, summary=summary, epoch=epoch)
+            utils.plot_samples(
+                model,
+                ds=val_ds,
+                summary=summary,
+                epoch=epoch,
+                device=args.device,
+            )
         if args.verbose:
             print(
                 f'Train\t\t\tloss: {train_result["loss"]:.04f}\t\t'
@@ -244,7 +261,14 @@ def main(args):
         print_result=True,
         save_result=args.output_dir,
     )
-    utils.plot_samples(model, ds=test_ds, summary=summary, epoch=epoch, mode=2)
+    utils.plot_samples(
+        model,
+        ds=test_ds,
+        summary=summary,
+        epoch=epoch,
+        mode=2,
+        device=args.device,
+    )
 
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")

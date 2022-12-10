@@ -33,9 +33,8 @@ class Readout(nn.Module):
         self.name = "Readout" if name is None else name
         self.input_shape = input_shape
         self.output_shape = output_shape
-        self.device = args.device
         self.neuron_coordinates = ds.dataset.coordinates
-        self.reg_scale = torch.tensor(args.readout_reg_scale, device=self.device)
+        self.register_buffer("reg_scale", torch.tensor(args.readout_reg_scale))
 
     @property
     def num_neurons(self):
@@ -66,7 +65,6 @@ class Readouts(nn.ModuleDict):
             raise NotImplementedError(f"Readout {model} has not been implemented.")
         self.input_shape = input_shape
         self.output_shapes = output_shapes
-        self.device = args.device
         readout_model = _READOUTS[model]
         for mouse_id, output_shape in self.output_shapes.items():
             self.add_module(

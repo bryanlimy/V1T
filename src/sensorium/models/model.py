@@ -18,13 +18,14 @@ def get_model_info(
     input_data: t.Union[torch.Tensor, t.Sequence[t.Any], t.Mapping[str, t.Any]],
     filename: str = None,
     summary: tensorboard.Summary = None,
+    device: torch.device = "cpu",
     tag: str = "model/trainable_parameters",
 ):
     model_info = torchinfo.summary(
         model,
         input_data=input_data,
         depth=5,
-        device=model.device,
+        device=device,
         verbose=0,
     )
     if filename is not None:
@@ -50,7 +51,6 @@ class Model(nn.Module):
             args.output_shapes, dict
         ), "output_shapes must be a dictionary of mouse_id and output_shape"
         self.name = name
-        self.device = args.device
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
         assert args.shift_mode in (0, 1, 2, 3)
@@ -159,7 +159,6 @@ class DataParallel(nn.DataParallel):
     def __init__(self, module: Model, **kwargs):
         super(DataParallel, self).__init__(module=module, **kwargs)
         self.module = module
-        self.device = module.device
         self.input_shape = module.input_shape
         self.output_shapes = self.module.output_shapes
 

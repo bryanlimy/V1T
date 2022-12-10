@@ -19,7 +19,6 @@ class ImageShifter(nn.Module):
         super(ImageShifter, self).__init__()
         assert 0 <= max_shift <= 1
         self.name = name
-        self.device = args.device
         self.register_buffer("max_shift", torch.tensor(max_shift))
         self.register_buffer("reg_scale", torch.tensor(args.shifter_reg_scale))
         out_features = 2

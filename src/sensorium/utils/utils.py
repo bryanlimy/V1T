@@ -31,7 +31,10 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
 
 
-def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tensor]:
+@torch.no_grad()
+def inference(
+    ds: DataLoader, model: torch.nn.Module, device: torch.device = "cpu"
+) -> t.Dict[str, torch.Tensor]:
     """Inference data in DataLoader ds
     Returns:
         results: t.Dict[int, t.Dict[str, torch.Tensor]]
@@ -47,20 +50,20 @@ def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tenso
         "trial_ids": [],
         "image_ids": [],
     }
-    mouse_id, device = ds.dataset.mouse_id, model.device
+    mouse_id = ds.dataset.mouse_id
+    model.to(device, non_blocking=True)
     model.train(False)
-    with torch.no_grad():
-        for data in ds:
-            predictions, _, _ = model(
-                inputs=data["image"].to(device),
-                mouse_id=mouse_id,
-                pupil_centers=data["pupil_center"].to(device),
-                behaviors=data["behavior"].to(device),
-            )
-            results["predictions"].append(predictions.cpu())
-            results["targets"].append(data["response"])
-            results["image_ids"].append(data["image_id"])
-            results["trial_ids"].append(data["trial_id"])
+    for data in ds:
+        predictions, _, _ = model(
+            inputs=data["image"].to(device, non_blocking=True),
+            mouse_id=mouse_id,
+            pupil_centers=data["pupil_center"].to(device, non_blocking=True),
+            behaviors=data["behavior"].to(device, non_blocking=True),
+        )
+        results["predictions"].append(predictions.cpu())
+        results["targets"].append(data["response"])
+        results["image_ids"].append(data["image_id"])
+        results["trial_ids"].append(data["trial_id"])
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
@@ -99,7 +102,7 @@ def evaluate(
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
-        outputs[mouse_id] = inference(ds=mouse_ds, model=model)
+        outputs[mouse_id] = inference(ds=mouse_ds, model=model, device=args.device)
 
         mouse_metric = Metrics(ds=mouse_ds, results=outputs[mouse_id])
 
@@ -167,6 +170,7 @@ def evaluate(
     return overall_result
 
 
+@torch.no_grad()
 def plot_samples(
     model: nn.Module,
     ds: t.Dict[int, DataLoader],
@@ -174,8 +178,9 @@ def plot_samples(
     epoch: int,
     mode: int = 1,
     num_samples: int = 5,
+    device: torch.device = "cpu",
 ):
-    device = model.device
+    model.to(device, non_blocking=True)
     model.train(False)
     for mouse_id, mouse_ds in ds.items():
         results = {
@@ -188,32 +193,32 @@ def plot_samples(
             "behaviors": [],
             "image_ids": [],
         }
-        with torch.no_grad():
-            for data in mouse_ds:
-                images = data["image"]
-                predictions, crop_images, image_grids = model(
-                    inputs=images.to(device),
-                    mouse_id=mouse_id,
-                    pupil_centers=data["pupil_center"].to(device),
-                    behaviors=data["behavior"].to(device),
-                )
-                images = mouse_ds.dataset.i_transform_image(images)
-                crop_images = mouse_ds.dataset.i_transform_image(crop_images.cpu())
-                image_grids = image_grids.cpu()
-                predictions = predictions.cpu()
-                for i in range(len(predictions)):
-                    results["images"].append(images[i])
-                    results["crop_images"].append(crop_images[i])
-                    results["image_grids"].append(image_grids[i])
-                    results["targets"].append(data["response"][i])
-                    results["predictions"].append(predictions[i])
-                    results["pupil_center"].append(data["pupil_center"][i])
-                    results["behaviors"].append(data["behavior"][i])
-                    results["image_ids"].append(data["image_id"][i])
-                    if len(results["images"]) == num_samples:
-                        break
+        i_transform_image = mouse_ds.dataset.i_transform_image
+        for data in mouse_ds:
+            images = data["image"]
+            predictions, crop_images, image_grids = model(
+                inputs=images.to(device, non_blocking=True),
+                mouse_id=mouse_id,
+                pupil_centers=data["pupil_center"].to(device, non_blocking=True),
+                behaviors=data["behavior"].to(device, non_blocking=True),
+            )
+            images = i_transform_image(images)
+            crop_images = i_transform_image(crop_images.cpu())
+            image_grids = image_grids.cpu()
+            predictions = predictions.cpu()
+            for i in range(len(predictions)):
+                results["images"].append(images[i])
+                results["crop_images"].append(crop_images[i])
+                results["image_grids"].append(image_grids[i])
+                results["targets"].append(data["response"][i])
+                results["predictions"].append(predictions[i])
+                results["pupil_center"].append(data["pupil_center"][i])
+                results["behaviors"].append(data["behavior"][i])
+                results["image_ids"].append(data["image_id"][i])
                 if len(results["images"]) == num_samples:
                     break
+            if len(results["images"]) == num_samples:
+                break
         results = {k: torch.stack(v, dim=0).numpy() for k, v in results.items()}
         summary.plot_image_response(
             f"image_response/mouse{mouse_id}", results=results, step=epoch, mode=mode
@@ -318,11 +323,11 @@ def num_steps(ds: t.Dict[int, DataLoader]):
     return sum([len(ds[k]) for k in ds.keys()])
 
 
-def load_pretrain_core(args, model: Model):
+def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
     filename = os.path.join(args.pretrain_core, "ckpt", "model_state.pt")
     assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
     model_dict = model.state_dict()
-    core_ckpt = torch.load(filename, map_location=model.device)
+    core_ckpt = torch.load(filename, map_location=device)
     # add 'core.' to parameters in pretrained core
     core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
     # check pretrained core has the same parameters in core module

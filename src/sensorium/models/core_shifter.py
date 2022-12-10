@@ -15,7 +15,6 @@ class CoreShifter(nn.Module):
     ):
         super(CoreShifter, self).__init__()
         self.name = name
-        self.device = args.device
         self.register_buffer("reg_scale", torch.tensor(args.shifter_reg_scale))
         out_features = in_features
         layers = []

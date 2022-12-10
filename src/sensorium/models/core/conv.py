@@ -18,7 +18,7 @@ class ConvCore(Core):
         name: str = "ConvCore",
     ):
         super(ConvCore, self).__init__(args, input_shape=input_shape, name=name)
-        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
+        self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
 
         output_shape = input_shape
         self.conv_block1 = nn.Sequential(

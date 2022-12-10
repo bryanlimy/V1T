@@ -42,11 +42,13 @@ def train(
     optimizer: torch.optim,
     summary: tensorboard.Summary,
     epoch: int,
+    device: torch.device = "cpu",
 ):
     results = {}
+    model.to(device)
     model.train(True)
     for images, labels in tqdm(ds, desc="Train", disable=args.verbose == 0):
-        images, labels = images.to(model.device), labels.to(model.device)
+        images, labels = images.to(device), labels.to(device)
         outputs = model(images)
         loss = F.nll_loss(input=outputs, target=labels)
         reg_loss = model.regularizer()
@@ -81,12 +83,14 @@ def validate(
     summary: tensorboard.Summary,
     epoch: int,
     mode: int = 1,
+    device: torch.device = "cpu",
 ):
     results, make_plot = {}, True
+    model.to(device)
     model.train(False)
     with torch.no_grad():
         for images, labels in tqdm(ds, desc="Val", disable=args.verbose == 0):
-            images, labels = images.to(model.device), labels.to(model.device)
+            images, labels = images.to(device), labels.to(device)
             outputs = model(images)
             loss = F.nll_loss(input=outputs, target=labels)
             predictions = torch.argmax(outputs, dim=1)

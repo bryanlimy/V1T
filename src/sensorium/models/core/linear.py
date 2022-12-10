@@ -10,7 +10,7 @@ class LinearCore(Core):
     def __init__(self, args, input_shape: tuple, name: str = "LinearCore"):
         super(LinearCore, self).__init__(args, input_shape=input_shape, name=name)
         self.output_shape = input_shape
-        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
+        self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
 
         self.flatten = nn.Flatten()
         self.linear = nn.Linear(

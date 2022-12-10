@@ -35,7 +35,7 @@ def inference(
     ds: DataLoader,
     model: nn.Module,
     mouse_id: int,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device = "cpu",
     desc: str = "",
 ) -> t.Dict[str, t.List[t.Union[float, int]]]:
     """
