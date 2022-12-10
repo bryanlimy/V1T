@@ -188,13 +188,13 @@ def main(args):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    # utils.plot_samples(
-    #     model,
-    #     ds=train_ds,
-    #     summary=summary,
-    #     epoch=epoch,
-    #     device=args.device,
-    # )
+    utils.plot_samples(
+        model,
+        ds=train_ds,
+        summary=summary,
+        epoch=epoch,
+        device=args.device,
+    )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
