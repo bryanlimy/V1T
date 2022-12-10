@@ -294,7 +294,7 @@ def get_training_ds(
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}
     if device.type in ("cuda", "mps"):
-        gpu_kwargs = {"prefetch_factor": 2, "pin_memory": False}
+        gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
 
     # a dictionary of DataLoader for each train, validation and test set

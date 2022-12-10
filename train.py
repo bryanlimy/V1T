@@ -40,12 +40,12 @@ def train_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    responses = batch["response"].to(device, non_blocking=True)
+    responses = batch["response"].to(device)
     outputs, _, _ = model(
-        inputs=batch["image"].to(device, non_blocking=True),
+        inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=batch["pupil_center"].to(device, non_blocking=True),
-        behaviors=batch["behavior"].to(device, non_blocking=True),
+        pupil_centers=batch["pupil_center"].to(device),
+        behaviors=batch["behavior"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
@@ -79,6 +79,7 @@ def train(
     update_frequency = len(mouse_ids)
     model.train(True)
     model.requires_grad_(True)
+    optimizer.zero_grad(set_to_none=True)
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
