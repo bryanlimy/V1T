@@ -112,7 +112,7 @@ class Attention(nn.Module):
         inputs = self.layer_norm(inputs)
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
         q, k, v = map(
-            lambda t: rearrange(t, "b n (h d) -> b h n d", h=self.num_heads),
+            lambda a: rearrange(a, "b n (h d) -> b h n d", h=self.num_heads),
             qkv,
         )
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
@@ -200,7 +200,6 @@ class ViTCore(Core):
             dropout=args.t_dropout,
             behavior_mode=args.behavior_mode,
         )
-
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
@@ -212,7 +211,7 @@ class ViTCore(Core):
         while num_patches % dim1 != 0 and dim1 > 0:
             dim1 -= 1
         dim2 = num_patches // dim1
-        return (dim1, dim2)
+        return dim1, dim2
 
     def regularizer(self):
         """L1 regularization"""
