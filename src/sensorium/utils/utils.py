@@ -51,14 +51,14 @@ def inference(
         "image_ids": [],
     }
     mouse_id = ds.dataset.mouse_id
-    model.to(device, non_blocking=True)
+    model.to(device)
     model.train(False)
     for data in ds:
         predictions, _, _ = model(
-            inputs=data["image"].to(device, non_blocking=True),
+            inputs=data["image"].to(device),
             mouse_id=mouse_id,
-            pupil_centers=data["pupil_center"].to(device, non_blocking=True),
-            behaviors=data["behavior"].to(device, non_blocking=True),
+            pupil_centers=data["pupil_center"].to(device),
+            behaviors=data["behavior"].to(device),
         )
         results["predictions"].append(predictions.cpu())
         results["targets"].append(data["response"])
