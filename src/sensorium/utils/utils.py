@@ -180,7 +180,7 @@ def plot_samples(
     num_samples: int = 5,
     device: torch.device = "cpu",
 ):
-    model.to(device, non_blocking=True)
+    model.to(device)
     model.train(False)
     for mouse_id, mouse_ds in ds.items():
         results = {
