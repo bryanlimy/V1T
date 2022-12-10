@@ -41,12 +41,12 @@ def train_step(
 ) -> t.Dict[str, torch.Tensor]:
     print(device)
     model.to(device)
-    responses = batch["response"].to(device, non_blocking=True)
+    responses = batch["response"].to(device)
     outputs, _, _ = model(
-        inputs=batch["image"].to(device, non_blocking=True),
+        inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=batch["pupil_center"].to(device, non_blocking=True),
-        behaviors=batch["behavior"].to(device, non_blocking=True),
+        pupil_centers=batch["pupil_center"].to(device),
+        behaviors=batch["behavior"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
