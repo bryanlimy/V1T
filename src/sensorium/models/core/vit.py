@@ -52,24 +52,15 @@ class Image2Patches(nn.Module):
         return outputs
 
 
-class PreNorm(nn.Module):
-    def __init__(self, dim: int, fn: nn.Module):
-        super(PreNorm, self).__init__()
-        self.norm = nn.LayerNorm(dim)
-        self.fn = fn
-
-    def forward(self, inputs: torch.Tensor, **kwargs):
-        return self.fn(self.norm(inputs), **kwargs)
-
-
-class FeedForward(nn.Module):
+class MLP(nn.Module):
     def __init__(
         self, in_dim: int, hidden_dim: int, out_dim: int = None, dropout: float = 0.0
     ):
-        super(FeedForward, self).__init__()
+        super(MLP, self).__init__()
         if out_dim is None:
             out_dim = in_dim
-        self.net = nn.Sequential(
+        self.model = nn.Sequential(
+            nn.LayerNorm(in_dim),
             nn.Linear(in_features=in_dim, out_features=hidden_dim),
             nn.GELU(),
             nn.Dropout(p=dropout),
@@ -78,7 +69,22 @@ class FeedForward(nn.Module):
         )
 
     def forward(self, inputs: torch.Tensor):
-        return self.net(inputs)
+        return self.model(inputs)
+
+
+class BehaviorMLP(nn.Module):
+    def __init__(self, in_dim: int, out_dim: int, dropout: float = 0.0):
+        super(BehaviorMLP, self).__init__()
+        self.model = nn.Sequential(
+            nn.Linear(in_features=in_dim, out_features=out_dim // 2),
+            nn.Tanh(),
+            nn.Dropout(p=dropout),
+            nn.Linear(in_features=out_dim // 2, out_features=out_dim),
+            nn.Tanh(),
+        )
+
+    def forward(self, inputs: torch.Tensor):
+        return self.model(inputs)
 
 
 class Attention(nn.Module):
@@ -100,8 +106,10 @@ class Attention(nn.Module):
             nn.Linear(in_features=inner_dim, out_features=emb_dim),
             nn.Dropout(p=dropout),
         )
+        self.layer_norm = nn.LayerNorm(emb_dim)
 
     def forward(self, inputs: torch.Tensor):
+        inputs = self.layer_norm(inputs)
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
         q, k, v = map(
             lambda t: rearrange(t, "b n (h d) -> b h n d", h=self.num_heads),
@@ -133,38 +141,21 @@ class Transformer(nn.Module):
             # emb_dim += 3
             block = nn.ModuleDict(
                 {
-                    "attn": PreNorm(
-                        dim=emb_dim,
-                        fn=Attention(
-                            emb_dim=emb_dim,
-                            num_heads=num_heads,
-                            dropout=dropout,
-                        ),
+                    "mha": Attention(
+                        emb_dim=emb_dim,
+                        num_heads=num_heads,
+                        dropout=dropout,
                     ),
-                    "ff": PreNorm(
-                        dim=emb_dim,
-                        fn=FeedForward(
-                            in_dim=emb_dim,
-                            hidden_dim=mlp_dim,
-                            dropout=dropout,
-                        ),
+                    "mlp": MLP(
+                        in_dim=emb_dim,
+                        hidden_dim=mlp_dim,
+                        dropout=dropout,
                     ),
                 }
             )
             if behavior_mode in (2, 3):
-                in_features = 3 if behavior_mode == 2 else 5
-                block.update(
-                    {
-                        "bff": nn.Sequential(
-                            nn.Linear(
-                                in_features=in_features, out_features=emb_dim // 2
-                            ),
-                            nn.Tanh(),
-                            nn.Dropout(p=dropout),
-                            nn.Linear(in_features=emb_dim // 2, out_features=emb_dim),
-                            nn.Tanh(),
-                        )
-                    }
+                block["b-mlp"] = BehaviorMLP(
+                    in_dim=3 if behavior_mode == 2 else 5, out_dim=emb_dim
                 )
             self.blocks.append(block)
         self.output_shape = (input_shape[0], emb_dim)
@@ -172,12 +163,12 @@ class Transformer(nn.Module):
     def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         outputs = inputs
         for block in self.blocks:
-            if "bff" in block:
-                b_latent = block["bff"](behaviors)
+            if "b-mlp" in block:
+                b_latent = block["b-mlp"](behaviors)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            outputs = block["attn"](outputs) + outputs
-            outputs = block["ff"](outputs) + outputs
+            outputs = block["mha"](outputs) + outputs
+            outputs = block["mlp"](outputs) + outputs
         return outputs
 
 
