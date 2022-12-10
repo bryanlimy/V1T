@@ -256,19 +256,12 @@ class MiceDataset(Dataset):
                 - trial_id: the trial ID
                 - mouse_id: the mouse ID
         """
-        print("1")
         trial = self.indexes[idx]
-        print("2")
         data = load_trial_data(mouse_dir=self.mouse_dir, trial=trial)
-        print("3")
         data["image"] = self.transform_image(data["image"])
-        print("4")
         data["response"] = self.transform_response(data["response"])
-        print("5")
         data["behavior"] = self.transform_behavior(data["behavior"])
-        print("6")
         data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
-        print("7")
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
