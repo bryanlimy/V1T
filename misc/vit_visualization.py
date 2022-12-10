@@ -82,7 +82,7 @@ class Recorder(nn.Module):
 def plot_attention_map(
     results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
     filename: str = None,
-    colormap: str = "jet",
+    colormap: str = "turbo",
 ):
     cmap = cm.get_cmap(colormap)
     colors = cmap(np.arange(256))[:, :3]
@@ -100,7 +100,7 @@ def plot_attention_map(
         axes[i, 0].imshow(image, cmap="gray")
         heatmap = colors[np.uint8(255.0 * heatmap)] * 255.0
         heatmap = alpha * heatmap + (1 - alpha) * image[..., np.newaxis]
-        axes[i, 1].imshow(heatmap.astype(np.uint8))
+        axes[i, 1].imshow(heatmap.astype(np.uint8), cmap=colormap)
         if i == 0:
             axes[i, 0].set_title("Input", fontsize=label_fontsize)
             axes[i, 1].set_title("Attention rollout", fontsize=label_fontsize)
@@ -168,14 +168,14 @@ def attention_rollout(image: np.ndarray, attention: np.ndarray):
 
     heatmap = joint_attentions[-1, 0, 1:]
     heatmap = np.reshape(heatmap, newshape=(33, 61))
-    # heatmap = heatmap / np.max(heatmap)
+    heatmap = heatmap / np.max(heatmap)
     heatmap = resize(
         heatmap,
         output_shape=image.shape[1:],
         preserve_range=True,
         anti_aliasing=False,
     )
-    heatmap = heatmap / np.max(heatmap)
+    # heatmap = heatmap / np.max(heatmap)
     return heatmap
 
 
@@ -205,7 +205,7 @@ def main(args):
     recorder = Recorder(model.core)
 
     results = []
-    for batch in test_ds[MOUSE_ID]:
+    for batch in val_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
             # pupil_centers = torch.zeros_like(pupil_centers)
