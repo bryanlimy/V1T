@@ -104,13 +104,13 @@ def validation_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     result = {}
-    model.to(device, non_blocking=True)
-    responses = batch["response"].to(device, non_blocking=True)
+    model.to(device)
+    responses = batch["response"].to(device)
     outputs, _, _ = model(
-        inputs=batch["image"].to(device, non_blocking=True),
+        inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=batch["pupil_center"].to(device, non_blocking=True),
-        behaviors=batch["behavior"].to(device, non_blocking=True),
+        pupil_centers=batch["pupil_center"].to(device),
+        behaviors=batch["behavior"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
