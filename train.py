@@ -39,7 +39,8 @@ def train_step(
     update: bool,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
-    # model.to(device)
+    print(device)
+    model.to(device)
     responses = batch["response"].to(device, non_blocking=True)
     outputs, _, _ = model(
         inputs=batch["image"].to(device, non_blocking=True),
