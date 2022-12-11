@@ -151,6 +151,16 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
+    if not args.disable_wandb:
+        os.environ["WANDB_SILENT"] = "true"
+        run = wandb.init(
+            config=args,
+            dir=os.path.join(args.output_dir, "wandb"),
+            project="Sensorium",
+            entity="bryanlimy",
+            name=os.path.basename(args.output_dir),
+        )
+
     Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
@@ -185,7 +195,6 @@ def main(args):
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
-    wandb.config = deepcopy(args.__dict__)
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
@@ -245,7 +254,8 @@ def main(args):
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
-        wandb.log(val_result)
+        if not args.disable_wandb:
+            wandb.log({"train": train_result, "val": val_result}, step=epoch)
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
@@ -495,10 +505,6 @@ if __name__ == "__main__":
     # hyper-parameters for shifter module
     if temp_args.shift_mode in (1, 2, 3):
         parser.add_argument("--shifter_reg_scale", type=float, default=0.0)
-
-    if not temp_args.disable_wandb:
-        os.environ["WANDB_SILENT"] = "true"
-        wandb.init(project="Sensorium", entity="bryanlimy")
 
     del temp_args
 
