@@ -153,11 +153,12 @@ def main(args):
 
     if not args.disable_wandb:
         os.environ["WANDB_SILENT"] = "true"
-        run = wandb.init(
+        wandb.init(
             config=args,
             dir=os.path.join(args.output_dir, "wandb"),
             project="Sensorium",
             entity="bryanlimy",
+            group=os.path.basename(os.path.dirname(args.output_dir)),
             name=os.path.basename(args.output_dir),
         )
 
