@@ -1,0 +1,135 @@
+import os
+import torch
+import argparse
+import numpy as np
+import typing as t
+from torch import nn
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+from skimage.transform import resize
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+from sensorium import data
+from sensorium.models.model import Model
+from sensorium.utils.scheduler import Scheduler
+from sensorium.utils import utils, tensorboard
+from sensorium.losses import correlation
+
+utils.set_random_seed(1234)
+
+BACKGROUND_COLOR = "#ffffff"
+
+
+@torch.no_grad()
+def inference(
+    model: Model, ds: DataLoader, mouse_id: int, device: torch.device = "cpu"
+):
+    results = {"predictions": [], "targets": [], "pupil_dilations": []}
+    model.to(device)
+    model.train(False)
+    i = 0
+    for data in tqdm(ds, desc=f"Mouse {mouse_id}"):
+        predictions, _, _ = model(
+            inputs=data["image"].to(device),
+            mouse_id=mouse_id,
+            pupil_centers=data["pupil_center"].to(device),
+            behaviors=data["behavior"].to(device),
+        )
+        results["predictions"].append(predictions.cpu().numpy())
+        results["targets"].append(data["response"].numpy())
+        results["pupil_dilations"].append(data["behavior"][:, 0].numpy())
+        i += 1
+        if i > 100:
+            break
+    results = {k: np.vstack(v) for k, v in results.items()}
+    results["pupil_dilations"] = np.squeeze(results["pupil_dilations"], axis=-1)
+    return results
+
+
+def correlation_by_dilation(results: t.Dict[str, np.ndarray]):
+    # sort responses according to pupil dilation
+    dilation_sort = np.argsort(results["pupil_dilations"])
+    predictions = results["predictions"][dilation_sort]
+    targets = results["targets"][dilation_sort]
+    # compute the correlation of top half and bottom half of responses
+    mid = len(dilation_sort) // 2
+    small = correlation(y1=predictions[:mid], y2=targets[:mid], dim=0)
+    large = correlation(y1=predictions[mid:], y2=targets[mid:], dim=0)
+    overall = correlation(y1=predictions, y2=targets, dim=0)
+    print(
+        f"Overall {overall.mean():.04f}, "
+        f"large: {large.mean():.04f}, "
+        f"small: {small.mean():.04f}"
+    )
+    return {"large": large, "small": small}
+
+
+import seaborn as sns
+import pandas as pd
+
+
+def plot_correlations(results: t.Dict[str, t.Dict[str, np.ndarray]]):
+    df = pd.DataFrame(
+        data=[
+            [results[mouse_id][size], mouse_id, size]
+            for size in ["large", "small"]
+            for mouse_id in results.keys()
+        ],
+        columns=["correlation", "mouse_id", "pupil_size"],
+    )
+    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 5), dpi=120)
+    sns.violinplot(
+        data=df,
+        x="mouse_id",
+        y="correlation",
+        hue="pupil_size",
+        split=True,
+        ax=ax,
+    )
+    sns.despine(ax=ax, offset=10, trim=True)
+    plt.show()
+
+
+def main(args):
+    if not os.path.isdir(args.output_dir):
+        raise FileNotFoundError(f"Cannot find {args.output_dir}.")
+    utils.load_args(args)
+    args.batch_size = 1
+    args.device = torch.device(args.device)
+
+    _, val_ds, _ = data.get_training_ds(
+        args,
+        data_dir=args.dataset,
+        mouse_ids=args.mouse_ids,
+        batch_size=args.batch_size,
+        device=args.device,
+    )
+
+    model = Model(args, ds=val_ds)
+    model.train(False)
+
+    scheduler = Scheduler(args, model=model, save_optimizer=False)
+    scheduler.restore(force=True)
+
+    results = {}
+    i = 0
+    for mouse_id, mouse_ds in val_ds.items():
+        mouse_result = inference(
+            model=model, ds=mouse_ds, mouse_id=mouse_id, device=args.device
+        )
+        correlations = correlation_by_dilation(mouse_result)
+        results[mouse_id] = correlations
+        i += 1
+        if i > 2:
+            break
+    plot_correlations(results)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", type=str, default="../data/sensorium")
+    parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--device", type=str, default="cpu")
+
+    main(parser.parse_args())
