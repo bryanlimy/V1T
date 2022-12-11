@@ -43,6 +43,7 @@ if __name__ == "__main__":
         default="data/sensorium",
         help="path to directory where the dataset is stored.",
     )
+    parser.add_argument("--batch_size", type=int, default=0)
     parser.add_argument("--sweep_id", type=str, required=True)
     parser.add_argument("--num_trials", type=int, default=1)
     params = parser.parse_args()
