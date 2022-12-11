@@ -62,6 +62,14 @@ def correlation_by_dilation(results: t.Dict[str, np.ndarray]):
     return {"large": large, "small": small}
 
 
+plt.rcParams.update(
+    {
+        "mathtext.default": "regular",
+        "legend.markerscale": 0.1,
+    }
+)
+
+
 def plot_correlations(
     results: t.Dict[str, t.Dict[str, np.ndarray]], filename: str = None
 ):
@@ -74,7 +82,8 @@ def plot_correlations(
         ],
         columns=["neuron", "Correlation", "Mouse", "Pupil size"],
     )
-    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 5), dpi=240)
+    tick_fontsize, label_fontsize = 8, 10
+    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4), dpi=240)
     sns.violinplot(
         data=df,
         x="Mouse",
@@ -87,14 +96,39 @@ def plot_correlations(
     )
     sns.move_legend(
         ax,
-        "lower center",
-        bbox_to_anchor=(0.5, 0.95),
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.03),
         ncols=2,
         frameon=False,
         handletextpad=0.5,
         markerscale=0.5,
+        fontsize=tick_fontsize,
+        title_fontsize=tick_fontsize,
     )
-    sns.despine(ax=ax, offset=10, trim=True)
+
+    sns.despine(ax=ax, offset={"left": 15, "bottom": 5}, trim=True)
+    ax.set_yticklabels(ax.get_yticks().round(1), fontsize=tick_fontsize)
+    ax.set_xticklabels(ax.get_xticks(), fontsize=tick_fontsize)
+    ax.set_ylabel(ax.get_ylabel(), fontsize=label_fontsize)
+    ax.set_xlabel(ax.get_xlabel(), fontsize=label_fontsize)
+
+    max_value = 1
+    for i, mouse_id in enumerate(results.keys()):
+        small = np.mean(results[mouse_id]["small"])
+        large = np.mean(results[mouse_id]["large"])
+        gain = 100 * (large - small) / small
+        ax.text(
+            x=i,
+            y=max_value,
+            s=f"{'+' if gain > 0 else '-'}{gain:.01f}%",
+            ha="center",
+            va="top",
+            fontsize=tick_fontsize,
+        )
+    ax.set_title(
+        "Prediction correlations w.r.t pupil dilation", fontsize=label_fontsize
+    )
+    plt.tight_layout()
     plt.show()
     if filename is not None:
         tensorboard.save_figure(figure=figure, filename=filename, dpi=240)
