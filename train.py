@@ -145,28 +145,29 @@ def validate(
     return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
 
 
-def main(args):
+def main(args, wandb_sweep: bool = False):
     if args.clear_output_dir and os.path.isdir(args.output_dir):
         rmtree(args.output_dir)
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    if not args.disable_wandb:
+    if args.use_wandb:
         os.environ["WANDB_SILENT"] = "true"
-        wandb.init(
-            config=args,
-            dir=os.path.join(args.output_dir, "wandb"),
-            project="Sensorium",
-            entity="bryanlimy",
-            group=os.path.basename(os.path.dirname(args.output_dir)),
-            name=os.path.basename(args.output_dir),
-        )
+        if not wandb_sweep:
+            wandb.init(
+                config=args,
+                dir=os.path.join(args.output_dir, "wandb"),
+                project="Sensorium",
+                entity="bryanlimy",
+                group=args.wandb_troup,
+                name=os.path.basename(args.output_dir),
+            )
 
     Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
 
-    if args.mouse_ids is None:
+    if not args.mouse_ids:
         args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
     if args.batch_size == 0 and "cuda" in args.device.type:
         utils.auto_batch_size(args)
@@ -255,7 +256,7 @@ def main(args):
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
-        if not args.disable_wandb:
+        if args.use_wandb:
             wandb.log(
                 {
                     "train_loss": train_result["loss"],
@@ -424,8 +425,11 @@ if __name__ == "__main__":
         help="file format when --save_plots",
     )
 
+    # wandb settings
+    parser.add_argument("--use_wandb", action="store_true")
+    parser.add_argument("--wandb_group", type=str, default="")
+
     # misc
-    parser.add_argument("--disable_wandb", action="store_true")
     parser.add_argument(
         "--clear_output_dir",
         action="store_true",
