@@ -2,6 +2,7 @@ import os
 import wandb
 import argparse
 from functools import partial
+from datetime import datetime
 
 import train as trainer
 
@@ -9,7 +10,9 @@ import train as trainer
 class Args:
     def __init__(self, id: str, config: wandb.Config, dataset: str, batch_size: int):
         self.dataset = dataset
-        self.output_dir = os.path.join(config.output_dir, id)
+        self.output_dir = os.path.join(
+            config.output_dir, f"{datetime.now():%Y%m%d-%Hh%Mm}-{id}"
+        )
         self.batch_size = batch_size
         self.device = ""
         self.mouse_ids = None
