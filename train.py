@@ -256,7 +256,15 @@ def main(args):
                 f"Elapse: {elapse:.02f}s"
             )
         if not args.disable_wandb:
-            wandb.log({"train": train_result, "val": val_result}, step=epoch)
+            wandb.log(
+                {
+                    "train_loss": train_result["loss"],
+                    "train_corr": train_result["single_trial_correlation"],
+                    "val_loss": val_result["loss"],
+                    "val_corr": val_result["single_trial_correlation"],
+                },
+                step=epoch,
+            )
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
