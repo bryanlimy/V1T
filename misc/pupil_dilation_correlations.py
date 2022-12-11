@@ -3,12 +3,12 @@ import torch
 import argparse
 import numpy as np
 import typing as t
-from torch import nn
-import matplotlib.cm as cm
-import matplotlib.pyplot as plt
-from skimage.transform import resize
-from torch.utils.data import DataLoader
+import pandas as pd
+import seaborn as sns
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader
+
 
 from sensorium import data
 from sensorium.models.model import Model
@@ -16,6 +16,7 @@ from sensorium.utils.scheduler import Scheduler
 from sensorium.utils import utils, tensorboard
 from sensorium.losses import correlation
 
+sns.set_style("ticks")
 utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
@@ -28,7 +29,6 @@ def inference(
     results = {"predictions": [], "targets": [], "pupil_dilations": []}
     model.to(device)
     model.train(False)
-    i = 0
     for data in tqdm(ds, desc=f"Mouse {mouse_id}"):
         predictions, _, _ = model(
             inputs=data["image"].to(device),
@@ -39,9 +39,6 @@ def inference(
         results["predictions"].append(predictions.cpu().numpy())
         results["targets"].append(data["response"].numpy())
         results["pupil_dilations"].append(data["behavior"][:, 0].numpy())
-        i += 1
-        if i > 100:
-            break
     results = {k: np.vstack(v) for k, v in results.items()}
     results["pupil_dilations"] = np.squeeze(results["pupil_dilations"], axis=-1)
     return results
@@ -65,30 +62,45 @@ def correlation_by_dilation(results: t.Dict[str, np.ndarray]):
     return {"large": large, "small": small}
 
 
-import seaborn as sns
-import pandas as pd
-
-
-def plot_correlations(results: t.Dict[str, t.Dict[str, np.ndarray]]):
+def plot_correlations(
+    results: t.Dict[str, t.Dict[str, np.ndarray]], filename: str = None
+):
     df = pd.DataFrame(
         data=[
-            [results[mouse_id][size], mouse_id, size]
+            [i, results[mouse_id][size][i], mouse_id, size]
             for size in ["large", "small"]
             for mouse_id in results.keys()
+            for i in range(len(results[mouse_id][size]))
         ],
-        columns=["correlation", "mouse_id", "pupil_size"],
+        columns=["neuron", "Correlation", "Mouse", "Pupil size"],
     )
-    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 5), dpi=120)
+    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 5), dpi=240)
     sns.violinplot(
         data=df,
-        x="mouse_id",
-        y="correlation",
-        hue="pupil_size",
+        x="Mouse",
+        y="Correlation",
+        hue="Pupil size",
+        inner="quartile",
         split=True,
+        palette="Set2",
         ax=ax,
+    )
+    sns.move_legend(
+        ax,
+        "lower center",
+        bbox_to_anchor=(0.5, 0.95),
+        ncols=2,
+        frameon=False,
+        handletextpad=0.5,
+        markerscale=0.5,
     )
     sns.despine(ax=ax, offset=10, trim=True)
     plt.show()
+    if filename is not None:
+        tensorboard.save_figure(figure=figure, filename=filename)
+
+
+import pickle
 
 
 def main(args):
@@ -113,17 +125,19 @@ def main(args):
     scheduler.restore(force=True)
 
     results = {}
-    i = 0
     for mouse_id, mouse_ds in val_ds.items():
         mouse_result = inference(
             model=model, ds=mouse_ds, mouse_id=mouse_id, device=args.device
         )
         correlations = correlation_by_dilation(mouse_result)
         results[mouse_id] = correlations
-        i += 1
-        if i > 2:
-            break
-    plot_correlations(results)
+
+    plot_correlations(
+        results,
+        filename=os.path.join(
+            args.output_dir, "plots", "pupil_dilation_correlation.jpg"
+        ),
+    )
 
 
 if __name__ == "__main__":
