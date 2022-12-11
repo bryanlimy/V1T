@@ -12,9 +12,10 @@ from torch.utils.data import DataLoader
 
 from sensorium import data
 from sensorium.models.model import Model
-from sensorium.utils.scheduler import Scheduler
-from sensorium.utils import utils, tensorboard
 from sensorium.losses import correlation
+from sensorium.utils import utils, tensorboard
+from sensorium.utils.scheduler import Scheduler
+
 
 sns.set_style("ticks")
 utils.set_random_seed(1234)
@@ -60,14 +61,6 @@ def correlation_by_dilation(results: t.Dict[str, np.ndarray]):
         f"small: {small.mean():.04f}"
     )
     return {"large": large, "small": small}
-
-
-plt.rcParams.update(
-    {
-        "mathtext.default": "regular",
-        "legend.markerscale": 0.1,
-    }
-)
 
 
 def plot_correlations(
@@ -125,9 +118,7 @@ def plot_correlations(
             va="top",
             fontsize=tick_fontsize,
         )
-    ax.set_title(
-        "Prediction correlations w.r.t pupil dilation", fontsize=label_fontsize
-    )
+    ax.set_title("Prediction performance w.r.t pupil dilation", fontsize=label_fontsize)
     plt.tight_layout()
     plt.show()
     if filename is not None:
