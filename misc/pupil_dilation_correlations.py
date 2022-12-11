@@ -100,9 +100,6 @@ def plot_correlations(
         tensorboard.save_figure(figure=figure, filename=filename)
 
 
-import pickle
-
-
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
