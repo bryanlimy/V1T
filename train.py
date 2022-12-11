@@ -157,7 +157,7 @@ def main(args, wandb_sweep: bool = False):
             wandb.init(
                 config=args,
                 dir=os.path.join(args.output_dir, "wandb"),
-                project="Sensorium",
+                project="sensorium",
                 entity="bryanlimy",
                 group=args.wandb_troup,
                 name=os.path.basename(args.output_dir),

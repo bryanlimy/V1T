@@ -1,9 +1,11 @@
 program: wandb_agent.py
-method: random
+method: bayes
 metric:
   goal: maximize
   name: val_corr
-name: sweep-test
+name: sweep-vit
+project: sensorium
+entity: bryanlimy
 early_terminate:
   type: hyperband
   min_iter: 30
@@ -15,7 +17,7 @@ parameters:
   adam_eps:
     value: 1e-08
   batch_size:
-    value: 16
+    value: 4
   behavior_mode:
     values:
       - 1
