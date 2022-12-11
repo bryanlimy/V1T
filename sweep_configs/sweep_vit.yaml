@@ -1,8 +1,8 @@
-program: wandb_agent.py
 method: bayes
 metric:
   goal: maximize
   name: val_corr
+  target: 0.46
 name: sweep-vit
 project: sensorium
 entity: bryanlimy
@@ -16,8 +16,6 @@ parameters:
     value: 0.9999
   adam_eps:
     value: 1e-08
-  batch_size:
-    value: 4
   behavior_mode:
     values:
       - 1
@@ -39,8 +37,6 @@ parameters:
     min: 0
   criterion:
     value: poisson
-  dataset:
-    value: data/sensorium
   disable_grid_predictor:
     value: false
   ds_scale:
