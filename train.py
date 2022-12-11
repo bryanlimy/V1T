@@ -1,15 +1,14 @@
 import os
 import torch
+import wandb
 import argparse
 import typing as t
-from ray import tune
 from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
-from ray.air import session
 from torch.utils.data import DataLoader
-
+from copy import deepcopy
 
 from sensorium import losses, data
 from sensorium.models import get_model
@@ -186,6 +185,7 @@ def main(args):
     criterion = losses.get_criterion(args, ds=train_ds)
 
     utils.save_args(args)
+    wandb.config = deepcopy(args.__dict__)
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
@@ -245,8 +245,7 @@ def main(args):
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
-        if tune.is_session_enabled():
-            session.report(metrics=val_result)
+        wandb.log(val_result)
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
@@ -408,6 +407,7 @@ if __name__ == "__main__":
     )
 
     # misc
+    parser.add_argument("--disable_wandb", action="store_true")
     parser.add_argument(
         "--clear_output_dir",
         action="store_true",
@@ -496,5 +496,10 @@ if __name__ == "__main__":
     if temp_args.shift_mode in (1, 2, 3):
         parser.add_argument("--shifter_reg_scale", type=float, default=0.0)
 
+    if not temp_args.disable_wandb:
+        os.environ["WANDB_SILENT"] = "true"
+        wandb.init(project="Sensorium", entity="bryanlimy")
+
     del temp_args
+
     main(parser.parse_args())

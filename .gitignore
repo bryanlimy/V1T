@@ -142,3 +142,4 @@ dmypy.json
 *.h5
 *.json
 /runs
+wandb/
