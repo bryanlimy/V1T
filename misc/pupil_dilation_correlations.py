@@ -97,7 +97,8 @@ def plot_correlations(
     sns.despine(ax=ax, offset=10, trim=True)
     plt.show()
     if filename is not None:
-        tensorboard.save_figure(figure=figure, filename=filename)
+        tensorboard.save_figure(figure=figure, filename=filename, dpi=240)
+        print(f"Figure saved at {filename}.")
 
 
 def main(args):
