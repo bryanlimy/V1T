@@ -262,8 +262,7 @@ def main(args):
                     "train_corr": train_result["single_trial_correlation"],
                     "val_loss": val_result["loss"],
                     "val_corr": val_result["single_trial_correlation"],
-                },
-                step=epoch,
+                }
             )
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
