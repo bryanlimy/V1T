@@ -5,11 +5,7 @@ import train as trainer
 
 
 class Args:
-    def __init__(
-        self,
-        id: str,
-        config: wandb.Config,
-    ):
+    def __init__(self, id: str, config: wandb.Config):
         self.dataset = config.dataset
         self.output_dir = os.path.join(config.output_dir, id)
         self.readout = config.readout
@@ -30,8 +26,10 @@ class Args:
 
 
 def main():
-    run = wandb.init(group="sweep-test")
+    run = wandb.init(group="vit_sweep")
     config = run.config
+    run.name = run.id
+    run.save()
 
     args = Args(id=run.id, config=config)
     trainer.main(args, wandb_sweep=True)

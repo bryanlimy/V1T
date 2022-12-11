@@ -4,6 +4,9 @@ metric:
   goal: maximize
   name: val_corr
 name: sweep-test
+early_terminate:
+  type: hyperband
+  min_iter: 30
 parameters:
   adam_beta1:
     value: 0.9
@@ -12,9 +15,12 @@ parameters:
   adam_eps:
     value: 1e-08
   batch_size:
-    value: 0
+    value: 16
   behavior_mode:
-    value: 0
+    values:
+      - 1
+      - 2
+      - 3
   bias_mode:
     value: 0
   center_crop:
@@ -59,10 +65,14 @@ parameters:
     distribution: int_uniform
     max: 8
     min: 1
+  num_heads:
+    distribution: int_uniform
+    max: 16
+    min: 2
   num_workers:
     value: 2
   output_dir:
-    value: runs/test_sweep/output_dir
+    value: runs/sweep_vit/output_dir
   p_dropout:
     distribution: uniform
     max: 0.5
