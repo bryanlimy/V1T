@@ -17,10 +17,7 @@ parameters:
   adam_eps:
     value: 1e-08
   behavior_mode:
-    values:
-      - 1
-      - 2
-      - 3
+    value: 3
   bias_mode:
     value: 0
   center_crop:
