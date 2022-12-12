@@ -273,7 +273,6 @@ def main(args, wandb_sweep: bool = False):
             break
 
     scheduler.restore()
-
     eval_result = utils.evaluate(
         args,
         ds=test_ds,
@@ -284,6 +283,8 @@ def main(args, wandb_sweep: bool = False):
         print_result=True,
         save_result=args.output_dir,
     )
+    if args.use_wandb:
+        wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
     utils.plot_samples(
         model,
         ds=test_ds,
@@ -292,12 +293,9 @@ def main(args, wandb_sweep: bool = False):
         mode=2,
         device=args.device,
     )
-
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
-
     summary.close()
-
     return eval_result
 
 
