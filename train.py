@@ -164,7 +164,7 @@ def main(args, wandb_sweep: bool = False):
                     name=os.path.basename(args.output_dir),
                 )
             except AssertionError as e:
-                print(f"wandb error: {e}")
+                print(f"wandb.init error: {e}")
                 args.use_wandb = False
 
     Logger(args)
