@@ -67,8 +67,6 @@ parameters:
     distribution: int_uniform
     max: 16
     min: 2
-  num_workers:
-    value: 2
   output_dir:
     value: runs/sweep_vit
   p_dropout:
