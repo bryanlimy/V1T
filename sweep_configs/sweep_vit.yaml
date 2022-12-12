@@ -2,7 +2,7 @@ method: bayes
 metric:
   goal: maximize
   name: val_corr
-  target: 0.46
+  target: 0.50
 name: sweep-vit
 project: sensorium
 entity: bryanlimy
@@ -70,7 +70,7 @@ parameters:
   num_workers:
     value: 2
   output_dir:
-    value: runs/sweep_vit/output_dir
+    value: runs/sweep_vit
   p_dropout:
     distribution: uniform
     max: 0.5

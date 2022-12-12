@@ -32,7 +32,7 @@ def main(dataset: str, batch_size: int):
     run = wandb.init(group="vit_sweep")
     config = run.config
     run.name = run.id
-    run.save()
+    wandb.config.update({"batch_size": batch_size})
 
     args = Args(id=run.id, config=config, dataset=dataset, batch_size=batch_size)
     trainer.main(args, wandb_sweep=True)
