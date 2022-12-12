@@ -183,7 +183,7 @@ if __name__ == "__main__":
         help="path to directory where the compressed dataset is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", default=16, type=int)
     parser.add_argument(
         "--device",
         type=str,
