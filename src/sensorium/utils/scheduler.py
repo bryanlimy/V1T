@@ -15,7 +15,7 @@ class Scheduler:
         model: nn.Module,
         optimizer: Optimizer = None,
         mode: t.Literal["min", "max"] = "max",
-        max_reduce: int = 3,
+        max_reduce: int = 2,
         lr_patience: int = 10,
         factor: float = 0.3,
         min_epochs: int = 0,
