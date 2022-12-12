@@ -154,14 +154,18 @@ def main(args, wandb_sweep: bool = False):
     if args.use_wandb:
         os.environ["WANDB_SILENT"] = "true"
         if not wandb_sweep:
-            wandb.init(
-                config=args,
-                dir=os.path.join(args.output_dir, "wandb"),
-                project="sensorium",
-                entity="bryanlimy",
-                group=args.wandb_group,
-                name=os.path.basename(args.output_dir),
-            )
+            try:
+                wandb.init(
+                    config=args,
+                    dir=os.path.join(args.output_dir, "wandb"),
+                    project="sensorium",
+                    entity="bryanlimy",
+                    group=args.wandb_group,
+                    name=os.path.basename(args.output_dir),
+                )
+            except AssertionError as e:
+                print(f"wandb error: {e}")
+                args.use_wandb = False
 
     Logger(args)
     utils.set_random_seed(args.seed)
