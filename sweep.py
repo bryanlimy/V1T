@@ -29,7 +29,7 @@ class Args:
         self.dpi = 120
         self.format = "svg"
         self.clear_output_dir = False
-        self.verbose = 0
+        self.verbose = 1
         self.use_wandb = True
         for key, value in config.items():
             if not hasattr(self, key):
