@@ -159,7 +159,7 @@ def main(args, wandb_sweep: bool = False):
                 dir=os.path.join(args.output_dir, "wandb"),
                 project="sensorium",
                 entity="bryanlimy",
-                group=args.wandb_troup,
+                group=args.wandb_group,
                 name=os.path.basename(args.output_dir),
             )
 
