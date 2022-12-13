@@ -145,7 +145,9 @@ class Model(nn.Module):
             pupil_centers=pupil_centers,
             behaviors=behaviors,
         )
-        outputs = self.core(images, behaviors=behaviors, pupil_centers=pupil_centers)
+        outputs = self.core(
+            images, behaviors=behaviors, pupil_centers=pupil_centers, mouse_id=mouse_id
+        )
         shifts = None
         if self.core_shifter is not None:
             shifts = self.core_shifter(pupil_centers, mouse_id=mouse_id)
@@ -193,6 +195,7 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
             torch.randn(args.batch_size, *model.core.input_shape),
             torch.randn(args.batch_size, 3),  # behaviors
             torch.randn(args.batch_size, 2),  # pupil centers
+            mouse_id,  # mouse_id
         ],
         filename=os.path.join(args.output_dir, "model_core.txt"),
         summary=summary,

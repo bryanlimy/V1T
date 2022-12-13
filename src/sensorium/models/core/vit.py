@@ -73,18 +73,29 @@ class MLP(nn.Module):
 
 
 class BehaviorMLP(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int, dropout: float = 0.0):
+    def __init__(
+        self,
+        mouse_ids: t.List[int],
+        in_dim: int,
+        out_dim: int,
+        dropout: float = 0.0,
+    ):
         super(BehaviorMLP, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(in_features=in_dim, out_features=out_dim // 2),
-            nn.Tanh(),
-            nn.Dropout(p=dropout),
-            nn.Linear(in_features=out_dim // 2, out_features=out_dim),
-            nn.Tanh(),
+        self.models = nn.ModuleDict(
+            {
+                str(mouse_id): nn.Sequential(
+                    nn.Linear(in_features=in_dim, out_features=out_dim // 2),
+                    nn.Tanh(),
+                    nn.Dropout(p=dropout),
+                    nn.Linear(in_features=out_dim // 2, out_features=out_dim),
+                    nn.Tanh(),
+                )
+                for mouse_id in mouse_ids
+            }
         )
 
-    def forward(self, inputs: torch.Tensor):
-        return self.model(inputs)
+    def forward(self, inputs: torch.Tensor, mouse_id: int):
+        return self.models[str(mouse_id)](inputs)
 
 
 class Attention(nn.Module):
@@ -134,6 +145,7 @@ class Transformer(nn.Module):
         mlp_dim: int,
         dropout: float,
         behavior_mode: int,
+        mouse_ids: t.List[int],
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
@@ -155,16 +167,18 @@ class Transformer(nn.Module):
             )
             if behavior_mode in (2, 3):
                 block["b-mlp"] = BehaviorMLP(
-                    in_dim=3 if behavior_mode == 2 else 5, out_dim=emb_dim
+                    mouse_ids=mouse_ids,
+                    in_dim=3 if behavior_mode == 2 else 5,
+                    out_dim=emb_dim,
                 )
             self.blocks.append(block)
         self.output_shape = (input_shape[0], emb_dim)
 
-    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor, mouse_id: int):
         outputs = inputs
         for block in self.blocks:
             if "b-mlp" in block:
-                b_latent = block["b-mlp"](behaviors)
+                b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
             outputs = block["mha"](outputs) + outputs
@@ -199,6 +213,7 @@ class ViTCore(Core):
             mlp_dim=args.mlp_dim,
             dropout=args.t_dropout,
             behavior_mode=args.behavior_mode,
+            mouse_ids=list(args.output_shapes.keys()),
         )
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
@@ -222,11 +237,12 @@ class ViTCore(Core):
         inputs: torch.Tensor,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
+        mouse_id: int,
     ):
         outputs = self.patch_embedding(inputs)
         if self.behavior_mode == 3:
             behaviors = torch.cat((behaviors, pupil_centers), dim=-1)
-        outputs = self.transformer(outputs, behaviors=behaviors)
+        outputs = self.transformer(outputs, behaviors=behaviors, mouse_id=mouse_id)
         outputs = outputs[:, 1:, :]  # remove CLS token
         outputs = self.rearrange(outputs)
         return outputs
