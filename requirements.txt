@@ -3,6 +3,7 @@ h5py
 numpy
 torch
 scipy
+joypy
 einops
 pandas
 sklearn
