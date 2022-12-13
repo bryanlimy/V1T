@@ -49,10 +49,10 @@ class Recorder(nn.Module):
     def _find_modules(nn_module, type):
         return [module for module in nn_module.modules() if isinstance(module, type)]
 
-    def _register_hook(self):
+    def _register_hook(self, mouse_id: int):
         modules = self._find_modules(self.vit.transformer, BehaviorMLP)
         for module in modules:
-            handle = module.model.register_forward_hook(self._hook)
+            handle = module.models[str(mouse_id)].register_forward_hook(self._hook)
             self.hooks.append(handle)
         self.hook_registered = True
 
@@ -75,6 +75,7 @@ class Recorder(nn.Module):
         images: torch.Tensor,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
+        mouse_id: int,
     ):
         """Return attention output from ViT
         attns has shape (batch size, num blocks, num heads, num patches, num patches)
@@ -82,8 +83,13 @@ class Recorder(nn.Module):
         assert not self.ejected, "recorder has been ejected, cannot be used anymore"
         self.clear()
         if not self.hook_registered:
-            self._register_hook()
-        _ = self.vit(inputs=images, behaviors=behaviors, pupil_centers=pupil_centers)
+            self._register_hook(mouse_id=mouse_id)
+        _ = self.vit(
+            inputs=images,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
+            mouse_id=mouse_id,
+        )
         activations = torch.vstack(self.recordings)
         return activations
 
@@ -98,11 +104,11 @@ def plot_distribution_map(
     tick_fontsize, label_fontsize = 8, 10
     figure, axes = joypy.joyplot(
         df,
-        figsize=(5, 5),
+        figsize=(5, 6),
         colormap=cm.get_cmap(colormap),
         alpha=0.8,
         overlap=1.25,
-        kind="normalized_counts",
+        # kind="normalized_counts",
         bins=30,
         range_style="all",
         x_range=[-1.5, 1.5],
@@ -150,9 +156,8 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    recorder = Recorder(model.core)
-
     for mouse_id, mouse_ds in val_ds.items():
+        recorder = Recorder(model.core)
         results = []
         for batch in val_ds[mouse_id]:
             with torch.no_grad():
@@ -165,21 +170,24 @@ def main(args):
                     behaviors=behavior,
                 )
                 activations = recorder(
-                    images=image, behaviors=behavior, pupil_centers=pupil_center
+                    images=image,
+                    behaviors=behavior,
+                    pupil_centers=pupil_center,
+                    mouse_id=mouse_id,
                 )
                 recorder.clear()
             results.append(activations.numpy())
-
         results = np.array(results)
-
         # compute the average activation for every block over all samples
         results = np.mean(results, axis=0)
-
         plot_distribution_map(
             results=results,
             mouse_id=mouse_id,
-            filename=os.path.join("plots", f"b-mlp_distributions_mouse{mouse_id}.jpg"),
+            filename=os.path.join(
+                "plots", "b-mlp_distributions", f"mouse{mouse_id}.jpg"
+            ),
         )
+        del recorder
 
 
 if __name__ == "__main__":

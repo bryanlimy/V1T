@@ -8,7 +8,7 @@ from torch import nn
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from skimage.transform import resize
-
+import matplotlib.font_manager as font_manager
 
 from sensorium import data
 from sensorium.models.model import Model
@@ -22,6 +22,13 @@ utils.set_random_seed(1234)
 BACKGROUND_COLOR = "#ffffff"
 
 MOUSE_ID = 2
+
+font_path = "/Users/bryanlimy/Git/Lexend/Lexend-Regular.ttf"
+font_manager.fontManager.addfont(font_path)
+prop = font_manager.FontProperties(fname=font_path)
+
+plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["font.sans-serif"] = prop.get_name()
 
 
 class Recorder(nn.Module):
@@ -65,7 +72,11 @@ class Recorder(nn.Module):
         self.recordings.append(recording)
 
     def forward(
-        self, images: torch.Tensor, behaviors: torch.Tensor, pupil_centers: torch.Tensor
+        self,
+        images: torch.Tensor,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+        mouse_id: int,
     ):
         """Return attention output from ViT
         attns has shape (batch size, num blocks, num heads, num patches, num patches)
@@ -74,7 +85,12 @@ class Recorder(nn.Module):
         self.clear()
         if not self.hook_registered:
             self._register_hook()
-        pred = self.vit(inputs=images, behaviors=behaviors, pupil_centers=pupil_centers)
+        pred = self.vit(
+            inputs=images,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
+            mouse_id=mouse_id,
+        )
         recordings = tuple(map(lambda tensor: tensor.to(self.device), self.recordings))
         attns = torch.stack(recordings, dim=1) if len(recordings) > 0 else None
         return pred, attns
@@ -211,16 +227,16 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    num_plots = 5
+    num_plots = 10
     recorder = Recorder(model.core)
 
     results = []
     for batch in test_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
-            # pupil_centers = torch.zeros_like(pupil_centers)
+            # pupil_center = torch.zeros_like(pupil_center)
             behavior = batch["behavior"]
-            # behaviors = torch.zeros_like(behaviors)
+            behavior = torch.zeros_like(behavior)
             image, _ = model.image_cropper(
                 inputs=batch["image"],
                 mouse_id=MOUSE_ID,
@@ -228,7 +244,10 @@ def main(args):
                 behaviors=behavior,
             )
             _, attention = recorder(
-                images=image, behaviors=behavior, pupil_centers=pupil_center
+                images=image,
+                behaviors=behavior,
+                pupil_centers=pupil_center,
+                mouse_id=MOUSE_ID,
             )
             image = val_ds[MOUSE_ID].dataset.i_transform_image(image)
             recorder.clear()
