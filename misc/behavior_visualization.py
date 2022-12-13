@@ -88,14 +88,13 @@ def plot_distribution_map(
         df[i + 1] = results[i]
 
     tick_fontsize, label_fontsize = 8, 10
-    # figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 5), dpi=120)
     figure, axes = joypy.joyplot(
         df,
         figsize=(5, 5),
         colormap=cm.get_cmap(colormap),
         alpha=0.8,
         overlap=1.25,
-        # kind="normalized_counts",
+        kind="normalized_counts",
         bins=30,
         range_style="all",
         x_range=[-1.5, 1.5],
