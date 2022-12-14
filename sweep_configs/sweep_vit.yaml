@@ -1,0 +1,101 @@
+method: bayes
+metric:
+  goal: maximize
+  name: val_corr
+  target: 0.50
+name: sweep-vit
+project: sensorium
+entity: bryanlimy
+early_terminate:
+  type: hyperband
+  min_iter: 30
+parameters:
+  adam_beta1:
+    value: 0.9
+  adam_beta2:
+    value: 0.9999
+  adam_eps:
+    value: 1e-08
+  behavior_mode:
+    value: 3
+  bias_mode:
+    value: 0
+  center_crop:
+    value: 1
+  core:
+    value: vit
+  core_lr_scale:
+    distribution: uniform
+    max: 1
+    min: 0.0001
+  core_reg_scale:
+    distribution: uniform
+    max: 1
+    min: 0
+  criterion:
+    value: poisson
+  disable_grid_predictor:
+    value: false
+  ds_scale:
+    value: true
+  emb_dim:
+    distribution: q_log_uniform_values
+    q: 8
+    min: 8
+    max: 1024
+  epochs:
+    value: 400
+  grid_predictor_dim:
+    value: 2
+  lr:
+    distribution: uniform
+    max: 0.1
+    min: 0.0001
+  mlp_dim:
+    distribution: q_log_uniform_values
+    q: 8
+    min: 8
+    max: 1024
+  num_blocks:
+    distribution: int_uniform
+    max: 8
+    min: 1
+  num_heads:
+    distribution: int_uniform
+    max: 16
+    min: 2
+  output_dir:
+    value: runs/sweep_vit
+  p_dropout:
+    distribution: uniform
+    max: 0.5
+    min: 0
+  patch_size:
+    distribution: int_uniform
+    max: 16
+    min: 2
+  pretrain_core:
+    value: ""
+  readout:
+    value: gaussian2d
+  readout_reg_scale:
+    value: 0.0076
+  resize_image:
+    value: 1
+  seed:
+    value: 1234
+  shift_mode:
+    values:
+      - 0
+      - 1
+      - 2
+      - 3
+  shifter_reg_scale:
+    distribution: uniform
+    max: 1
+    min: 0
+  t_dropout:
+    distribution: uniform
+    max: 0.5
+    min: 0
+

@@ -1,15 +1,14 @@
 import os
 import torch
+import wandb
 import argparse
 import typing as t
-from ray import tune
 from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
-from ray.air import session
 from torch.utils.data import DataLoader
-
+from copy import deepcopy
 
 from sensorium import losses, data
 from sensorium.models import get_model
@@ -44,8 +43,8 @@ def train_step(
     outputs, _, _ = model(
         inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=batch["pupil_center"].to(device),
         behaviors=batch["behavior"].to(device),
+        pupil_centers=batch["pupil_center"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
@@ -109,8 +108,8 @@ def validation_step(
     outputs, _, _ = model(
         inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=batch["pupil_center"].to(device),
         behaviors=batch["behavior"].to(device),
+        pupil_centers=batch["pupil_center"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
@@ -146,17 +145,33 @@ def validate(
     return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
 
 
-def main(args):
+def main(args, wandb_sweep: bool = False):
     if args.clear_output_dir and os.path.isdir(args.output_dir):
         rmtree(args.output_dir)
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
+    if args.use_wandb:
+        os.environ["WANDB_SILENT"] = "true"
+        if not wandb_sweep:
+            try:
+                wandb.init(
+                    config=args,
+                    dir=os.path.join(args.output_dir, "wandb"),
+                    project="sensorium",
+                    entity="bryanlimy",
+                    group=args.wandb_group,
+                    name=os.path.basename(args.output_dir),
+                )
+            except AssertionError as e:
+                print(f"wandb.init error: {e}")
+                args.use_wandb = False
+
     Logger(args)
     utils.set_random_seed(args.seed)
     utils.get_device(args)
 
-    if args.mouse_ids is None:
+    if not args.mouse_ids:
         args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
     if args.batch_size == 0 and "cuda" in args.device.type:
         utils.auto_batch_size(args)
@@ -245,13 +260,19 @@ def main(args):
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
-        if tune.is_session_enabled():
-            session.report(metrics=val_result)
+        if args.use_wandb:
+            wandb.log(
+                {
+                    "train_loss": train_result["loss"],
+                    "train_corr": train_result["single_trial_correlation"],
+                    "val_loss": val_result["loss"],
+                    "val_corr": val_result["single_trial_correlation"],
+                }
+            )
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
 
     scheduler.restore()
-
     eval_result = utils.evaluate(
         args,
         ds=test_ds,
@@ -262,6 +283,8 @@ def main(args):
         print_result=True,
         save_result=args.output_dir,
     )
+    if args.use_wandb:
+        wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
     utils.plot_samples(
         model,
         ds=test_ds,
@@ -270,12 +293,9 @@ def main(args):
         mode=2,
         device=args.device,
     )
-
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
-
     summary.close()
-
     return eval_result
 
 
@@ -300,12 +320,13 @@ if __name__ == "__main__":
         "--behavior_mode",
         required=True,
         type=int,
-        choices=[0, 1, 2, 3],
+        choices=[0, 1, 2, 3, 4],
         help="behavior mode:"
         "0: do not include behavior"
         "1: concat behavior with natural image"
         "2: add latent behavior variables to each ViT block"
-        "3: add latent behavior + pupil centers to each ViT block",
+        "3: add latent behavior + pupil centers to each ViT block"
+        "4: separate BehaviorMLP for each animal",
     )
     parser.add_argument(
         "--center_crop",
@@ -407,6 +428,10 @@ if __name__ == "__main__":
         help="file format when --save_plots",
     )
 
+    # wandb settings
+    parser.add_argument("--use_wandb", action="store_true")
+    parser.add_argument("--wandb_group", type=str, default="")
+
     # misc
     parser.add_argument(
         "--clear_output_dir",
@@ -431,13 +456,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--shift_mode",
         type=int,
-        default=2,
-        choices=[0, 1, 2, 3],
+        default=1,
+        choices=[0, 1, 2, 3, 4],
         help="shifter mode: "
         "0 - disable shifter, "
-        "1 - shift input to core module, "
-        "2 - shift input to readout module"
-        "3 - shift input to both core and readout module",
+        "1 - shift input to readout module"
+        "2 - shift input to core module, "
+        "3 - shift input to both core and readout module"
+        "4 - shift_mode=3 and provide both behavior and pupil center to cropper",
     )
 
     temp_args = parser.parse_known_args()[0]
@@ -492,9 +518,13 @@ if __name__ == "__main__":
     else:
         parser.add_argument("--readout_reg_scale", type=float, default=0.0)
 
-    # hyper-parameters for shifter module
-    if temp_args.shift_mode in (1, 2, 3):
+    # hyper-parameters for core shifter module
+    if temp_args.shift_mode in (1, 2, 3, 4):
         parser.add_argument("--shifter_reg_scale", type=float, default=0.0)
+    # hyper-parameters for image cropper module
+    if temp_args.shift_mode in (2, 3, 4):
+        parser.add_argument("--cropper_reg_scale", type=float, default=0.0)
 
     del temp_args
+
     main(parser.parse_args())

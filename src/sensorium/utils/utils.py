@@ -57,8 +57,8 @@ def inference(
         predictions, _, _ = model(
             inputs=data["image"].to(device),
             mouse_id=mouse_id,
-            pupil_centers=data["pupil_center"].to(device),
             behaviors=data["behavior"].to(device),
+            pupil_centers=data["pupil_center"].to(device),
         )
         results["predictions"].append(predictions.cpu())
         results["targets"].append(data["response"])

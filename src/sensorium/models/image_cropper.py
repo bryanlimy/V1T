@@ -19,9 +19,10 @@ class ImageShifter(nn.Module):
         super(ImageShifter, self).__init__()
         assert 0 <= max_shift <= 1
         self.name = name
+        self.shift_mode = args.shift_mode
         self.register_buffer("max_shift", torch.tensor(max_shift))
-        self.register_buffer("reg_scale", torch.tensor(args.shifter_reg_scale))
-        out_features = 2
+        self.register_buffer("reg_scale", torch.tensor(args.cropper_reg_scale))
+        out_features = 5 if self.shift_mode == 4 else 2
         layers = []
         for _ in range(num_layers - 1):
             layers.extend(
@@ -37,21 +38,28 @@ class ImageShifter(nn.Module):
     def regularizer(self):
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
-    def forward(self, pupil_centers: torch.Tensor):
-        shifts = self.mlp(pupil_centers)
+    def forward(self, behaviors: torch.Tensor, pupil_centers: torch.Tensor):
+        inputs = pupil_centers
+        if self.shift_mode == 4:
+            inputs = torch.cat((behaviors, pupil_centers), dim=-1)
+        shifts = self.mlp(inputs)
         shifts = shifts * self.max_shift
         return shifts
 
 
 class ImageCropper(nn.Module):
-    def __init__(
-        self,
-        args,
-        ds: t.Dict[int, DataLoader],
-        use_shifter: bool,
-    ):
-        super().__init__()
+    """
+    shift mode:
+        0 - disable shifter
+        1 - shift input to readout module
+        2 - shift input to core module
+        3 - shift input to both core and readout module
+        4 - shift_mode=3 and provide both behavior and pupil center to cropper
+    """
 
+    def __init__(self, args, ds: t.Dict[int, DataLoader]):
+        super().__init__()
+        self.shift_mode = args.shift_mode
         self.input_shape = args.input_shape
         c, in_h, in_w = args.input_shape
         out_h, out_w = in_h, in_w
@@ -66,7 +74,7 @@ class ImageCropper(nn.Module):
             out_h = self.crop_h = int(in_h * self.crop_scale)
             out_w = self.crop_w = int(in_w * self.crop_scale)
         self.build_grid()
-        if use_shifter:
+        if self.shift_mode > 1:
             max_shift = 1 - self.crop_scale
             self.add_module(
                 name="image_shifter",
@@ -113,12 +121,14 @@ class ImageCropper(nn.Module):
         self,
         inputs: torch.Tensor,
         mouse_id: int,
-        pupil_centers: torch.Tensor,
         behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
     ):
         grid = repeat(self.grid, "1 c h w -> b c h w", b=inputs.size(0))
         if self.image_shifter is not None:
-            shifts = self.image_shifter[str(mouse_id)](pupil_centers)
+            shifts = self.image_shifter[str(mouse_id)](
+                behaviors=behaviors, pupil_centers=pupil_centers
+            )
             grid = grid + shifts[:, None, None, :]
         outputs = F.grid_sample(inputs, grid=grid, mode="nearest", align_corners=True)
         if self.resize is not None:

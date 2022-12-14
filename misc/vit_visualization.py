@@ -1,4 +1,5 @@
 import os
+import math
 import torch
 import argparse
 import numpy as np
@@ -7,7 +8,6 @@ from torch import nn
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from skimage.transform import resize
-
 
 from sensorium import data
 from sensorium.models.model import Model
@@ -64,16 +64,25 @@ class Recorder(nn.Module):
         self.recordings.append(recording)
 
     def forward(
-        self, images: torch.Tensor, behaviors: torch.Tensor, pupil_centers: torch.Tensor
+        self,
+        images: torch.Tensor,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+        mouse_id: int,
     ):
         """Return attention output from ViT
-        attns has shape (batch size, num blocks, num heads, patch size, patch size)
+        attns has shape (batch size, num blocks, num heads, num patches, num patches)
         """
         assert not self.ejected, "recorder has been ejected, cannot be used anymore"
         self.clear()
         if not self.hook_registered:
             self._register_hook()
-        pred = self.vit(inputs=images, behaviors=behaviors, pupil_centers=pupil_centers)
+        pred = self.vit(
+            inputs=images,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
+            mouse_id=mouse_id,
+        )
         recordings = tuple(map(lambda tensor: tensor.to(self.device), self.recordings))
         attns = torch.stack(recordings, dim=1) if len(recordings) > 0 else None
         return pred, attns
@@ -144,6 +153,14 @@ def plot_attention_map(
         print(f"plot saved to {filename}.")
 
 
+def find_shape(num_patches: int):
+    dim1 = math.ceil(math.sqrt(num_patches))
+    while num_patches % dim1 != 0 and dim1 > 0:
+        dim1 -= 1
+    dim2 = num_patches // dim1
+    return dim1, dim2
+
+
 def attention_rollout(image: np.ndarray, attention: np.ndarray):
     """
     Attention rollout from https://arxiv.org/abs/2005.00928
@@ -151,6 +168,7 @@ def attention_rollout(image: np.ndarray, attention: np.ndarray):
     - https://keras.io/examples/vision/probing_vits/#method-ii-attention-rollout
     - https://github.com/jeonsworld/ViT-pytorch/blob/main/visualize_attention_map.ipynb
     """
+    # average the attention heads
     attention = np.mean(attention, axis=1)
 
     # to account for residual connections, we add an identity matrix to the
@@ -167,21 +185,22 @@ def attention_rollout(image: np.ndarray, attention: np.ndarray):
         joint_attentions[n] = np.matmul(aug_att_mat[n], joint_attentions[n - 1])
 
     heatmap = joint_attentions[-1, 0, 1:]
-    heatmap = np.reshape(heatmap, newshape=(33, 61))
-    heatmap = heatmap / np.max(heatmap)
+    heatmap = np.reshape(heatmap, newshape=find_shape(len(heatmap)))
+    # heatmap = heatmap / np.max(heatmap)
     heatmap = resize(
         heatmap,
         output_shape=image.shape[1:],
         preserve_range=True,
         anti_aliasing=False,
     )
-    # heatmap = heatmap / np.max(heatmap)
+    heatmap = heatmap / np.max(heatmap)
     return heatmap
 
 
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
+    tensorboard.set_font()
 
     utils.load_args(args)
     args.batch_size = 1
@@ -201,16 +220,16 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    num_plots = 20
+    num_plots = 10
     recorder = Recorder(model.core)
 
     results = []
-    for batch in val_ds[MOUSE_ID]:
+    for batch in test_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
-            # pupil_centers = torch.zeros_like(pupil_centers)
+            # pupil_center = torch.zeros_like(pupil_center)
             behavior = batch["behavior"]
-            # behaviors = torch.zeros_like(behaviors)
+            behavior = torch.zeros_like(behavior)
             image, _ = model.image_cropper(
                 inputs=batch["image"],
                 mouse_id=MOUSE_ID,
@@ -218,7 +237,10 @@ def main(args):
                 behaviors=behavior,
             )
             _, attention = recorder(
-                images=image, behaviors=behavior, pupil_centers=pupil_center
+                images=image,
+                behaviors=behavior,
+                pupil_centers=pupil_center,
+                mouse_id=MOUSE_ID,
             )
             image = val_ds[MOUSE_ID].dataset.i_transform_image(image)
             recorder.clear()

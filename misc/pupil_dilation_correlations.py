@@ -129,6 +129,8 @@ def plot_correlations(
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
+    tensorboard.set_font()
+
     utils.load_args(args)
     args.batch_size = 1
     args.device = torch.device(args.device)

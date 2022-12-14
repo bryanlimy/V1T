@@ -15,7 +15,7 @@ class Scheduler:
         model: nn.Module,
         optimizer: Optimizer = None,
         mode: t.Literal["min", "max"] = "max",
-        max_reduce: int = 3,
+        max_reduce: int = 2,
         lr_patience: int = 10,
         factor: float = 0.3,
         min_epochs: int = 0,
@@ -157,10 +157,10 @@ class Scheduler:
         for i, param_group in enumerate(self.optimizer.param_groups):
             new_lr = self.factor * float(param_group["lr"])
             param_group["lr"] = new_lr
-            if self.verbose >= 2:
+            if self.verbose:
                 print(
                     f"Reduce learning rate of {param_group['name']} to "
-                    f"{new_lr:.04e} (num_reduce: {self.num_reduce})."
+                    f"{new_lr:.04e} (num. reduce: {self.num_reduce})."
                 )
 
     def step(self, value: t.Union[float, np.ndarray, torch.Tensor], epoch: int):

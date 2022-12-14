@@ -1,17 +1,14 @@
 tqdm
 h5py
-HEBO
 numpy
 torch
-pymoo==0.5.0
 scipy
-gputil
+joypy
 einops
 pandas
 sklearn
 seaborn
 jupyter
-ray[tune]
 torchinfo
 torchaudio
 matplotlib
@@ -19,7 +16,4 @@ ruamel.yaml
 tensorboard
 torchvision
 scikit-image
-jupyter_http_over_ws
-hpbandster
-ConfigSpace
 opencv-python

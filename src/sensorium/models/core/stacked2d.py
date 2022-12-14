@@ -345,6 +345,8 @@ class Stacked2dCore(Core, nn.Module):
     ):
         if depth_separable and attention_conv:
             raise ValueError("depth_separable and attention_conv can not both be true")
+        if args.behavior_mode not in (0, 1):
+            raise ValueError("stacked2d core only support behavior mode 0 and 1.")
 
         self.batch_norm = batch_norm
         self.final_batchnorm_scale = final_batchnorm_scale
@@ -574,7 +576,12 @@ class Stacked2dCore(Core, nn.Module):
         term2 = self.gamma_input * self.laplace()
         return term1 + term2
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+    ):
         outputs = []
         for layer, fn in enumerate(self.features):
             do_skip = layer >= 1 and self.skip > 1
