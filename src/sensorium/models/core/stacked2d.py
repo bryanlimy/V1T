@@ -579,6 +579,7 @@ class Stacked2dCore(Core, nn.Module):
     def forward(
         self,
         inputs: torch.Tensor,
+        mouse_id: int,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):

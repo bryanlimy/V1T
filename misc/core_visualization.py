@@ -83,30 +83,29 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    df = pd.DataFrame(columns=["Mouse", "Component 1", "Component 2"])
-    for mouse_id, mouse_ds in test_ds.items():
-        latents = inference(
-            mouse_id=mouse_id, ds=mouse_ds, model=model, device=args.device
-        )
-        latents = np.sum(latents, axis=1)  # sum over channel dimension
-        pca = PCA(n_components=2)
-        pca.fit(latents)
-        print(f"Explained variance ratio: {pca.explained_variance_ratio_}")
-        factors = pca.transform(latents)
-        mouse_df = pd.DataFrame(
-            data={
-                "Mouse": np.repeat(mouse_id, repeats=len(factors)),
-                "Component 1": factors[..., 0],
-                "Component 2": factors[..., 1],
-            }
-        )
-        df = pd.concat([df, mouse_df], ignore_index=True)
+    # df = pd.DataFrame(columns=["Mouse", "Component 1", "Component 2"])
+    # for mouse_id, mouse_ds in test_ds.items():
+    #     latents = inference(
+    #         mouse_id=mouse_id, ds=mouse_ds, model=model, device=args.device
+    #     )
+    #     latents = np.sum(latents, axis=1)  # sum over channel dimension
+    #     pca = PCA(n_components=2)
+    #     pca.fit(latents)
+    #     print(f"Explained variance ratio: {pca.explained_variance_ratio_}")
+    #     factors = pca.transform(latents)
+    #     mouse_df = pd.DataFrame(
+    #         data={
+    #             "Mouse": np.repeat(mouse_id, repeats=len(factors)),
+    #             "Component 1": factors[..., 0],
+    #             "Component 2": factors[..., 1],
+    #         }
+    #     )
+    #     df = pd.concat([df, mouse_df], ignore_index=True)
 
     import pickle
 
-    with open("dim1.pkl", "wb") as file:
-        pickle.dump(df, file)
-    exit()
+    with open("057_dim1.pkl", "rb") as file:
+        df = pickle.load(file)
 
     figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 5), dpi=120)
     sns.scatterplot(
@@ -115,6 +114,7 @@ def main(args):
         y="Component 2",
         hue="Mouse",
         palette="Set2",
+        alpha=0.6,
         ax=ax,
     )
     sns.despine(ax=ax, offset={"left": 15, "bottom": 5}, trim=True)
