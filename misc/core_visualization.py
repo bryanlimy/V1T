@@ -104,7 +104,7 @@ def main(args):
 
     import pickle
 
-    with open("dim1.pkl", "rb") as file:
+    with open("dim1.pkl", "wb") as file:
         pickle.dump(df, file)
     exit()
 
