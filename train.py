@@ -43,8 +43,8 @@ def train_step(
     outputs, _, _ = model(
         inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=batch["pupil_center"].to(device),
         behaviors=batch["behavior"].to(device),
+        pupil_centers=batch["pupil_center"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
@@ -108,8 +108,8 @@ def validation_step(
     outputs, _, _ = model(
         inputs=batch["image"].to(device),
         mouse_id=mouse_id,
-        pupil_centers=batch["pupil_center"].to(device),
         behaviors=batch["behavior"].to(device),
+        pupil_centers=batch["pupil_center"].to(device),
     )
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     result["loss/loss"] = loss.item()
@@ -320,12 +320,13 @@ if __name__ == "__main__":
         "--behavior_mode",
         required=True,
         type=int,
-        choices=[0, 1, 2, 3],
+        choices=[0, 1, 2, 3, 4],
         help="behavior mode:"
         "0: do not include behavior"
         "1: concat behavior with natural image"
         "2: add latent behavior variables to each ViT block"
-        "3: add latent behavior + pupil centers to each ViT block",
+        "3: add latent behavior + pupil centers to each ViT block"
+        "4: separate BehaviorMLP for each animal",
     )
     parser.add_argument(
         "--center_crop",
@@ -455,13 +456,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--shift_mode",
         type=int,
-        default=2,
-        choices=[0, 1, 2, 3],
+        default=1,
+        choices=[0, 1, 2, 3, 4],
         help="shifter mode: "
         "0 - disable shifter, "
-        "1 - shift input to core module, "
-        "2 - shift input to readout module"
-        "3 - shift input to both core and readout module",
+        "1 - shift input to readout module"
+        "2 - shift input to core module, "
+        "3 - shift input to both core and readout module"
+        "4 - shift_mode=3 and provide both behavior and pupil center to cropper",
     )
 
     temp_args = parser.parse_known_args()[0]
@@ -516,9 +518,12 @@ if __name__ == "__main__":
     else:
         parser.add_argument("--readout_reg_scale", type=float, default=0.0)
 
-    # hyper-parameters for shifter module
-    if temp_args.shift_mode in (1, 2, 3):
+    # hyper-parameters for core shifter module
+    if temp_args.shift_mode in (1, 2, 3, 4):
         parser.add_argument("--shifter_reg_scale", type=float, default=0.0)
+    # hyper-parameters for image cropper module
+    if temp_args.shift_mode in (2, 3, 4):
+        parser.add_argument("--cropper_reg_scale", type=float, default=0.0)
 
     del temp_args
 

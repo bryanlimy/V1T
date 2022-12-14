@@ -38,11 +38,12 @@ def get_model_info(
 
 class Model(nn.Module):
     """
-    args.shift_mode:
+    shift mode:
         0 - disable shifter
-        1 - shift input to core module
-        2 - shift input to readout module
+        1 - shift input to readout module
+        2 - shift input to core module
         3 - shift input to both core and readout module
+        4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
 
     def __init__(self, args, ds: t.Dict[int, DataLoader], name: str = "Model"):
@@ -53,16 +54,11 @@ class Model(nn.Module):
         self.name = name
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
-        assert args.shift_mode in (0, 1, 2, 3)
         self.shift_mode = args.shift_mode
 
         self.add_module(
             "image_cropper",
-            module=ImageCropper(
-                args,
-                ds=ds,
-                use_shifter=self.shift_mode in (1, 3),
-            ),
+            module=ImageCropper(args, ds=ds),
         )
         self.add_module(
             name="core",
@@ -71,7 +67,7 @@ class Model(nn.Module):
                 input_shape=self.image_cropper.output_shape,
             ),
         )
-        if self.shift_mode in (2, 3):
+        if self.shift_mode in (1, 3, 4):
             self.add_module(
                 "core_shifter",
                 module=CoreShifters(
@@ -135,18 +131,21 @@ class Model(nn.Module):
         self,
         inputs: torch.Tensor,
         mouse_id: torch.Union[int, torch.Tensor],
-        pupil_centers: torch.Tensor,
         behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
         activate: bool = True,
     ):
         images, image_grids = self.image_cropper(
             inputs,
             mouse_id=mouse_id,
-            pupil_centers=pupil_centers,
             behaviors=behaviors,
+            pupil_centers=pupil_centers,
         )
         outputs = self.core(
-            images, behaviors=behaviors, pupil_centers=pupil_centers, mouse_id=mouse_id
+            images,
+            mouse_id=mouse_id,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
         )
         shifts = None
         if self.core_shifter is not None:
@@ -180,8 +179,8 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
         input_data=[
             torch.randn(args.batch_size, *model.input_shape),  # images
             mouse_id,  # mouse ID
-            torch.randn(args.batch_size, 2),  # pupil centers
             torch.randn(args.batch_size, 3),  # behaviors
+            torch.randn(args.batch_size, 2),  # pupil centers
         ],
         filename=os.path.join(args.output_dir, "model.txt"),
         summary=summary,
@@ -193,9 +192,9 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
         model=model.core,
         input_data=[
             torch.randn(args.batch_size, *model.core.input_shape),
+            mouse_id,  # mouse_id
             torch.randn(args.batch_size, 3),  # behaviors
             torch.randn(args.batch_size, 2),  # pupil centers
-            mouse_id,  # mouse_id
         ],
         filename=os.path.join(args.output_dir, "model_core.txt"),
         summary=summary,
