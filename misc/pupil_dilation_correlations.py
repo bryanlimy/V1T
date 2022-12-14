@@ -8,7 +8,6 @@ import seaborn as sns
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
-import matplotlib.font_manager as font_manager
 
 
 from sensorium import data
@@ -22,13 +21,6 @@ sns.set_style("ticks")
 utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
-
-font_path = "/Users/bryanlimy/Git/Lexend/Lexend-Regular.ttf"
-font_manager.fontManager.addfont(font_path)
-prop = font_manager.FontProperties(fname=font_path)
-
-plt.rcParams["font.family"] = "sans-serif"
-plt.rcParams["font.sans-serif"] = prop.get_name()
 
 
 @torch.no_grad()
@@ -137,6 +129,8 @@ def plot_correlations(
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
+    tensorboard.set_font()
+
     utils.load_args(args)
     args.batch_size = 1
     args.device = torch.device(args.device)

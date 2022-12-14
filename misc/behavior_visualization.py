@@ -9,7 +9,6 @@ import pandas as pd
 from torch import nn
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import matplotlib.font_manager as font_manager
 
 from sensorium import data
 from sensorium.models.model import Model
@@ -21,13 +20,6 @@ from sensorium.models.core.vit import ViTCore, BehaviorMLP
 utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
-
-font_path = "/Users/bryanlimy/Git/Lexend/Lexend-Regular.ttf"
-font_manager.fontManager.addfont(font_path)
-prop = font_manager.FontProperties(fname=font_path)
-
-plt.rcParams["font.family"] = "sans-serif"
-plt.rcParams["font.sans-serif"] = prop.get_name()
 
 
 class Recorder(nn.Module):
@@ -137,6 +129,8 @@ def plot_distribution_map(
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
+
+    tensorboard.set_font()
 
     utils.load_args(args)
     args.batch_size = 1

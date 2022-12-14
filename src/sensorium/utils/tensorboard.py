@@ -11,6 +11,7 @@ import seaborn as sns
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from torchvision import transforms
+import matplotlib.font_manager as font_manager
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -37,6 +38,16 @@ GRAY = cm.get_cmap("gray")
 TURBO = cm.get_cmap("turbo")
 COLORMAP = TURBO
 GRAY2RGB = COLORMAP(np.arange(256))[:, :3]
+
+
+def set_font():
+    font_path = "/Users/bryanlimy/Git/font-lexend/Lexend-Regular.ttf"
+    if os.path.exists(font_path):
+        font_manager.fontManager.addfont(path=font_path)
+        prop = font_manager.FontProperties(fname=font_path)
+        plt.rcParams.update(
+            {"font.family": "sans-serif", "font.sans-serif": prop.get_name()}
+        )
 
 
 def remove_spines(axis: matplotlib.axes.Axes):

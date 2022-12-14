@@ -8,7 +8,6 @@ from torch import nn
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from skimage.transform import resize
-import matplotlib.font_manager as font_manager
 
 from sensorium import data
 from sensorium.models.model import Model
@@ -22,13 +21,6 @@ utils.set_random_seed(1234)
 BACKGROUND_COLOR = "#ffffff"
 
 MOUSE_ID = 2
-
-font_path = "/Users/bryanlimy/Git/Lexend/Lexend-Regular.ttf"
-font_manager.fontManager.addfont(font_path)
-prop = font_manager.FontProperties(fname=font_path)
-
-plt.rcParams["font.family"] = "sans-serif"
-plt.rcParams["font.sans-serif"] = prop.get_name()
 
 
 class Recorder(nn.Module):
@@ -208,6 +200,7 @@ def attention_rollout(image: np.ndarray, attention: np.ndarray):
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
+    tensorboard.set_font()
 
     utils.load_args(args)
     args.batch_size = 1
