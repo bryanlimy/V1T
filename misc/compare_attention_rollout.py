@@ -34,36 +34,41 @@ def extract_attention_maps(
 ):
     recorder = Recorder(vit=model.core)
     i_transform_image = ds.dataset.i_transform_image
-    results = {"images": [], "heatmaps": []}
+    results = {"images": [], "attentions": []}
     for batch in tqdm(ds, desc=f"Mouse {mouse_id}"):
-        pupil_center = batch["pupil_center"]
-        # pupil_center = torch.zeros_like(pupil_center)
+        pupil_centers = batch["pupil_center"]
         if hide_pupil_x:
-            pupil_center[:, 0] = 0.0
+            pupil_centers[:, 0] = 0.0
         if hide_pupil_y:
-            pupil_center[:, 1] = 0.0
-        behavior = batch["behavior"]
-        # behavior = torch.zeros_like(behavior)
-        image, _ = model.image_cropper(
+            pupil_centers[:, 1] = 0.0
+        behaviors = batch["behavior"]
+        images, _ = model.image_cropper(
             inputs=batch["image"],
             mouse_id=mouse_id,
-            pupil_centers=pupil_center,
-            behaviors=behavior,
+            pupil_centers=pupil_centers,
+            behaviors=behaviors,
         )
-        _, attention = recorder(
-            images=image,
-            behaviors=behavior,
-            pupil_centers=pupil_center,
+        _, attentions = recorder(
+            images=images,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
             mouse_id=mouse_id,
         )
-        image = i_transform_image(image)
-        image, attention = image.numpy()[0], attention.numpy()[0]
-        heatmap = attention_rollout(image=image, attention=attention)
-        results["images"].append(image)
-        results["heatmaps"].append(heatmap)
+        results["images"].append(i_transform_image(images))
+        results["attentions"].append(attentions)
         recorder.clear()
+        if len(results["images"]) > 5:
+            break
+    recorder.eject()
     del recorder
-    results = {k: np.stack(v, axis=0) for k, v in results.items()}
+    results = {k: torch.concat(v, dim=0).numpy() for k, v in results.items()}
+    results["heatmaps"] = []
+    for i in range(len(results["attentions"])):
+        image, attention = results["images"][i], results["attentions"][i]
+        heatmap = attention_rollout(image=image, attention=attention)
+        results["heatmaps"].append(heatmap)
+    del results["attentions"]
+    results["heatmaps"] = np.stack(results["heatmaps"], axis=0)
     return results
 
 
@@ -76,7 +81,6 @@ def main(args):
     tensorboard.set_font()
 
     utils.load_args(args)
-    args.batch_size = 1
     args.device = torch.device(args.device)
 
     _, _, test_ds = data.get_training_ds(
@@ -93,36 +97,38 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    results = {"mouse_id": {}}
+    results = {}
     for mouse_id, mouse_ds in test_ds.items():
-        results[mouse_id]["hide_x"] = extract_attention_maps(
+        mouse_result = {}
+        mouse_result["hide_x"] = extract_attention_maps(
             mouse_id=mouse_id,
             ds=mouse_ds,
             model=model,
             hide_pupil_x=True,
             hide_pupil_y=False,
         )
-        results[mouse_id]["hide_y"] = extract_attention_maps(
+        mouse_result["hide_y"] = extract_attention_maps(
             mouse_id=mouse_id,
             ds=mouse_ds,
             model=model,
             hide_pupil_x=False,
             hide_pupil_y=True,
         )
-        results[mouse_id]["hide_none"] = extract_attention_maps(
+        mouse_result["hide_none"] = extract_attention_maps(
             mouse_id=mouse_id,
             ds=mouse_ds,
             model=model,
             hide_pupil_x=False,
             hide_pupil_y=False,
         )
-        results[mouse_id]["hide_both"] = extract_attention_maps(
+        mouse_result["hide_both"] = extract_attention_maps(
             mouse_id=mouse_id,
             ds=mouse_ds,
             model=model,
             hide_pupil_x=True,
             hide_pupil_y=True,
         )
+        results[mouse_id] = mouse_result
         break
 
     with open("temp.pkl", "wb") as file:
@@ -139,5 +145,6 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--batch_size", type=int, default=1)
 
     main(parser.parse_args())
