@@ -51,8 +51,8 @@ class ImageCropper(nn.Module):
     """
     shift mode:
         0 - disable shifter
-        1 - shift input to readout module
-        2 - shift input to core module
+        1 - shift input to core module
+        2 - shift input to readout module
         3 - shift input to both core and readout module
         4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
@@ -74,7 +74,7 @@ class ImageCropper(nn.Module):
             out_h = self.crop_h = int(in_h * self.crop_scale)
             out_w = self.crop_w = int(in_w * self.crop_scale)
         self.build_grid()
-        if self.shift_mode > 1:
+        if self.shift_mode in (1, 3, 4):
             max_shift = 1 - self.crop_scale
             self.add_module(
                 name="image_shifter",

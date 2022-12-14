@@ -457,10 +457,10 @@ if __name__ == "__main__":
         type=int,
         default=1,
         choices=[0, 1, 2, 3, 4],
-        help="shifter mode: "
+        help="shift mode: "
         "0 - disable shifter, "
-        "1 - shift input to readout module"
-        "2 - shift input to core module, "
+        "1 - shift input to core module, "
+        "2 - shift input to readout module"
         "3 - shift input to both core and readout module"
         "4 - shift_mode=3 and provide both behavior and pupil center to cropper",
     )

@@ -40,8 +40,8 @@ class Model(nn.Module):
     """
     shift mode:
         0 - disable shifter
-        1 - shift input to readout module
-        2 - shift input to core module
+        1 - shift input to core module
+        2 - shift input to readout module
         3 - shift input to both core and readout module
         4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
@@ -67,7 +67,7 @@ class Model(nn.Module):
                 input_shape=self.image_cropper.output_shape,
             ),
         )
-        if self.shift_mode in (1, 3, 4):
+        if self.shift_mode in (2, 3, 4):
             self.add_module(
                 "core_shifter",
                 module=CoreShifters(
