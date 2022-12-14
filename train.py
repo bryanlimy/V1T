@@ -8,7 +8,6 @@ from tqdm import tqdm
 from time import time
 from shutil import rmtree
 from torch.utils.data import DataLoader
-from copy import deepcopy
 
 from sensorium import losses, data
 from sensorium.models import get_model
