@@ -102,13 +102,6 @@ def main(args):
         )
         df = pd.concat([df, mouse_df], ignore_index=True)
 
-    import pickle
-
-    with open("070_dim1.pkl", "wb") as file:
-        pickle.dump(df, file)
-        df = pickle.load(file)
-    exit()
-
     tick_fontsize, label_fontsize = 10, 12
     figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 5), dpi=120)
     sns.scatterplot(
