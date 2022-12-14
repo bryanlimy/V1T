@@ -60,6 +60,8 @@ def extract_attention_maps(
         results["images"].append(image)
         results["heatmaps"].append(heatmap)
         recorder.clear()
+        if len(results["images"]) == 10:
+            break
     recorder.eject()
     del recorder
     results = {k: np.stack(v, axis=0) for k, v in results.items()}
@@ -67,6 +69,20 @@ def extract_attention_maps(
 
 
 import pickle
+
+from scipy.ndimage.measurements import center_of_mass
+
+
+def compute_centers(heatmaps: np.ndarray, tag: str):
+    centers = np.zeros((len(heatmaps), 2))
+    for i, heatmap in enumerate(heatmaps):
+        y, x = center_of_mass(heatmap)
+        centers[i][0], centers[i][1] = x, y
+    print(
+        f"{tag}\n"
+        f"\tx: {np.mean(centers[:, 0]):.02f} \pm {np.std(centers[:, 0]):.02f}\n"
+        f"\ty: {np.mean(centers[:, 1]):.02f} \pm {np.std(centers[:, 1]):.02f}"
+    )
 
 
 def main(args):
@@ -92,41 +108,46 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    results = {}
-    for mouse_id, mouse_ds in test_ds.items():
-        results[mouse_id] = {}
-        results[mouse_id]["hide_x"] = extract_attention_maps(
-            mouse_id=mouse_id,
-            ds=mouse_ds,
-            model=model,
-            hide_pupil_x=True,
-            hide_pupil_y=False,
-        )
-        results[mouse_id]["hide_y"] = extract_attention_maps(
-            mouse_id=mouse_id,
-            ds=mouse_ds,
-            model=model,
-            hide_pupil_x=False,
-            hide_pupil_y=True,
-        )
-        results[mouse_id]["hide_none"] = extract_attention_maps(
-            mouse_id=mouse_id,
-            ds=mouse_ds,
-            model=model,
-            hide_pupil_x=False,
-            hide_pupil_y=False,
-        )
-        results[mouse_id]["hide_both"] = extract_attention_maps(
-            mouse_id=mouse_id,
-            ds=mouse_ds,
-            model=model,
-            hide_pupil_x=True,
-            hide_pupil_y=True,
-        )
-        break
+    # results = {}
+    # for mouse_id, mouse_ds in test_ds.items():
+    #     results[mouse_id] = {}
+    #     results[mouse_id]["hide_x"] = extract_attention_maps(
+    #         mouse_id=mouse_id,
+    #         ds=mouse_ds,
+    #         model=model,
+    #         hide_pupil_x=True,
+    #         hide_pupil_y=False,
+    #     )
+    #     results[mouse_id]["hide_y"] = extract_attention_maps(
+    #         mouse_id=mouse_id,
+    #         ds=mouse_ds,
+    #         model=model,
+    #         hide_pupil_x=False,
+    #         hide_pupil_y=True,
+    #     )
+    #     results[mouse_id]["hide_none"] = extract_attention_maps(
+    #         mouse_id=mouse_id,
+    #         ds=mouse_ds,
+    #         model=model,
+    #         hide_pupil_x=False,
+    #         hide_pupil_y=False,
+    #     )
+    #     results[mouse_id]["hide_both"] = extract_attention_maps(
+    #         mouse_id=mouse_id,
+    #         ds=mouse_ds,
+    #         model=model,
+    #         hide_pupil_x=True,
+    #         hide_pupil_y=True,
+    #     )
+    #     break
 
-    with open("temp.pkl", "wb") as file:
-        pickle.dump(results, file)
+    with open("temp.pkl", "rb") as file:
+        results = pickle.load(file)
+
+    for i in range(0, 100, 10):
+        print(f"\nFrame {i}")
+        for k in ["hide_none", "hide_x", "hide_y", "hide_both"]:
+            compute_centers(heatmaps=results[1][k]["heatmaps"][i : i + 10], tag=f"{k}")
 
     # plot_attention_map(
     #     results=results,
