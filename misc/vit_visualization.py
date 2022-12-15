@@ -224,12 +224,12 @@ def main(args):
     recorder = Recorder(model.core)
 
     results = []
-    for batch in test_ds[MOUSE_ID]:
+    for batch in val_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
             # pupil_center = torch.zeros_like(pupil_center)
             behavior = batch["behavior"]
-            behavior = torch.zeros_like(behavior)
+            # behavior = torch.zeros_like(behavior)
             image, _ = model.image_cropper(
                 inputs=batch["image"],
                 mouse_id=MOUSE_ID,
@@ -252,7 +252,9 @@ def main(args):
 
     plot_attention_map(
         results=results,
-        # filename=os.path.join(args.output_dir, "plots", "attention_rollouts.pdf"),
+        filename=os.path.join(
+            args.output_dir, "plots", f"mouse{MOUSE_ID}_attention_rollouts.pdf"
+        ),
     )
 
 
