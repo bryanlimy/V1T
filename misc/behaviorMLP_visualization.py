@@ -7,6 +7,7 @@ import numpy as np
 import typing as t
 import pandas as pd
 from torch import nn
+from tqdm import tqdm
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
@@ -44,7 +45,7 @@ class Recorder(nn.Module):
     def _register_hook(self, mouse_id: int):
         modules = self._find_modules(self.vit.transformer, BehaviorMLP)
         for module in modules:
-            handle = module.models[str(mouse_id)].register_forward_hook(self._hook)
+            handle = module.model.register_forward_hook(self._hook)
             self.hooks.append(handle)
         self.hook_registered = True
 
@@ -105,7 +106,7 @@ def plot_distribution_map(
         range_style="all",
         x_range=[-1.5, 1.5],
         linewidth=1.5,
-        title=f"Mouse {mouse_id} behavior activations per layer",
+        title=f"Mouse {mouse_id} BehaviorMLP activations",
     )
     pos = axes[0].get_position()
     axes[0].text(
@@ -153,7 +154,7 @@ def main(args):
     for mouse_id, mouse_ds in val_ds.items():
         recorder = Recorder(model.core)
         results = []
-        for batch in val_ds[mouse_id]:
+        for batch in tqdm(val_ds[mouse_id], desc=f"Mouse {mouse_id}"):
             with torch.no_grad():
                 pupil_center = batch["pupil_center"]
                 behavior = batch["behavior"]
@@ -178,9 +179,12 @@ def main(args):
             results=results,
             mouse_id=mouse_id,
             filename=os.path.join(
-                "plots", "b-mlp_distributions", f"mouse{mouse_id}.jpg"
+                "plots",
+                "behaviorMLP",
+                f"mouse{mouse_id}_activations.png",
             ),
         )
+        recorder.eject()
         del recorder
 
 

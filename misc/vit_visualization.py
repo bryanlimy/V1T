@@ -99,7 +99,7 @@ def plot_attention_map(
     figure, axes = plt.subplots(
         nrows=len(results),
         ncols=2,
-        figsize=(8, 2.2 * len(results)),
+        figsize=(7, 2.2 * len(results)),
         gridspec_kw={"wspace": -0.25, "hspace": 0.2},
         dpi=120,
         facecolor=BACKGROUND_COLOR,
@@ -220,16 +220,16 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    num_plots = 10
+    num_plots = 4
     recorder = Recorder(model.core)
 
     results = []
-    for batch in val_ds[MOUSE_ID]:
+    for batch in test_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
             # pupil_center = torch.zeros_like(pupil_center)
             behavior = batch["behavior"]
-            # behavior = torch.zeros_like(behavior)
+            behavior = torch.zeros_like(behavior)
             image, _ = model.image_cropper(
                 inputs=batch["image"],
                 mouse_id=MOUSE_ID,
@@ -253,7 +253,7 @@ def main(args):
     plot_attention_map(
         results=results,
         filename=os.path.join(
-            args.output_dir, "plots", f"mouse{MOUSE_ID}_attention_rollouts.pdf"
+            "plots", "attention_rollout", f"mouse{MOUSE_ID}_attention_rollouts.png"
         ),
     )
 
