@@ -78,7 +78,11 @@ class Image2Patches(nn.Module):
 
 class MLP(nn.Module):
     def __init__(
-        self, in_dim: int, hidden_dim: int, out_dim: int = None, dropout: float = 0.0
+        self,
+        in_dim: int,
+        hidden_dim: int,
+        out_dim: int = None,
+        dropout: float = 0.0,
     ):
         super(MLP, self).__init__()
         if out_dim is None:
@@ -99,10 +103,10 @@ class MLP(nn.Module):
 class BehaviorMLP(nn.Module):
     def __init__(
         self,
-        mouse_ids: t.List[int],
         behavior_mode: int,
         out_dim: int,
         dropout: float = 0.0,
+        mouse_ids: t.List[int] = None,
     ):
         """
         behavior mode:
@@ -111,9 +115,10 @@ class BehaviorMLP(nn.Module):
         - 2: add latent behavior variables to each ViT block
         - 3: add latent behavior + pupil centers to each ViT block
         - 4: separate BehaviorMLP for each animal
+        - 5: BehaviorMLP in MultiHeadsAttention module
         """
         super(BehaviorMLP, self).__init__()
-        assert behavior_mode in (2, 3, 4)
+        assert behavior_mode in (2, 3, 4, 5)
         self.behavior_mode = behavior_mode
         in_dim = 3 if behavior_mode == 2 else 5
         if behavior_mode == 4:
@@ -147,9 +152,20 @@ class BehaviorMLP(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, emb_dim: int, num_heads: int = 8, dropout: float = 0.0):
+    def __init__(
+        self,
+        behavior_mode: int,
+        emb_dim: int,
+        num_heads: int = 8,
+        dropout: float = 0.0,
+        num_patches: int = None,
+    ):
         super(Attention, self).__init__()
         inner_dim = emb_dim * num_heads
+
+        self.behavior_mode = behavior_mode
+        if behavior_mode == 5:
+            self.bmlp = BehaviorMLP(behavior_mode=behavior_mode, out_dim=num_patches)
 
         self.num_heads = num_heads
         self.scale = emb_dim**-0.5
@@ -167,14 +183,21 @@ class Attention(nn.Module):
         )
         self.layer_norm = nn.LayerNorm(emb_dim)
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         inputs = self.layer_norm(inputs)
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
         q, k, v = map(
             lambda a: rearrange(a, "b n (h d) -> b h n d", h=self.num_heads),
             qkv,
         )
+
+        if hasattr(self, "bmlp"):
+            b_mlp = self.bmlp(behaviors, mouse_id=None)
+            b_mlp = repeat(b_mlp, "b d -> b 1 d 1")
+            k = k + b_mlp
+
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+
         attn = self.attend(dots)
         attn = self.dropout(attn)
         outputs = torch.matmul(attn, v)
@@ -204,6 +227,8 @@ class Transformer(nn.Module):
                         emb_dim=emb_dim,
                         num_heads=num_heads,
                         dropout=dropout,
+                        behavior_mode=behavior_mode,
+                        num_patches=input_shape[0],
                     ),
                     "mlp": MLP(
                         in_dim=emb_dim,
@@ -212,7 +237,7 @@ class Transformer(nn.Module):
                     ),
                 }
             )
-            if behavior_mode > 1:
+            if behavior_mode in (1, 2, 3, 4):
                 block["b-mlp"] = BehaviorMLP(
                     mouse_ids=mouse_ids,
                     behavior_mode=behavior_mode,
@@ -233,7 +258,7 @@ class Transformer(nn.Module):
                 b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            outputs = block["mha"](outputs) + outputs
+            outputs = block["mha"](outputs, behaviors=behaviors) + outputs
             outputs = block["mlp"](outputs) + outputs
         return outputs
 
@@ -292,7 +317,7 @@ class ViTCore(Core):
         pupil_centers: torch.Tensor,
     ):
         outputs = self.patch_embedding(inputs)
-        if self.behavior_mode in (3, 4):
+        if self.behavior_mode in (3, 4, 5):
             behaviors = torch.cat((behaviors, pupil_centers), dim=-1)
         outputs = self.transformer(outputs, mouse_id=mouse_id, behaviors=behaviors)
         outputs = outputs[:, 1:, :]  # remove CLS token
