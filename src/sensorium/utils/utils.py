@@ -380,8 +380,8 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
                     outputs, _, _ = model(
                         inputs=random_input((batch_size, *image_shape)),
                         mouse_id=mouse_id,
-                        pupil_centers=random_input((batch_size, 2)),
                         behaviors=random_input((batch_size, 3)),
+                        pupil_centers=random_input((batch_size, 2)),
                     )
                     loss = criterion(
                         y_true=random_input((batch_size, *output_shapes[mouse_id])),
