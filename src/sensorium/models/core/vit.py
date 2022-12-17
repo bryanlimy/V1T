@@ -158,14 +158,14 @@ class Attention(nn.Module):
         emb_dim: int,
         num_heads: int = 8,
         dropout: float = 0.0,
-        num_patches: int = None,
     ):
         super(Attention, self).__init__()
         inner_dim = emb_dim * num_heads
 
         self.behavior_mode = behavior_mode
         if behavior_mode == 5:
-            self.bmlp = BehaviorMLP(behavior_mode=behavior_mode, out_dim=num_patches)
+            self.q_b_mlp = BehaviorMLP(behavior_mode=behavior_mode, out_dim=emb_dim)
+            self.k_b_mlp = BehaviorMLP(behavior_mode=behavior_mode, out_dim=emb_dim)
 
         self.num_heads = num_heads
         self.scale = emb_dim**-0.5
@@ -191,10 +191,14 @@ class Attention(nn.Module):
             qkv,
         )
 
-        if hasattr(self, "bmlp"):
-            b_mlp = self.bmlp(behaviors, mouse_id=None)
-            b_mlp = repeat(b_mlp, "b d -> b 1 d 1")
-            k = k + b_mlp
+        if hasattr(self, "q_b_mlp"):
+            q_b_mlp = self.q_b_mlp(behaviors, mouse_id=None)
+            q_b_mlp = repeat(q_b_mlp, "b d -> b 1 1 d")
+            q = q + q_b_mlp
+        if hasattr(self, "k_b_mlp"):
+            k_b_mlp = self.k_b_mlp(behaviors, mouse_id=None)
+            k_b_mlp = repeat(k_b_mlp, "b d -> b 1 1 d")
+            k = k + k_b_mlp
 
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
 
@@ -228,7 +232,6 @@ class Transformer(nn.Module):
                         num_heads=num_heads,
                         dropout=dropout,
                         behavior_mode=behavior_mode,
-                        num_patches=input_shape[0],
                     ),
                     "mlp": MLP(
                         in_dim=emb_dim,
