@@ -492,6 +492,16 @@ if __name__ == "__main__":
         parser.add_argument(
             "--t_dropout", type=float, default=0.2, help="ViT block dropout"
         )
+        parser.add_argument(
+            "--patch_mode",
+            type=int,
+            default=0,
+            help="patch embedding mode:"
+            "0 - nn.Unfold to extract overlapping patches with stride 1"
+            "1 - nn.Unfold to extract non-overlapping patches"
+            "2 - nn.Conv2D to extract patches with stride 1"
+            "3 - nn.Conv2D to extract non-overlapping patches",
+        )
         parser.add_argument("--core_reg_scale", type=float, default=0)
     elif temp_args.core == "stn":
         parser.add_argument("--num_layers", type=int, default=7)

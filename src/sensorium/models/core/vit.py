@@ -10,11 +10,19 @@ from einops.layers.torch import Rearrange
 
 
 class Image2Patches(nn.Module):
+    """
+    patch embedding mode:
+        0 - nn.Unfold to extract overlapping patches with stride 1
+        1 - nn.Unfold to extract non-overlapping patches
+        2 - nn.Conv2D to extract patches with stride 1
+        3 - nn.Conv2D to extract non-overlapping patches
+    """
+
     def __init__(
         self,
+        args,
         image_shape: t.Tuple[int, int, int],
         patch_size: int,
-        stride: int,
         emb_dim: int,
         dropout: float = 0.0,
     ):
@@ -22,12 +30,30 @@ class Image2Patches(nn.Module):
         c, h, w = image_shape
         self.input_shape = image_shape
 
-        self.unfold = nn.Unfold(kernel_size=patch_size, stride=stride)
+        if not hasattr(args, "patch_mode"):
+            print("patch_mode is not provided, set patch_mode to 0.")
+            args.patch_mode = 0
+        assert args.patch_mode in (0, 1, 2, 3)
+        self.patch_mode = args.patch_mode
+        stride = 1 if self.patch_mode in (0, 2) else patch_size
         num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
         patch_dim = patch_size * patch_size * c
-
-        self.rearrange = Rearrange("b c l -> b l c")
-        self.linear = nn.Linear(in_features=patch_dim, out_features=emb_dim)
+        if self.patch_mode in (0, 1):
+            self.projection = nn.Sequential(
+                nn.Unfold(kernel_size=patch_size, stride=stride),
+                Rearrange("b c l -> b l c"),
+                nn.Linear(in_features=patch_dim, out_features=emb_dim),
+            )
+        else:
+            self.projection = nn.Sequential(
+                nn.Conv2d(
+                    in_channels=c,
+                    out_channels=emb_dim,
+                    kernel_size=patch_size,
+                    stride=stride,
+                ),
+                Rearrange("b c h w -> b (h w) c"),
+            )
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
         self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
@@ -42,11 +68,9 @@ class Image2Patches(nn.Module):
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
-        patches = self.unfold(inputs)
-        patches = self.rearrange(patches)
-        outputs = self.linear(patches)
+        patches = self.projection(inputs)
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
-        outputs = torch.cat((cls_tokens, outputs), dim=1)
+        outputs = torch.cat((cls_tokens, patches), dim=1)
         outputs += self.pos_embedding
         outputs = self.dropout(outputs)
         return outputs
@@ -227,9 +251,9 @@ class ViTCore(Core):
         emb_dim = args.emb_dim
         self.behavior_mode = args.behavior_mode
         self.patch_embedding = Image2Patches(
+            args,
             image_shape=input_shape,
             patch_size=args.patch_size,
-            stride=1,
             emb_dim=emb_dim,
             dropout=args.p_dropout,
         )
