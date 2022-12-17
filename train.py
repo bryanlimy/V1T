@@ -175,7 +175,7 @@ def main(args, wandb_sweep: bool = False):
     if args.batch_size == 0 and "cuda" in args.device.type:
         utils.auto_batch_size(args)
         if args.use_wandb:
-            wandb.config.update({"batch_size": args.batch_size})
+            wandb.config.update({"batch_size": args.batch_size}, allow_val_change=True)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
         args,
