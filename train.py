@@ -150,15 +150,6 @@ def main(args, wandb_sweep: bool = False):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    Logger(args)
-    utils.set_random_seed(args.seed)
-    utils.get_device(args)
-
-    if not args.mouse_ids:
-        args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
-    if args.batch_size == 0 and "cuda" in args.device.type:
-        utils.auto_batch_size(args)
-
     if args.use_wandb:
         os.environ["WANDB_SILENT"] = "true"
         if not wandb_sweep:
@@ -174,6 +165,17 @@ def main(args, wandb_sweep: bool = False):
             except AssertionError as e:
                 print(f"wandb.init error: {e}")
                 args.use_wandb = False
+
+    Logger(args)
+    utils.set_random_seed(args.seed)
+    utils.get_device(args)
+
+    if not args.mouse_ids:
+        args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
+    if args.batch_size == 0 and "cuda" in args.device.type:
+        utils.auto_batch_size(args)
+        if args.use_wandb:
+            wandb.config.update({"batch_size": args.batch_size})
 
     train_ds, val_ds, test_ds = data.get_training_ds(
         args,
