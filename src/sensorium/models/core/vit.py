@@ -119,24 +119,25 @@ class BehaviorMLP(nn.Module):
         if behavior_mode == 4:
             self.model = nn.ModuleDict(
                 {
-                    str(mouse_id): nn.Sequential(
-                        nn.Linear(in_features=in_dim, out_features=out_dim // 2),
-                        nn.Tanh(),
-                        nn.Dropout(p=dropout),
-                        nn.Linear(in_features=out_dim // 2, out_features=out_dim),
-                        nn.Tanh(),
+                    str(mouse_id): self.build_model(
+                        in_dim=in_dim, out_dim=out_dim, dropout=dropout
                     )
                     for mouse_id in mouse_ids
                 }
             )
         else:
-            self.model = nn.Sequential(
-                nn.Linear(in_features=in_dim, out_features=out_dim // 2),
-                nn.Tanh(),
-                nn.Dropout(p=dropout),
-                nn.Linear(in_features=out_dim // 2, out_features=out_dim),
-                nn.Tanh(),
+            self.model = self.build_model(
+                in_dim=in_dim, out_dim=out_dim, dropout=dropout
             )
+
+    def build_model(self, in_dim: int, out_dim: int, dropout: float = 0.0):
+        return nn.Sequential(
+            nn.Linear(in_features=in_dim, out_features=out_dim // 2),
+            nn.Tanh(),
+            nn.Dropout(p=dropout),
+            nn.Linear(in_features=out_dim // 2, out_features=out_dim),
+            nn.Tanh(),
+        )
 
     def forward(self, inputs: torch.Tensor, mouse_id: int):
         if self.behavior_mode == 4:
