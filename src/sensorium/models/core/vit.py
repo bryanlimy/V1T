@@ -12,33 +12,28 @@ from einops.layers.torch import Rearrange
 class Image2Patches(nn.Module):
     """
     patch embedding mode:
-        0 - nn.Unfold to extract overlapping patches with stride 1
-        1 - nn.Unfold to extract non-overlapping patches
-        2 - nn.Conv2D to extract patches with stride 1
-        3 - nn.Conv2D to extract non-overlapping patches
+        0 - nn.Unfold to extract patches
+        1 - nn.Conv2D to extract patches
     """
 
     def __init__(
         self,
-        args,
         image_shape: t.Tuple[int, int, int],
+        patch_mode: int,
         patch_size: int,
+        stride: int,
         emb_dim: int,
         dropout: float = 0.0,
     ):
         super(Image2Patches, self).__init__()
+        assert patch_mode in (0, 1)
+        assert 1 <= stride <= patch_size
         c, h, w = image_shape
         self.input_shape = image_shape
 
-        if not hasattr(args, "patch_mode"):
-            print("patch_mode is not provided, set patch_mode to 0.")
-            args.patch_mode = 0
-        assert args.patch_mode in (0, 1, 2, 3)
-        self.patch_mode = args.patch_mode
-        stride = 1 if self.patch_mode in (0, 2) else patch_size
         num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
         patch_dim = patch_size * patch_size * c
-        if self.patch_mode in (0, 1):
+        if patch_mode == 0:
             self.projection = nn.Sequential(
                 nn.Unfold(kernel_size=patch_size, stride=stride),
                 Rearrange("b c l -> b l c"),
@@ -276,25 +271,34 @@ class ViTCore(Core):
     ):
         super(ViTCore, self).__init__(args, input_shape=input_shape, name=name)
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
-        emb_dim = args.emb_dim
         self.behavior_mode = args.behavior_mode
+
+        if not hasattr(args, "patch_mode"):
+            print("patch_mode is not defined, set to 0.")
+            args.patch_mode = 0
+        if not hasattr(args, "patch_stride"):
+            print("patch_stride is not defined, set to 1.")
+            args.patch_stride = 1
         self.patch_embedding = Image2Patches(
-            args,
             image_shape=input_shape,
+            patch_mode=args.patch_mode,
             patch_size=args.patch_size,
-            emb_dim=emb_dim,
+            stride=args.patch_stride,
+            emb_dim=args.emb_dim,
             dropout=args.p_dropout,
         )
+
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
-            emb_dim=emb_dim,
+            emb_dim=args.emb_dim,
             num_blocks=args.num_blocks,
             num_heads=args.num_heads,
             mlp_dim=args.mlp_dim,
             dropout=args.t_dropout,
-            behavior_mode=args.behavior_mode,
+            behavior_mode=self.behavior_mode,
             mouse_ids=list(args.output_shapes.keys()),
         )
+
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)

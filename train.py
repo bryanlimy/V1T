@@ -497,11 +497,16 @@ if __name__ == "__main__":
             "--patch_mode",
             type=int,
             default=0,
+            choices=[0, 1],
             help="patch embedding mode:"
-            "0 - nn.Unfold to extract overlapping patches with stride 1"
-            "1 - nn.Unfold to extract non-overlapping patches"
-            "2 - nn.Conv2D to extract patches with stride 1"
-            "3 - nn.Conv2D to extract non-overlapping patches",
+            "0 - nn.Unfold to extract patches"
+            "1 - nn.Conv2D to extract patches",
+        )
+        parser.add_argument(
+            "--patch_stride",
+            type=int,
+            default=1,
+            help="stride size to extract patches",
         )
         parser.add_argument("--core_reg_scale", type=float, default=0)
     elif temp_args.core == "stn":
