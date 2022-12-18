@@ -40,7 +40,7 @@ parameters:
     value: 1
   core_reg_scale:
     distribution: uniform
-    max: 1
+    max: 10
     min: 0
   patch_mode:
     values:
