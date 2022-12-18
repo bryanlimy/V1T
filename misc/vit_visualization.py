@@ -229,7 +229,7 @@ def main(args):
             pupil_center = batch["pupil_center"]
             # pupil_center = torch.zeros_like(pupil_center)
             behavior = batch["behavior"]
-            behavior = torch.zeros_like(behavior)
+            # behavior = torch.zeros_like(behavior)
             image, _ = model.image_cropper(
                 inputs=batch["image"],
                 mouse_id=MOUSE_ID,
