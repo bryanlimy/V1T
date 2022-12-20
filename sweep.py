@@ -15,6 +15,7 @@ class Args:
         dataset: str,
         batch_size: int,
         num_workers: int = 2,
+        verbose: int = 1,
     ):
         self.dataset = dataset
         self.output_dir = os.path.join(
@@ -29,7 +30,7 @@ class Args:
         self.dpi = 120
         self.format = "svg"
         self.clear_output_dir = False
-        self.verbose = 1
+        self.verbose = verbose
         self.use_wandb = True
         for key, value in config.items():
             if not hasattr(self, key):
@@ -64,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--sweep_id", type=str, required=True)
     parser.add_argument("--num_trials", type=int, default=1)
+    parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
     params = parser.parse_args()
 
     wandb.agent(
