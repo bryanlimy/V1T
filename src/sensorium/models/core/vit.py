@@ -11,11 +11,36 @@ from einops.layers.torch import Rearrange
 from sensorium.models.utils import init_weights
 
 
+class PatchShifting(nn.Module):
+    """Patch shifting for Shifted Patch Tokenization"""
+
+    def __init__(self, patch_size: int):
+        super(PatchShifting, self).__init__()
+        self.shift = int(patch_size * (1 / 2))
+
+    def forward(self, inputs: torch.Tensor):
+        """4 diagonal directions padding"""
+        padded_inputs = torch.nn.functional.pad(
+            input=inputs,
+            pad=(self.shift, self.shift, self.shift, self.shift),
+        )
+        left_upper = padded_inputs[:, :, : -self.shift * 2, : -self.shift * 2]
+        right_upper = padded_inputs[:, :, : -self.shift * 2, self.shift * 2 :]
+        left_bottom = padded_inputs[:, :, self.shift * 2 :, : -self.shift * 2]
+        right_bottom = padded_inputs[:, :, self.shift * 2 :, self.shift * 2 :]
+        outputs = torch.cat(
+            [inputs, left_upper, right_upper, left_bottom, right_bottom],
+            dim=1,
+        )
+        return outputs
+
+
 class Image2Patches(nn.Module):
     """
     patch embedding mode:
         0 - nn.Unfold to extract patches
         1 - nn.Conv2D to extract patches
+        2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1
     """
 
     def __init__(
@@ -28,20 +53,20 @@ class Image2Patches(nn.Module):
         dropout: float = 0.0,
     ):
         super(Image2Patches, self).__init__()
-        assert patch_mode in (0, 1)
+        assert patch_mode in (0, 1, 2)
         assert 1 <= stride <= patch_size
         c, h, w = image_shape
         self.input_shape = image_shape
 
         num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
-        patch_dim = patch_size * patch_size * c
         if patch_mode == 0:
+            patch_dim = patch_size * patch_size * c
             self.projection = nn.Sequential(
                 nn.Unfold(kernel_size=patch_size, stride=stride),
                 Rearrange("b c l -> b l c"),
                 nn.Linear(in_features=patch_dim, out_features=emb_dim),
             )
-        else:
+        elif patch_mode == 1:
             self.projection = nn.Sequential(
                 nn.Conv2d(
                     in_channels=c,
@@ -50,6 +75,15 @@ class Image2Patches(nn.Module):
                     stride=stride,
                 ),
                 Rearrange("b c h w -> b (h w) c"),
+            )
+        else:
+            patch_dim = patch_size * patch_size * (c + 4)
+            self.projection = nn.Sequential(
+                PatchShifting(patch_size=patch_size),
+                nn.Unfold(kernel_size=patch_size, stride=stride),
+                Rearrange("b c l -> b l c"),
+                nn.LayerNorm(normalized_shape=patch_dim),
+                nn.Linear(in_features=patch_dim, out_features=emb_dim),
             )
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
@@ -112,10 +146,9 @@ class BehaviorMLP(nn.Module):
         - 2: add latent behavior variables to each ViT block
         - 3: add latent behavior + pupil centers to each ViT block
         - 4: separate BehaviorMLP for each animal
-        - 5: BehaviorMLP in MultiHeadsAttention module
         """
         super(BehaviorMLP, self).__init__()
-        assert behavior_mode in (2, 3, 4, 5)
+        assert behavior_mode in (2, 3, 4)
         self.behavior_mode = behavior_mode
         in_dim = 3 if behavior_mode == 2 else 5
         if behavior_mode == 4:
@@ -152,18 +185,14 @@ class BehaviorMLP(nn.Module):
 class Attention(nn.Module):
     def __init__(
         self,
-        behavior_mode: int,
+        num_patches: int,
         emb_dim: int,
         num_heads: int = 8,
         dropout: float = 0.0,
+        use_lsa: bool = False,
     ):
         super(Attention, self).__init__()
         inner_dim = emb_dim * num_heads
-
-        self.behavior_mode = behavior_mode
-        if behavior_mode == 5:
-            self.q_b_mlp = BehaviorMLP(behavior_mode=behavior_mode, out_dim=emb_dim)
-            self.k_b_mlp = BehaviorMLP(behavior_mode=behavior_mode, out_dim=emb_dim)
 
         self.num_heads = num_heads
         self.scale = emb_dim**-0.5
@@ -181,9 +210,18 @@ class Attention(nn.Module):
         )
         self.layer_norm = nn.LayerNorm(emb_dim)
 
+        self.mask = None
+        if use_lsa:
+            self.scale = nn.Parameter(
+                torch.full(size=(num_heads,), fill_value=self.scale)
+            )
+            self.mask = torch.eye(num_patches, num_patches)
+            self.mask = torch.nonzero((self.mask == 1), as_tuple=False)
+
         init_weights(self.to_qkv)
 
     def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
+        batch_size = inputs.size(0)
         inputs = self.layer_norm(inputs)
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
         q, k, v = map(
@@ -191,16 +229,12 @@ class Attention(nn.Module):
             qkv,
         )
 
-        if hasattr(self, "q_b_mlp"):
-            q_b_mlp = self.q_b_mlp(behaviors, mouse_id=None)
-            q_b_mlp = repeat(q_b_mlp, "b d -> b 1 1 d")
-            q = q + q_b_mlp
-        if hasattr(self, "k_b_mlp"):
-            k_b_mlp = self.k_b_mlp(behaviors, mouse_id=None)
-            k_b_mlp = repeat(k_b_mlp, "b d -> b 1 1 d")
-            k = k + k_b_mlp
-
-        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+        if self.mask is None:
+            dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+        else:
+            scale = repeat(self.scale, "h -> b h 1 1", b=batch_size)
+            dots = torch.matmul(q, k.transpose(-1, -2)) * scale
+            dots[:, :, self.mask[:, 0], self.mask[:, 1]] = -torch.inf
 
         attn = self.attend(dots)
         attn = self.dropout(attn)
@@ -221,17 +255,20 @@ class Transformer(nn.Module):
         dropout: float,
         behavior_mode: int,
         mouse_ids: t.List[int],
+        use_lsa: bool,
     ):
         super().__init__()
+        num_patches = input_shape[1]
         self.blocks = nn.ModuleList([])
         for i in range(num_blocks):
             block = nn.ModuleDict(
                 {
                     "mha": Attention(
+                        num_patches=num_patches,
                         emb_dim=emb_dim,
                         num_heads=num_heads,
                         dropout=dropout,
-                        behavior_mode=behavior_mode,
+                        use_lsa=use_lsa,
                     ),
                     "mlp": MLP(
                         in_dim=emb_dim,
@@ -302,6 +339,7 @@ class ViTCore(Core):
             dropout=args.t_dropout,
             behavior_mode=self.behavior_mode,
             mouse_ids=list(args.output_shapes.keys()),
+            use_lsa=args.use_lsa,
         )
 
         # calculate latent height and width based on num_patches
@@ -331,7 +369,7 @@ class ViTCore(Core):
         pupil_centers: torch.Tensor,
     ):
         outputs = self.patch_embedding(inputs)
-        if self.behavior_mode in (3, 4, 5):
+        if self.behavior_mode in (3, 4):
             behaviors = torch.cat((behaviors, pupil_centers), dim=-1)
         outputs = self.transformer(outputs, mouse_id=mouse_id, behaviors=behaviors)
         outputs = outputs[:, 1:, :]  # remove CLS token

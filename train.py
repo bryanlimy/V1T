@@ -321,14 +321,13 @@ if __name__ == "__main__":
         "--behavior_mode",
         required=True,
         type=int,
-        choices=[0, 1, 2, 3, 4, 5],
+        choices=[0, 1, 2, 3, 4],
         help="behavior mode:"
         "0: do not include behavior"
         "1: concat behavior with natural image"
         "2: add latent behavior variables to each ViT block"
         "3: add latent behavior + pupil centers to each ViT block"
-        "4: separate BehaviorMLP for each animal"
-        "5: BehaviorMLP in MultiHeadsAttention module",
+        "4: separate BehaviorMLP for each animal",
     )
     parser.add_argument(
         "--center_crop",
@@ -497,16 +496,20 @@ if __name__ == "__main__":
             "--patch_mode",
             type=int,
             default=0,
-            choices=[0, 1],
+            choices=[0, 1, 2],
             help="patch embedding mode:"
             "0 - nn.Unfold to extract patches"
-            "1 - nn.Conv2D to extract patches",
+            "1 - nn.Conv2D to extract patches"
+            "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1",
         )
         parser.add_argument(
             "--patch_stride",
             type=int,
             default=1,
             help="stride size to extract patches",
+        )
+        parser.add_argument(
+            "--use_lsa", action="store_true", help="Use Locality Self Attention"
         )
         parser.add_argument("--core_reg_scale", type=float, default=0)
     elif temp_args.core == "stn":
