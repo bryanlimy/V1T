@@ -8,6 +8,8 @@ from torch import nn
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
+from sensorium.models.utils import init_weights
+
 
 class Image2Patches(nn.Module):
     """
@@ -179,6 +181,8 @@ class Attention(nn.Module):
         )
         self.layer_norm = nn.LayerNorm(emb_dim)
 
+        init_weights(self.to_qkv)
+
     def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
         inputs = self.layer_norm(inputs)
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
@@ -304,6 +308,8 @@ class ViTCore(Core):
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
         self.output_shape = (self.transformer.output_shape[-1], h, w)
+
+        self.apply(init_weights)
 
     @staticmethod
     def find_shape(num_patches: int):
