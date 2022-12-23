@@ -221,6 +221,10 @@ class Attention(nn.Module):
             )
             diagonal = torch.eye(num_patches, num_patches)
             self.mask = torch.nonzero(diagonal == 1, as_tuple=False)
+            self.register_buffer(
+                "max_value",
+                tensor=torch.tensor(torch.finfo(torch.get_default_dtype()).max),
+            )
         else:
             self.mask = None
             self.register_buffer("scale", torch.tensor(scale))
@@ -241,7 +245,7 @@ class Attention(nn.Module):
         else:
             scale = repeat(self.scale, "h -> b h 1 1", b=batch_size)
             dots = torch.matmul(q, k.transpose(-1, -2)) * scale
-            dots[:, :, self.mask[:, 0], self.mask[:, 1]] = -torch.inf
+            dots[:, :, self.mask[:, 0], self.mask[:, 1]] = -self.max_value
 
         attn = self.attend(dots)
         attn = self.dropout(attn)
