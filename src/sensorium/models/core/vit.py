@@ -4,9 +4,11 @@ import math
 import torch
 import typing as t
 from torch import nn
+import torch.nn.functional as F
 
-from einops import rearrange, repeat
+
 from einops.layers.torch import Rearrange
+from einops import rearrange, repeat, einsum
 
 from sensorium.models.utils import init_weights
 
@@ -20,14 +22,16 @@ class PatchShifting(nn.Module):
 
     def forward(self, inputs: torch.Tensor):
         """4 diagonal directions padding"""
-        padded_inputs = torch.nn.functional.pad(
+        padded_inputs = F.pad(
             input=inputs,
             pad=(self.shift, self.shift, self.shift, self.shift),
+            mode="constant",
+            value=0,
         )
-        left_upper = padded_inputs[:, :, : -self.shift * 2, : -self.shift * 2]
-        right_upper = padded_inputs[:, :, : -self.shift * 2, self.shift * 2 :]
-        left_bottom = padded_inputs[:, :, self.shift * 2 :, : -self.shift * 2]
-        right_bottom = padded_inputs[:, :, self.shift * 2 :, self.shift * 2 :]
+        left_upper = padded_inputs[..., : -self.shift * 2, : -self.shift * 2]
+        right_upper = padded_inputs[..., : -self.shift * 2, self.shift * 2 :]
+        left_bottom = padded_inputs[..., self.shift * 2 :, : -self.shift * 2]
+        right_bottom = padded_inputs[..., self.shift * 2 :, self.shift * 2 :]
         outputs = torch.cat(
             [inputs, left_upper, right_upper, left_bottom, right_bottom],
             dim=1,
@@ -195,7 +199,6 @@ class Attention(nn.Module):
         inner_dim = emb_dim * num_heads
 
         self.num_heads = num_heads
-        self.scale = emb_dim**-0.5
 
         self.attend = nn.Softmax(dim=-1)
         self.dropout = nn.Dropout(p=dropout)
@@ -210,13 +213,17 @@ class Attention(nn.Module):
         )
         self.layer_norm = nn.LayerNorm(emb_dim)
 
-        self.mask = None
+        scale = emb_dim**-0.5
         if use_lsa:
-            self.scale = nn.Parameter(
-                torch.full(size=(num_heads,), fill_value=self.scale)
+            self.register_parameter(
+                "scale",
+                param=nn.Parameter(torch.full(size=(num_heads,), fill_value=scale)),
             )
-            self.mask = torch.eye(num_patches, num_patches)
-            self.mask = torch.nonzero((self.mask == 1), as_tuple=False)
+            diagonal = torch.eye(num_patches, num_patches)
+            self.mask = torch.nonzero(diagonal == 1, as_tuple=False)
+        else:
+            self.mask = None
+            self.register_buffer("scale", torch.tensor(scale))
 
         init_weights(self.to_qkv)
 
@@ -238,7 +245,7 @@ class Attention(nn.Module):
 
         attn = self.attend(dots)
         attn = self.dropout(attn)
-        outputs = torch.matmul(attn, v)
+        outputs = einsum(attn, v, "b h n i, b h i d -> b h n d")
         outputs = rearrange(outputs, "b h n d -> b n (h d)")
         outputs = self.projection(outputs)
         return outputs
@@ -258,13 +265,12 @@ class Transformer(nn.Module):
         use_lsa: bool,
     ):
         super().__init__()
-        num_patches = input_shape[1]
         self.blocks = nn.ModuleList([])
         for i in range(num_blocks):
             block = nn.ModuleDict(
                 {
                     "mha": Attention(
-                        num_patches=num_patches,
+                        num_patches=input_shape[0],
                         emb_dim=emb_dim,
                         num_heads=num_heads,
                         dropout=dropout,
