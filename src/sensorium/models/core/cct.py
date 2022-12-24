@@ -184,16 +184,18 @@ class Transformer(nn.Module):
         super(Transformer, self).__init__()
         assert pos_emb in ("sine", "learn", "none")
 
-        num_patches = input_shape[0]
+        self.num_patches = input_shape[0]
         self.num_channels = num_channels
 
         if pos_emb == "none":
             self.pos_emb = None
         elif pos_emb == "learn":
-            self.pos_emb = nn.Parameter(torch.zeros(1, num_patches, emb_dim))
+            self.pos_emb = nn.Parameter(torch.zeros(1, self.num_patches, emb_dim))
             nn.init.trunc_normal_(self.pos_emb, std=0.2)
         else:
-            self.register_buffer("pos_emb", sinusoidal_embedding(num_patches, emb_dim))
+            self.register_buffer(
+                "pos_emb", sinusoidal_embedding(self.num_patches, emb_dim)
+            )
 
         self.p_dropout = nn.Dropout(p=p_dropout)
 
@@ -204,7 +206,7 @@ class Transformer(nn.Module):
             [
                 TransformerBlock(
                     behavior_mode=behavior_mode,
-                    num_patches=num_patches,
+                    num_patches=self.num_patches,
                     emb_dim=emb_dim,
                     num_heads=num_heads,
                     mlp_dim=mlp_dim,
@@ -216,7 +218,7 @@ class Transformer(nn.Module):
             ]
         )
 
-        self.output_shape = (num_patches, emb_dim)
+        self.output_shape = (self.num_patches, emb_dim)
         self.apply(self.init_weight)
 
     @staticmethod
