@@ -58,7 +58,7 @@ class Tokenizer(nn.Module):
                         bias=bias,
                     ),
                     nn.ReLU(),
-                    nn.MaxPool2d(kernel_size=4, stride=1, padding=1),
+                    nn.MaxPool2d(kernel_size=6, stride=1, padding=1),
                 ]
             )
         self.tokenizer = nn.Sequential(*layers)
@@ -282,7 +282,7 @@ class CCTCore(Core):
             stride=args.patch_stride,
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
-            num_layers=2,
+            num_layers=1,
         )
         tokenizer_shape = self.tokenizer.output_shape
         num_patches = tokenizer_shape[0]

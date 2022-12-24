@@ -51,7 +51,7 @@ def train_step(
     total_loss.backward()  # calculate and accumulate gradients
     if update:
         optimizer.step()
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
     result = {
         "loss/loss": loss.item(),
         "loss/reg_loss": reg_loss.item(),
@@ -77,7 +77,7 @@ def train(
     update_frequency = len(mouse_ids)
     model.train(True)
     model.requires_grad_(True)
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
