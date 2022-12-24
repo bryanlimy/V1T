@@ -308,8 +308,6 @@ class CCTCore(Core):
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
         self.output_shape = (self.transformer.output_shape[1], h, w)
 
-        self.apply(init_weights)
-
     @staticmethod
     def find_shape(num_patches: int):
         dim1 = math.ceil(math.sqrt(num_patches))

@@ -220,10 +220,13 @@ class Attention(nn.Module):
                 param=nn.Parameter(torch.full(size=(num_heads,), fill_value=scale)),
             )
             diagonal = torch.eye(num_patches, num_patches)
-            self.mask = torch.nonzero(diagonal == 1, as_tuple=False)
+            self.register_buffer(
+                "mask",
+                torch.nonzero(diagonal == 1, as_tuple=False),
+            )
             self.register_buffer(
                 "max_value",
-                tensor=torch.tensor(torch.finfo(torch.get_default_dtype()).max),
+                torch.tensor(torch.finfo(torch.get_default_dtype()).max),
             )
         else:
             self.mask = None
