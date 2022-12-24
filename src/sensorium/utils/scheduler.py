@@ -16,7 +16,7 @@ class Scheduler:
         mode: t.Literal["min", "max"] = "max",
         max_reduce: int = 2,
         lr_patience: int = 10,
-        factor: float = 0.5,
+        factor: float = 0.3,
         min_epochs: int = 0,
         save_optimizer: bool = True,
         save_scheduler: bool = True,

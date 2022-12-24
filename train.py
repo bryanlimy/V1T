@@ -192,12 +192,12 @@ def main(args, wandb_sweep: bool = False):
     if args.pretrain_core:
         utils.load_pretrain_core(args, model=model)
 
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         params=model.get_parameters(core_lr=args.core_lr_scale * args.lr),
         lr=args.lr,
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
-        amsgrad=True,
+        weight_decay=0,
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
@@ -514,6 +514,41 @@ if __name__ == "__main__":
         )
         parser.add_argument(
             "--use_lsa", action="store_true", help="Use Locality Self Attention"
+        )
+        parser.add_argument("--core_reg_scale", type=float, default=0)
+    elif temp_args.core == "cct":
+        parser.add_argument("--patch_size", type=int, default=4)
+        parser.add_argument("--num_blocks", type=int, default=4)
+        parser.add_argument("--emb_dim", type=int, default=64)
+        parser.add_argument("--mlp_ratio", type=int, default=3)
+        parser.add_argument("--num_heads", type=int, default=3)
+        parser.add_argument(
+            "--pos_emb", type=str, default="sine", choices=["sine", "learn", "none"]
+        )
+        parser.add_argument(
+            "--p_dropout", type=float, default=0.2, help="patch embeddings dropout"
+        )
+        parser.add_argument(
+            "--t_dropout", type=float, default=0.2, help="ViT block dropout"
+        )
+        parser.add_argument(
+            "--drop_path", type=float, default=0.0, help="stochastic depth dropout rate"
+        )
+        parser.add_argument(
+            "--patch_mode",
+            type=int,
+            default=0,
+            choices=[0, 1, 2],
+            help="patch embedding mode:"
+            "0 - nn.Unfold to extract patches"
+            "1 - nn.Conv2D to extract patches"
+            "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1",
+        )
+        parser.add_argument(
+            "--patch_stride",
+            type=int,
+            default=1,
+            help="stride size to extract patches",
         )
         parser.add_argument("--core_reg_scale", type=float, default=0)
     elif temp_args.core == "stn":

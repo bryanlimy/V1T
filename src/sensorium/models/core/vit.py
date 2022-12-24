@@ -10,8 +10,7 @@ import torch.nn.functional as F
 from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
 
-from sensorium.models.utils import init_weights
-from sensorium.models.core.utils import DropPath
+from sensorium.models.utils import init_weights, DropPath
 
 
 class PatchShifting(nn.Module):
@@ -291,9 +290,9 @@ class Transformer(nn.Module):
             )
             if behavior_mode in (1, 2, 3, 4):
                 block["b-mlp"] = BehaviorMLP(
-                    mouse_ids=mouse_ids,
                     behavior_mode=behavior_mode,
                     out_dim=emb_dim,
+                    mouse_ids=mouse_ids,
                 )
             self.blocks.append(block)
         self.drop_path = DropPath(dropout=drop_path)
