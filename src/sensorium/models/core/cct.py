@@ -270,9 +270,6 @@ class CCTCore(Core):
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
         self.behavior_mode = args.behavior_mode
 
-        if not hasattr(args, "patch_mode"):
-            print("patch_mode is not defined, set to 0.")
-            args.patch_mode = 0
         if not hasattr(args, "patch_stride"):
             print("patch_stride is not defined, set to 1.")
             args.patch_stride = 1
