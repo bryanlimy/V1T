@@ -361,7 +361,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--batch_size",
-        default=16,
+        default=8,
         type=int,
         help="If batch_size == 0 and CUDA is available, then dynamically test "
         "batch size. Otherwise use the provided value.",
@@ -388,7 +388,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--lr",
-        default=1e-3,
+        default=0.001647,
         type=float,
         help="initial learning rate",
     )
@@ -458,7 +458,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--shift_mode",
         type=int,
-        default=1,
+        default=2,
         choices=[0, 1, 2, 3, 4],
         help="shift mode: "
         "0 - disable shifter, "
@@ -482,16 +482,16 @@ if __name__ == "__main__":
         parser.add_argument("--core_reg_input", type=float, default=6.3831)
         parser.add_argument("--core_reg_hidden", type=float, default=0.0)
     elif temp_args.core == "vit":
-        parser.add_argument("--patch_size", type=int, default=4)
+        parser.add_argument("--patch_size", type=int, default=8)
         parser.add_argument("--num_blocks", type=int, default=4)
-        parser.add_argument("--emb_dim", type=int, default=64)
-        parser.add_argument("--num_heads", type=int, default=3)
-        parser.add_argument("--mlp_dim", type=int, default=64)
+        parser.add_argument("--num_heads", type=int, default=4)
+        parser.add_argument("--emb_dim", type=int, default=155)
+        parser.add_argument("--mlp_dim", type=int, default=488)
         parser.add_argument(
-            "--p_dropout", type=float, default=0.2, help="patch embeddings dropout"
+            "--p_dropout", type=float, default=0.0229, help="patch embeddings dropout"
         )
         parser.add_argument(
-            "--t_dropout", type=float, default=0.2, help="ViT block dropout"
+            "--t_dropout", type=float, default=0.2544, help="ViT block dropout"
         )
         parser.add_argument(
             "--drop_path", type=float, default=0.0, help="stochastic depth dropout rate"
@@ -515,7 +515,7 @@ if __name__ == "__main__":
         parser.add_argument(
             "--use_lsa", action="store_true", help="Use Locality Self Attention"
         )
-        parser.add_argument("--core_reg_scale", type=float, default=0)
+        parser.add_argument("--core_reg_scale", type=float, default=0.5379)
     elif temp_args.core == "cct":
         parser.add_argument("--patch_size", type=int, default=4)
         parser.add_argument("--num_blocks", type=int, default=4)
