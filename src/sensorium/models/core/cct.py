@@ -5,25 +5,11 @@ import torch
 import typing as t
 from torch import nn
 import torch.nn.functional as F
-
-
 from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
 
+from sensorium.models.utils import DropPath
 from sensorium.models.core.vit import BehaviorMLP
-from sensorium.models.utils import init_weights, DropPath
-
-
-def exists(val):
-    return val is not None
-
-
-def default(val, d):
-    return val if exists(val) else d
-
-
-def pair(t):
-    return t if isinstance(t, tuple) else (t, t)
 
 
 class Tokenizer(nn.Module):
@@ -35,7 +21,6 @@ class Tokenizer(nn.Module):
         emb_dim: int,
         padding: int = 3,
         bias: bool = False,
-        dropout: float = 0.0,
         num_layers: int = 1,
     ):
         super(Tokenizer, self).__init__()
@@ -81,18 +66,6 @@ class Tokenizer(nn.Module):
         outputs = self.tokenizer(inputs)
         outputs = rearrange(outputs, "b c h w -> b (h w) c")
         return outputs
-
-
-def sinusoidal_embedding(num_channels: int, dim: int):
-    pe = torch.FloatTensor(
-        [
-            [p / (10000 ** (2 * (i // 2) / dim)) for i in range(dim)]
-            for p in range(num_channels)
-        ]
-    )
-    pe[:, 0::2] = torch.sin(pe[:, 0::2])
-    pe[:, 1::2] = torch.cos(pe[:, 1::2])
-    return torch.unsqueeze(pe, dim=0)
 
 
 class Attention(nn.Module):
@@ -169,7 +142,7 @@ class TransformerBlock(nn.Module):
                 behavior_mode=behavior_mode, out_dim=emb_dim, mouse_ids=mouse_ids
             )
 
-    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor, mouse_id: int):
+    def forward(self, inputs: torch.Tensor, mouse_id: int, behaviors: torch.Tensor):
         outputs = inputs
         if self.b_mlp is not None:
             b_latent = self.b_mlp(behaviors, mouse_id=mouse_id)
@@ -178,6 +151,18 @@ class TransformerBlock(nn.Module):
         outputs = self.drop_path(self.mha(outputs)) + outputs
         outputs = self.drop_path(self.mlp(outputs)) + outputs
         return outputs
+
+
+def sinusoidal_embedding(num_channels: int, dim: int):
+    pe = torch.FloatTensor(
+        [
+            [p / (10000 ** (2 * (i // 2) / dim)) for i in range(dim)]
+            for p in range(num_channels)
+        ]
+    )
+    pe[:, 0::2] = torch.sin(pe[:, 0::2])
+    pe[:, 1::2] = torch.cos(pe[:, 1::2])
+    return torch.unsqueeze(pe, dim=0)
 
 
 class Transformer(nn.Module):
@@ -194,7 +179,7 @@ class Transformer(nn.Module):
         mouse_ids: t.List[int],
         drop_path: float = 0.0,
         mlp_ratio: float = 3,
-        pos_emb: str = "sine",
+        pos_emb: t.Literal["sine", "learn", "none"] = "sine",
     ):
         super(Transformer, self).__init__()
         assert pos_emb in ("sine", "learn", "none")
@@ -234,9 +219,19 @@ class Transformer(nn.Module):
         self.output_shape = (num_patches, emb_dim)
         self.apply(self.init_weight)
 
+    @staticmethod
+    def init_weight(m):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
     def forward(self, inputs: torch.Tensor, mouse_id: int, behaviors: torch.Tensor):
         outputs = inputs
-        if not exists(self.pos_emb) and inputs.size(1) < self.num_patches:
+        if self.pos_emb is not None and inputs.size(1) < self.num_patches:
             outputs = F.pad(
                 outputs,
                 (0, 0, 0, self.num_channels - outputs.size(1)),
@@ -249,16 +244,6 @@ class Transformer(nn.Module):
         for block in self.blocks:
             outputs = block(outputs, mouse_id=mouse_id, behaviors=behaviors)
         return outputs
-
-    @staticmethod
-    def init_weight(m):
-        if isinstance(m, nn.Linear):
-            nn.init.trunc_normal_(m.weight, std=0.02)
-            if isinstance(m, nn.Linear) and exists(m.bias):
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
 
 
 @register("cct")
@@ -281,7 +266,6 @@ class CCTCore(Core):
             patch_size=args.patch_size,
             stride=args.patch_stride,
             emb_dim=args.emb_dim,
-            dropout=args.p_dropout,
             num_layers=1,
         )
         tokenizer_shape = self.tokenizer.output_shape

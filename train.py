@@ -527,7 +527,7 @@ if __name__ == "__main__":
         parser.add_argument("--num_blocks", type=int, default=4)
         parser.add_argument("--num_heads", type=int, default=4)
         parser.add_argument("--emb_dim", type=int, default=160)
-        parser.add_argument("--mlp_ratio", type=int, default=3)
+        parser.add_argument("--mlp_ratio", type=float, default=3)
         parser.add_argument(
             "--pos_emb", type=str, default="sine", choices=["sine", "learn", "none"]
         )
