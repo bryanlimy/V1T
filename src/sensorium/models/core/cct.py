@@ -43,7 +43,7 @@ class Tokenizer(nn.Module):
                         bias=bias,
                     ),
                     nn.ReLU(),
-                    nn.MaxPool2d(kernel_size=6, stride=1, padding=1),
+                    nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
                 ]
             )
         self.tokenizer = nn.Sequential(*layers)
@@ -233,7 +233,7 @@ class Transformer(nn.Module):
 
     def forward(self, inputs: torch.Tensor, mouse_id: int, behaviors: torch.Tensor):
         outputs = inputs
-        if self.pos_emb is not None and inputs.size(1) < self.num_patches:
+        if self.pos_emb is None and inputs.size(1) < self.num_patches:
             outputs = F.pad(
                 outputs,
                 (0, 0, 0, self.num_channels - outputs.size(1)),
