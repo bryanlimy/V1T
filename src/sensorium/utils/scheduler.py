@@ -5,7 +5,6 @@ import numpy as np
 from torch import nn
 from torch.optim import Optimizer
 from collections import OrderedDict
-from torch.cuda.amp import GradScaler
 
 
 class Scheduler:
@@ -17,7 +16,7 @@ class Scheduler:
         mode: t.Literal["min", "max"] = "max",
         max_reduce: int = 2,
         lr_patience: int = 10,
-        factor: float = 0.3,
+        factor: float = 0.5,
         min_epochs: int = 0,
         save_optimizer: bool = True,
         save_scheduler: bool = True,

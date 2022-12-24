@@ -192,17 +192,12 @@ def main(args, wandb_sweep: bool = False):
     if args.pretrain_core:
         utils.load_pretrain_core(args, model=model)
 
-    # optimizer = torch.optim.Adam(
-    #     params=model.get_parameters(core_lr=args.core_lr_scale * args.lr),
-    #     lr=args.lr,
-    #     betas=(args.adam_beta1, args.adam_beta2),
-    #     eps=args.adam_eps,
-    #     amsgrad=True,
-    # )
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
         params=model.get_parameters(core_lr=args.core_lr_scale * args.lr),
         lr=args.lr,
-        momentum=0.9,
+        betas=(args.adam_beta1, args.adam_beta2),
+        eps=args.adam_eps,
+        amsgrad=True,
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)

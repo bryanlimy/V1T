@@ -18,6 +18,9 @@ def register(name):
     return add_to_dict
 
 
+EPS = torch.finfo(torch.float32).eps
+
+
 def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):
     """Mean sum squared error"""
     loss = torch.square(y_true - y_pred)
@@ -132,9 +135,9 @@ class MSSE(Loss):
 
 @register("poisson")
 class PoissonLoss(Loss):
-    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-12):
+    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = EPS):
         super(PoissonLoss, self).__init__(args, ds=ds)
-        self.eps = torch.tensor(eps, dtype=torch.float32, device=self.device)
+        self.register_buffer("eps", torch.tensor(eps))
 
     def forward(
         self,
@@ -152,9 +155,9 @@ class PoissonLoss(Loss):
 class Correlation(Loss):
     """single trial correlation"""
 
-    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-8):
+    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = EPS):
         super(Correlation, self).__init__(args, ds=ds)
-        self.eps = torch.tensor(eps, dtype=torch.float32, device=self.device)
+        self.register_buffer("eps", torch.tensor(eps))
 
     def forward(
         self,
