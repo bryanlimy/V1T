@@ -58,7 +58,7 @@ class Tokenizer(nn.Module):
                         bias=bias,
                     ),
                     nn.ReLU(),
-                    nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+                    nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
                 ]
             )
         self.tokenizer = nn.Sequential(*layers)
@@ -83,16 +83,16 @@ class Tokenizer(nn.Module):
         return outputs
 
 
-def sinusoidal_embedding(n_channels, dim):
+def sinusoidal_embedding(num_channels: int, dim: int):
     pe = torch.FloatTensor(
         [
             [p / (10000 ** (2 * (i // 2) / dim)) for i in range(dim)]
-            for p in range(n_channels)
+            for p in range(num_channels)
         ]
     )
     pe[:, 0::2] = torch.sin(pe[:, 0::2])
     pe[:, 1::2] = torch.cos(pe[:, 1::2])
-    return rearrange(pe, "... -> 1 ...")
+    return torch.unsqueeze(pe, dim=0)
 
 
 class Attention(nn.Module):
@@ -208,9 +208,7 @@ class Transformer(nn.Module):
             self.pos_emb = nn.Parameter(torch.zeros(1, num_patches, emb_dim))
             nn.init.trunc_normal_(self.pos_emb, std=0.2)
         else:
-            self.pos_emb = nn.Parameter(
-                sinusoidal_embedding(num_patches, emb_dim), requires_grad=False
-            )
+            self.register_buffer("pos_emb", sinusoidal_embedding(num_patches, emb_dim))
 
         self.p_dropout = nn.Dropout(p=p_dropout)
 
@@ -238,7 +236,6 @@ class Transformer(nn.Module):
 
     def forward(self, inputs: torch.Tensor, mouse_id: int, behaviors: torch.Tensor):
         outputs = inputs
-
         if not exists(self.pos_emb) and inputs.size(1) < self.num_patches:
             outputs = F.pad(
                 outputs,
@@ -249,10 +246,8 @@ class Transformer(nn.Module):
         if self.pos_emb is not None:
             outputs += self.pos_emb
         outputs = self.p_dropout(outputs)
-
         for block in self.blocks:
             outputs = block(outputs, mouse_id=mouse_id, behaviors=behaviors)
-
         return outputs
 
     @staticmethod
