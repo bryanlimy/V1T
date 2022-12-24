@@ -18,8 +18,7 @@ def register(name):
     return add_to_dict
 
 
-# EPS = torch.finfo(torch.float32).eps
-EPS = 1e-12
+EPS = torch.finfo(torch.float32).eps
 
 
 def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):

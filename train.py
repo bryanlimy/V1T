@@ -494,6 +494,9 @@ if __name__ == "__main__":
             "--t_dropout", type=float, default=0.2, help="ViT block dropout"
         )
         parser.add_argument(
+            "--drop_path", type=float, default=0.0, help="stochastic depth dropout rate"
+        )
+        parser.add_argument(
             "--patch_mode",
             type=int,
             default=0,

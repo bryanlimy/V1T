@@ -11,6 +11,7 @@ from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
 
 from sensorium.models.utils import init_weights
+from sensorium.models.core.utils import DropPath
 
 
 class PatchShifting(nn.Module):
@@ -231,7 +232,7 @@ class Attention(nn.Module):
 
         init_weights(self.to_qkv)
 
-    def forward(self, inputs: torch.Tensor, behaviors: torch.Tensor):
+    def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         inputs = self.layer_norm(inputs)
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
@@ -266,7 +267,8 @@ class Transformer(nn.Module):
         dropout: float,
         behavior_mode: int,
         mouse_ids: t.List[int],
-        use_lsa: bool,
+        use_lsa: bool = False,
+        drop_path: float = 0.0,
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
@@ -294,6 +296,7 @@ class Transformer(nn.Module):
                     out_dim=emb_dim,
                 )
             self.blocks.append(block)
+        self.drop_path = DropPath(dropout=drop_path)
         self.output_shape = (input_shape[0], emb_dim)
 
     def forward(
@@ -308,8 +311,8 @@ class Transformer(nn.Module):
                 b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            outputs = block["mha"](outputs, behaviors=behaviors) + outputs
-            outputs = block["mlp"](outputs) + outputs
+            outputs = self.drop_path(block["mha"](outputs)) + outputs
+            outputs = self.drop_path(block["mlp"](outputs)) + outputs
         return outputs
 
 
@@ -350,6 +353,7 @@ class ViTCore(Core):
             behavior_mode=self.behavior_mode,
             mouse_ids=list(args.output_shapes.keys()),
             use_lsa=args.use_lsa,
+            drop_path=args.drop_path,
         )
 
         # calculate latent height and width based on num_patches
