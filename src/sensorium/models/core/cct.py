@@ -20,7 +20,7 @@ class Tokenizer(nn.Module):
         stride: int,
         emb_dim: int,
         padding: int = 3,
-        bias: bool = False,
+        use_bias: bool = False,
         num_layers: int = 1,
     ):
         super(Tokenizer, self).__init__()
@@ -37,13 +37,13 @@ class Tokenizer(nn.Module):
                     nn.Conv2d(
                         in_channels=in_channels,
                         out_channels=out_channels,
-                        kernel_size=(patch_size, patch_size),
-                        stride=(stride, stride),
-                        padding=(padding, padding),
-                        bias=bias,
+                        kernel_size=patch_size,
+                        stride=stride,
+                        padding=padding,
+                        bias=use_bias,
                     ),
                     nn.ReLU(),
-                    nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
+                    nn.MaxPool2d(kernel_size=6, stride=1, padding=1),
                 ]
             )
         self.tokenizer = nn.Sequential(*layers)
