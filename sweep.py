@@ -37,8 +37,8 @@ class Args:
                 setattr(self, key, value)
 
 
-def main(dataset: str, batch_size: int, num_workers: int = 2):
-    run = wandb.init(group="vit_sweep")
+def main(wandb_group: str, dataset: str, batch_size: int, num_workers: int = 2):
+    run = wandb.init(group=wandb_group)
     config = run.config
     run.name = run.id
     wandb.config.update({"batch_size": batch_size})
@@ -64,6 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=0)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--sweep_id", type=str, required=True)
+    parser.add_argument("--wandb_group", type=str, required=True)
     parser.add_argument("--num_trials", type=int, default=1)
     parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
     params = parser.parse_args()
@@ -72,6 +73,7 @@ if __name__ == "__main__":
         sweep_id=f"bryanlimy/sensorium/{params.sweep_id}",
         function=partial(
             main,
+            wandb_group=params.wandb_group,
             dataset=params.dataset,
             batch_size=params.batch_size,
             num_workers=params.num_workers,
