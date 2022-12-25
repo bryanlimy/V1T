@@ -78,12 +78,13 @@ class Attention(nn.Module):
     ):
         super().__init__()
         self.num_heads = num_heads
-        head_dim = emb_dim // num_heads
+        # head_dim = emb_dim // num_heads
+        inner_dim = emb_dim * num_heads
 
-        self.register_buffer("scale", torch.tensor(head_dim**-0.5))
+        self.register_buffer("scale", torch.tensor(inner_dim**-0.5))
         self.layer_norm = nn.LayerNorm(normalized_shape=emb_dim)
 
-        self.qkv = nn.Linear(emb_dim, emb_dim * 3, bias=False)
+        self.qkv = nn.Linear(emb_dim, inner_dim * 3, bias=False)
         self.attend = nn.Softmax(dim=-1)
         self.attn_drop = nn.Dropout(p=dropout)
         self.projection = nn.Sequential(
