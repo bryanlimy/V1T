@@ -88,7 +88,7 @@ class Attention(nn.Module):
         self.attend = nn.Softmax(dim=-1)
         self.attn_drop = nn.Dropout(p=dropout)
         self.projection = nn.Sequential(
-            nn.Linear(in_features=emb_dim, out_features=emb_dim),
+            nn.Linear(in_features=inner_dim, out_features=emb_dim),
             nn.Dropout(p=dropout),
         )
 
