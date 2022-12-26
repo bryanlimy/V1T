@@ -73,8 +73,8 @@ class Model(nn.Module):
                 module=CoreShifters(
                     args,
                     mouse_ids=list(ds.keys()),
-                    input_channels=5,
-                    hidden_features=10,
+                    input_channels=2,
+                    hidden_features=5,
                     num_layers=3,
                 ),
             )
@@ -149,8 +149,7 @@ class Model(nn.Module):
         )
         shifts = None
         if self.core_shifter is not None:
-            behaviors = torch.cat((behaviors, pupil_centers), dim=-1)
-            shifts = self.core_shifter(behaviors, mouse_id=mouse_id)
+            shifts = self.core_shifter(pupil_centers, mouse_id=mouse_id)
         outputs = self.readouts(outputs, mouse_id=mouse_id, shifts=shifts)
         if activate:
             outputs = self.elu(outputs) + 1

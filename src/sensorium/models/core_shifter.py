@@ -42,7 +42,7 @@ class CoreShifters(ModuleDict):
         args,
         mouse_ids: t.List[int],
         input_channels: int = 2,
-        hidden_features: int = 5,
+        hidden_features: int = 10,
         num_layers: int = 3,
     ):
         super(CoreShifters, self).__init__()
