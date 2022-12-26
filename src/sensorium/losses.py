@@ -152,7 +152,7 @@ class PoissonLoss(Loss):
         print("eps: ", self.eps.dtype, self.eps.device)
 
         y_true, y_pred = y_true.to(torch.float64), y_pred.to(torch.float64)
-        self.eps = self.eps..to(y_true.device).to(torch.float64)
+        self.eps = self.eps.to(y_true.device).to(torch.float64)
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=reduction)
         print("loss: ", loss.dtype, loss.device)
         exit()
