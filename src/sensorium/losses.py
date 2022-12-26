@@ -32,7 +32,7 @@ def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum
 def poisson_loss(
     y_true: torch.Tensor,
     y_pred: torch.Tensor,
-    eps: t.Union[float, torch.Tensor] = 1e-12,
+    eps: t.Union[float, torch.Tensor] = EPS,
     reduction: REDUCTION = "sum",
 ):
     loss = y_pred - y_true * torch.log(y_pred + eps)
@@ -138,7 +138,7 @@ class MSSE(Loss):
 class PoissonLoss(Loss):
     def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = EPS):
         super(PoissonLoss, self).__init__(args, ds=ds)
-        self.register_buffer("eps", torch.tensor(eps))
+        self.register_buffer("eps", torch.tensor(eps, dtype=torch.float64))
 
     def forward(
         self,
@@ -147,7 +147,13 @@ class PoissonLoss(Loss):
         mouse_id: int,
         reduction: REDUCTION = "sum",
     ):
+        print("y_true: ", y_true.dtype, y_true.device)
+        print("y_pred: ", y_pred.dtype, y_pred.device)
+        # y_true, y_pred = y_true.to(torch.float64), y_pred.to(torch.float64)
+        # self.eps = self.eps.to(torch.float64)
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=reduction)
+        print("loss: ", loss.dtype, loss.device)
+        exit()
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
