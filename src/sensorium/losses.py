@@ -147,12 +147,12 @@ class PoissonLoss(Loss):
         mouse_id: int,
         reduction: REDUCTION = "sum",
     ):
-        print("y_true: ", y_true.dtype, y_true.device)
-        print("y_pred: ", y_pred.dtype, y_pred.device)
-        print("eps: ", self.eps.dtype, self.eps.device)
 
         y_true, y_pred = y_true.to(torch.float64), y_pred.to(torch.float64)
         self.eps = self.eps.to(y_true.device).to(torch.float64)
+        print("y_true: ", y_true.dtype, y_true.device)
+        print("y_pred: ", y_pred.dtype, y_pred.device)
+        print("eps: ", self.eps.dtype, self.eps.device)
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=reduction)
         print("loss: ", loss.dtype, loss.device)
         exit()
