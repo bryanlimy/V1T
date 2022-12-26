@@ -138,7 +138,9 @@ class MSSE(Loss):
 class PoissonLoss(Loss):
     def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = EPS):
         super(PoissonLoss, self).__init__(args, ds=ds)
-        self.register_buffer("eps", torch.tensor(eps, dtype=torch.float64))
+        self.register_buffer(
+            "eps", torch.tensor(eps, dtype=torch.float64, device=args.device)
+        )
 
     def forward(
         self,
@@ -147,17 +149,10 @@ class PoissonLoss(Loss):
         mouse_id: int,
         reduction: REDUCTION = "sum",
     ):
-
         y_true, y_pred = y_true.to(torch.float64), y_pred.to(torch.float64)
-        self.eps = self.eps.to(y_true.device).to(torch.float64)
-        print("y_true: ", y_true.dtype, y_true.device)
-        print("y_pred: ", y_pred.dtype, y_pred.device)
-        print("eps: ", self.eps.dtype, self.eps.device)
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=reduction)
-        print("loss: ", loss.dtype, loss.device)
-        exit()
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
-        return loss
+        return loss.to(torch.float32)
 
 
 @register("correlation")
