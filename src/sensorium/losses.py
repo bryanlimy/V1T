@@ -1,13 +1,14 @@
 import torch
-import typing as t
 import numpy as np
-from torch import nn
+import typing as t
 from torch.utils.data import DataLoader
 from torch.nn.modules.loss import _Loss
 
 REDUCTION = t.Literal["sum", "mean"]
 
 _CRITERION = dict()
+
+EPS = torch.finfo(torch.float32).smallest_normal
 
 
 def register(name):
@@ -17,10 +18,6 @@ def register(name):
         return fn
 
     return add_to_dict
-
-
-EPS = torch.finfo(torch.float32).smallest_normal
-# EPS = 1e-12
 
 
 def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):
@@ -33,7 +30,7 @@ def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum
 def poisson_loss(
     y_true: torch.Tensor,
     y_pred: torch.Tensor,
-    eps: t.Union[float, torch.Tensor] = EPS,
+    eps: t.Union[float, torch.Tensor] = 1e-8,
     reduction: REDUCTION = "sum",
 ):
     loss = y_pred - y_true * torch.log(y_pred + eps)
@@ -181,5 +178,5 @@ class Correlation(Loss):
 def get_criterion(args, ds: t.Dict[int, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
     criterion = _CRITERION[args.criterion](args, ds=ds)
-    criterion.to(args.device, torch.float64)
+    criterion.to(args.device)
     return criterion
