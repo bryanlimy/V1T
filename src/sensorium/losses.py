@@ -111,6 +111,7 @@ class Loss(_Loss):
         }
 
     def to(self, *args):
+        # load ds_sizes to the target device
         self.ds_sizes = {k: v.to(*args) for k, v in self.ds_sizes.items()}
         super(Loss, self).to(*args)
 
@@ -180,5 +181,5 @@ class Correlation(Loss):
 def get_criterion(args, ds: t.Dict[int, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
     criterion = _CRITERION[args.criterion](args, ds=ds)
-    criterion.to(args.device)
+    criterion.to(args.device, torch.float64)
     return criterion
