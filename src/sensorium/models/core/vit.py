@@ -232,7 +232,7 @@ class Attention(nn.Module):
             self.mask = None
             self.register_buffer("scale", torch.tensor(scale))
 
-        init_weights(self.to_qkv)
+        # init_weights(self.to_qkv)
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
@@ -363,7 +363,7 @@ class ViTCore(Core):
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
         self.output_shape = (self.transformer.output_shape[-1], h, w)
 
-        self.apply(init_weights)
+        # self.apply(init_weights)
 
     @staticmethod
     def find_shape(num_patches: int):
