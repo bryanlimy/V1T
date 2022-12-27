@@ -115,7 +115,7 @@ class Loss(_Loss):
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
         if self.ds_scale:
-            scale = torch.sqrt(self.ds_sizes[str(mouse_id)] / batch_size)
+            scale = torch.sqrt(self.ds_sizes[mouse_id] / batch_size)
             loss = scale * loss
         return loss
 
