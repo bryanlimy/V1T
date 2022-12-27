@@ -107,11 +107,6 @@ class Loss(_Loss):
             for mouse_id, mouse_ds in ds.items()
         }
 
-    def to(self, *args):
-        # load ds_sizes to the target device
-        self.ds_sizes = {k: v.to(*args) for k, v in self.ds_sizes.items()}
-        super(Loss, self).to(*args)
-
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
         if self.ds_scale:
