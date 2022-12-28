@@ -103,9 +103,7 @@ class Loss(_Loss):
         )
         self.ds_scale = args.ds_scale
         self.ds_sizes = {
-            mouse_id: torch.tensor(
-                len(mouse_ds.dataset), dtype=torch.float32, device=args.device
-            )
+            mouse_id: torch.tensor(len(mouse_ds.dataset))
             for mouse_id, mouse_ds in ds.items()
         }
 
@@ -143,7 +141,7 @@ class PoissonLoss(Loss):
         reduction: REDUCTION = "sum",
     ):
         super(PoissonLoss, self).__init__(args, ds=ds, reduction=reduction)
-        self.register_buffer("eps", torch.tensor(eps, device=args.device))
+        self.register_buffer("eps", torch.tensor(eps))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction="sum")
