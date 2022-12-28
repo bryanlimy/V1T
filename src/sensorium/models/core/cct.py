@@ -311,7 +311,9 @@ class CCTCore(Core):
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):
+        print(f"cct input {torch.min(inputs):.04f} max: {torch.max(inputs):.04f}")
         outputs = self.tokenizer(inputs)
+        print(f"cct tokenizer {torch.min(outputs):.04f} max: {torch.max(outputs):.04f}")
         if self.behavior_mode in (3, 4):
             behaviors = torch.cat((behaviors, pupil_centers), dim=-1)
         outputs = self.transformer(outputs, mouse_id=mouse_id, behaviors=behaviors)
