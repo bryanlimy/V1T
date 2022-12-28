@@ -103,15 +103,17 @@ class Loss(_Loss):
         )
         self.ds_scale = args.ds_scale
         self.ds_sizes = {
-            mouse_id: torch.tensor(len(mouse_ds.dataset), dtype=torch.float32)
+            mouse_id: torch.tensor(
+                len(mouse_ds.dataset), dtype=torch.float32, device=args.device
+            )
             for mouse_id, mouse_ds in ds.items()
         }
 
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
         if self.ds_scale:
-            scale = torch.sqrt(self.ds_sizes[mouse_id] / batch_size)
-            loss = scale * loss
+            loss_scale = torch.sqrt(self.ds_sizes[mouse_id] / batch_size)
+            loss = loss_scale * loss
         return loss
 
 
@@ -144,8 +146,11 @@ class PoissonLoss(Loss):
         self.register_buffer("eps", torch.tensor(eps))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
+        print(f"eps: {self.eps:.04e}, reduction: {self.reduction}")
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=self.reduction)
+        print(f"loss before scale: {loss:.4f}")
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        print(f"loss after scale: {loss:.4f}")
         return loss
 
 
