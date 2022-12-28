@@ -31,15 +31,6 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
 
 
-def get_grad_norm(model: nn.Module):
-    total_norm = 0
-    for p in model.parameters():
-        if p.grad is not None:
-            param_norm = p.grad.data.norm(2)
-            total_norm += param_norm.item() ** 2
-    return total_norm ** (1.0 / 2)
-
-
 @torch.no_grad()
 def inference(
     ds: DataLoader, model: torch.nn.Module, device: torch.device = "cpu"
