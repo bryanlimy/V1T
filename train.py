@@ -2,6 +2,7 @@ import os
 import torch
 import wandb
 import argparse
+import numpy as np
 import typing as t
 from torch import nn
 from tqdm import tqdm
@@ -273,6 +274,9 @@ def main(args, wandb_sweep: bool = False):
                 }
             )
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
+            break
+        if np.isnan(train_result["loss"]) or np.isnan(val_result["loss"]):
+            print("\nNaN loss detected, determinate training.\n")
             break
 
     scheduler.restore()
