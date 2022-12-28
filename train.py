@@ -16,8 +16,6 @@ from sensorium.utils.logger import Logger
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
-import math
-
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
@@ -31,6 +29,30 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     }
 
 
+class AutoGradClip:
+    def __init__(self, percentile: float):
+        self.percentile = percentile
+        self.history = []
+
+    @staticmethod
+    def compute_grad_norm(model: nn.Module):
+        total_norm = 0
+        for p in model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        return total_norm ** (1.0 / 2)
+
+    def clear(self):
+        self.history.clear()
+
+    def __call__(self, model: nn.Module):
+        grad_norm = self.compute_grad_norm(model)
+        self.history.append(grad_norm)
+        clip_value = np.percentile(self.history, q=self.percentile)
+        torch.nn.utils.clip_grad_value_(model.parameters(), clip_value)
+
+
 def train_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
@@ -38,6 +60,7 @@ def train_step(
     optimizer: torch.optim,
     criterion: losses.Loss,
     update: bool,
+    grad_clip: AutoGradClip = None,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
@@ -52,19 +75,8 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-    torch.nn.utils.clip_grad_value_(model.parameters(), clip_value=100)
-    total_norm = 0
-    parameters = model.parameters()
-    for p in parameters:
-        if p.grad is not None:
-            param_norm = p.grad.data.norm(2)
-            if torch.isinf(param_norm):
-                print(f"\tparam_norm: {param_norm:.02f}, param_shape: {p.shape}")
-            total_norm += param_norm.item() ** 2
-    total_norm = total_norm ** (1.0 / 2)
-    print(f"total grad norm: {total_norm:.02f}")
-    if total_norm in (math.inf, math.nan):
-        print(f"\tloss: {loss:.02f}, reg_loss: {reg_loss:.02f}")
+    if grad_clip is not None:
+        grad_clip(model)
     if update:
         print("update\n")
         optimizer.step()
@@ -84,6 +96,7 @@ def train(
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
+    grad_clip: AutoGradClip,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
@@ -105,6 +118,7 @@ def train(
             optimizer=optimizer,
             criterion=criterion,
             update=(i + 1) % update_frequency == 0,
+            grad_clip=grad_clip,
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
@@ -218,6 +232,7 @@ def main(args, wandb_sweep: bool = False):
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
+    grad_clip = AutoGradClip(percentile=0.9)
 
     utils.save_args(args)
 
@@ -242,6 +257,7 @@ def main(args, wandb_sweep: bool = False):
             model=model,
             optimizer=optimizer,
             criterion=criterion,
+            grad_clip=grad_clip,
             epoch=epoch,
             summary=summary,
         )
