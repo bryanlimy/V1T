@@ -279,7 +279,7 @@ def main(args, wandb_sweep: bool = False):
         if np.isnan(train_result["loss"]) or np.isnan(val_result["loss"]):
             if args.use_wandb:
                 wandb.finish(exit_code=1)  # mark run as failed
-            exit("\nNaN loss detected, determinate training.\n")
+            exit("\nNaN loss detected, determinate training.")
 
     scheduler.restore()
     eval_result = utils.evaluate(
