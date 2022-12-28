@@ -29,6 +29,9 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     }
 
 
+import math
+
+
 class AutoGradClip:
     def __init__(self, percentile: float):
         self.percentile = percentile
@@ -48,8 +51,10 @@ class AutoGradClip:
 
     def __call__(self, model: nn.Module):
         grad_norm = self.compute_grad_norm(model)
+
         self.history.append(grad_norm)
         clip_value = np.percentile(self.history, q=self.percentile)
+        print(f"total norm: {grad_norm}:.02f, clip value: {clip_value:.02f}")
         torch.nn.utils.clip_grad_value_(model.parameters(), clip_value)
 
 
