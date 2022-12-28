@@ -56,7 +56,12 @@ def train_step(
     print(
         f"conv2d grad norm: {torch.norm(model.core.tokenizer.tokenizer[0].weight.grad)}"
     )
-    torch.nn.utils.clip_grad_norm_(model.core.tokenizer, max_norm=2.0, norm_type=2)
+    torch.nn.utils.clip_grad_norm_(
+        model.core.tokenizer.parameters(), max_norm=2.0, norm_type=2
+    )
+    print(
+        f"conv2d grad norm after: {torch.norm(model.core.tokenizer.tokenizer[0].weight.grad)}"
+    )
     if update:
         print("update")
         optimizer.step()
