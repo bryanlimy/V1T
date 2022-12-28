@@ -21,32 +21,21 @@ class Tokenizer(nn.Module):
         emb_dim: int,
         padding: int = 3,
         use_bias: bool = False,
-        num_layers: int = 1,
     ):
         super(Tokenizer, self).__init__()
         c, h, w = image_shape
         self.image_shape = image_shape
 
-        n_filter_list = [c] + [emb_dim for _ in range(num_layers - 1)] + [emb_dim]
-        n_filter_list_pairs = zip(n_filter_list[:-1], n_filter_list[1:])
-
-        layers = []
-        for in_channels, out_channels in n_filter_list_pairs:
-            layers.extend(
-                [
-                    nn.Conv2d(
-                        in_channels=in_channels,
-                        out_channels=out_channels,
-                        kernel_size=patch_size,
-                        stride=stride,
-                        padding=padding,
-                        bias=use_bias,
-                    ),
-                    nn.ReLU(),
-                    nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
-                ]
-            )
-        self.tokenizer = nn.Sequential(*layers)
+        self.conv2d = nn.Conv2d(
+            in_channels=c,
+            out_channels=emb_dim,
+            kernel_size=patch_size,
+            stride=stride,
+            padding=padding,
+            bias=use_bias,
+        )
+        self.relu = nn.ReLU()
+        self.max_pool2d = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.apply(self.init_weight)
 
     @property
@@ -58,12 +47,14 @@ class Tokenizer(nn.Module):
         return (num_patches, emb_dim)
 
     @staticmethod
-    def init_weight(m):
+    def init_weight(m: nn.Module):
         if isinstance(m, nn.Conv2d):
             nn.init.kaiming_normal_(m.weight)
 
     def forward(self, inputs: torch.Tensor):
-        outputs = self.tokenizer(inputs)
+        outputs = self.conv2d(inputs)
+        outputs = self.relu(outputs)
+        outputs = self.max_pool2d(outputs)
         outputs = rearrange(outputs, "b c h w -> b (h w) c")
         return outputs
 
@@ -272,7 +263,6 @@ class CCTCore(Core):
             patch_size=args.patch_size,
             stride=args.patch_stride,
             emb_dim=args.emb_dim,
-            num_layers=1,
         )
         tokenizer_shape = self.tokenizer.output_shape
         num_patches = tokenizer_shape[0]
