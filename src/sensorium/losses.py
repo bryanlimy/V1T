@@ -4,11 +4,8 @@ import typing as t
 from torch.utils.data import DataLoader
 from torch.nn.modules.loss import _Loss
 
-REDUCTION = t.Literal["sum", "mean"]
 
 _CRITERION = dict()
-
-EPS = torch.finfo(torch.float32).smallest_normal
 
 
 def register(name):
@@ -18,6 +15,10 @@ def register(name):
         return fn
 
     return add_to_dict
+
+
+REDUCTION = t.Literal["sum", "mean"]
+EPS = torch.finfo(torch.float32).smallest_normal
 
 
 def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):
