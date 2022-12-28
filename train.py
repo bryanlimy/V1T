@@ -59,6 +59,7 @@ def train_step(
     total_norm = total_norm ** (1.0 / 2)
     print(f"total grad norm: {total_norm:.02f}")
     if update:
+        print("update\n\n")
         optimizer.step()
         optimizer.zero_grad()
     result = {
