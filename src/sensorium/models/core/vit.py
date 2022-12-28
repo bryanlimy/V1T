@@ -5,12 +5,10 @@ import torch
 import typing as t
 from torch import nn
 import torch.nn.functional as F
-
-
 from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
 
-from sensorium.models.utils import init_weights, DropPath
+from sensorium.models.utils import DropPath
 
 
 class PatchShifting(nn.Module):
@@ -96,10 +94,17 @@ class Image2Patches(nn.Module):
         self.num_patches = num_patches
         self.output_shape = (num_patches, emb_dim)
 
+        self.apply(self.init_weight)
+
     @staticmethod
     def unfold_dim(h: int, w: int, patch_size: int, padding: int = 0, stride: int = 1):
         l = lambda s: math.floor(((s + 2 * padding - patch_size) / stride) + 1)
         return l(h) * l(w)
+
+    @staticmethod
+    def init_weight(m: nn.Module):
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight)
 
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
@@ -232,8 +237,6 @@ class Attention(nn.Module):
             self.mask = None
             self.register_buffer("scale", torch.tensor(scale))
 
-        # init_weights(self.to_qkv)
-
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         inputs = self.layer_norm(inputs)
@@ -301,6 +304,18 @@ class Transformer(nn.Module):
         self.drop_path = DropPath(dropout=drop_path)
         self.output_shape = (input_shape[0], emb_dim)
 
+        self.apply(self.init_weight)
+
+    @staticmethod
+    def init_weight(m: nn.Module):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
     def forward(
         self,
         inputs: torch.Tensor,
@@ -362,8 +377,6 @@ class ViTCore(Core):
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
         self.output_shape = (self.transformer.output_shape[-1], h, w)
-
-        # self.apply(init_weights)
 
     @staticmethod
     def find_shape(num_patches: int):

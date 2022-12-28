@@ -223,7 +223,7 @@ class Transformer(nn.Module):
         self.apply(self.init_weight)
 
     @staticmethod
-    def init_weight(m):
+    def init_weight(m: nn.Module):
         if isinstance(m, nn.Linear):
             nn.init.trunc_normal_(m.weight, std=0.02)
             if isinstance(m, nn.Linear) and m.bias is not None:

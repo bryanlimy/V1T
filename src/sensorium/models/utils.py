@@ -109,17 +109,6 @@ class DropPath(nn.Module):
         return outputs
 
 
-def init_weights(module: nn.Module):
-    """Weight initialization for module"""
-    if isinstance(module, (nn.Linear, nn.Conv2d)):
-        nn.init.xavier_normal_(module.weight)
-        if module.bias is not None:
-            nn.init.constant_(module.bias, 0)
-    elif isinstance(module, nn.LayerNorm):
-        nn.init.constant_(module.weight, 1.0)
-        nn.init.constant_(module.bias, 0)
-
-
 class BufferDict(nn.Module):
     """Holds buffers in a dictionary.
 
