@@ -16,6 +16,8 @@ from sensorium.utils.logger import Logger
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
+torch.autograd.set_detect_anomaly(True)
+
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
