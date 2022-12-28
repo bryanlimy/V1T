@@ -47,7 +47,7 @@ class Tokenizer(nn.Module):
                 ]
             )
         self.tokenizer = nn.Sequential(*layers)
-        # self.apply(self.init_weight)
+        self.apply(self.init_weight)
 
     @property
     def output_shape(self):

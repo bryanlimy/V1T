@@ -50,6 +50,7 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
+    print(f"total_loss grad: {total_loss.grad}")
     if update:
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
@@ -82,6 +83,7 @@ def train(
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
+        print(f"step {i}")
         result = train_step(
             mouse_id=mouse_id,
             batch=mouse_batch,
@@ -207,15 +209,14 @@ def main(args, wandb_sweep: bool = False):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(
-        model,
-        ds=train_ds,
-        summary=summary,
-        epoch=epoch,
-        device=args.device,
-    )
+    # utils.plot_samples(
+    #     model,
+    #     ds=train_ds,
+    #     summary=summary,
+    #     epoch=epoch,
+    #     device=args.device,
+    # )
 
-    failed = False  # failed signal for wandb
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")

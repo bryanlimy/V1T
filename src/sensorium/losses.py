@@ -151,9 +151,9 @@ class PoissonLoss(Loss):
         print(f"y_true min: {torch.min(y_true):.04f} max: {torch.max(y_true):.04f}")
         print(f"y_pred min: {torch.min(y_pred):.04f} max: {torch.max(y_pred):.04f}")
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=self.reduction)
-        print(f"loss before scale: {loss:.06f}")
+        print(f"loss before scale: {loss:.02f}")
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
-        print(f"loss after scale: {loss:.06f}\n\n")
+        print(f"loss after scale: {loss:.02f}\n\n")
         return loss
 
 
