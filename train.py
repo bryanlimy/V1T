@@ -50,9 +50,14 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-    torch.nn.utils.clip_grad_norm_(
-        model.core.tokenizer.parameters(), max_norm=2.0, norm_type=2
-    )
+    total_norm = 0
+    parameters = model.parameters()
+    for p in parameters:
+        if p.grad is not None:
+            param_norm = p.grad.data.norm(2)
+            total_norm += param_norm.item() ** 2
+    total_norm = total_norm ** (1.0 / 2)
+    print(f"total grad norm: {total_norm:.02f}")
     if update:
         optimizer.step()
         optimizer.zero_grad()
@@ -210,13 +215,13 @@ def main(args, wandb_sweep: bool = False):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(
-        model,
-        ds=train_ds,
-        summary=summary,
-        epoch=epoch,
-        device=args.device,
-    )
+    # utils.plot_samples(
+    #     model,
+    #     ds=train_ds,
+    #     summary=summary,
+    #     epoch=epoch,
+    #     device=args.device,
+    # )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:

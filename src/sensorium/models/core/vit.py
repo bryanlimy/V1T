@@ -94,7 +94,7 @@ class Image2Patches(nn.Module):
         self.num_patches = num_patches
         self.output_shape = (num_patches, emb_dim)
 
-        # self.apply(self.init_weight)
+        self.apply(self.init_weight)
 
     @staticmethod
     def unfold_dim(h: int, w: int, patch_size: int, padding: int = 0, stride: int = 1):
@@ -304,7 +304,7 @@ class Transformer(nn.Module):
         self.drop_path = DropPath(dropout=drop_path)
         self.output_shape = (input_shape[0], emb_dim)
 
-        # self.apply(self.init_weight)
+        self.apply(self.init_weight)
 
     @staticmethod
     def init_weight(m: nn.Module):
