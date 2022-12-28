@@ -60,11 +60,13 @@ def train_step(
     for p in parameters:
         if p.grad is not None:
             param_norm = p.grad.data.norm(2)
+            if torch.isinf(param_norm):
+                print(f"\tparam_norm: {param_norm:.02f}, param_shape: {p.shape}")
             total_norm += param_norm.item() ** 2
     total_norm = total_norm ** (1.0 / 2)
     print(f"total grad norm: {total_norm:.02f}")
     if total_norm in (math.inf, math.nan):
-        print(f"loss: {loss:.04f}")
+        print(f"\tloss: {loss:.02f}, reg_loss: {reg_loss:.02f}")
     if update:
         print("update\n")
         optimizer.step()
