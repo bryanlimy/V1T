@@ -34,6 +34,7 @@ class AutoGradClip:
         assert 0 <= percentile <= 100
         self.idx = 0
         self.percentile = percentile
+        self.max_history = max_history
         self.history = np.zeros(shape=(max_history,), dtype=np.float32)
 
     @staticmethod
@@ -47,8 +48,8 @@ class AutoGradClip:
 
     def __call__(self, model: nn.Module):
         grad_norm = self.compute_grad_norm(model)
+        self.history[self.idx % self.max_history] = grad_norm
         self.idx += 1
-        self.history[self.idx] = grad_norm
         clip_value = np.percentile(self.history[: self.idx], q=self.percentile)
         print(f"total norm: {grad_norm:.02f}, clip value: {clip_value:.02f}")
         torch.nn.utils.clip_grad_value_(model.parameters(), clip_value)
