@@ -42,7 +42,7 @@ class Tokenizer(nn.Module):
                         padding=padding,
                         bias=use_bias,
                     ),
-                    nn.ReLU(),
+                    nn.GELU(),
                     nn.MaxPool2d(kernel_size=6, stride=1, padding=1),
                 ]
             )
