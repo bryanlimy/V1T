@@ -8,9 +8,9 @@ class CoreShifter(nn.Module):
     def __init__(
         self,
         args,
-        in_features: int = 2,
-        hidden_features: int = 10,
-        num_layers: int = 1,
+        in_features: int,
+        hidden_features: int,
+        num_layers: int,
         name: str = "CoreShifter",
     ):
         super(CoreShifter, self).__init__()
@@ -41,9 +41,9 @@ class CoreShifters(ModuleDict):
         self,
         args,
         mouse_ids: t.List[int],
-        input_channels: int = 2,
-        hidden_features: int = 10,
-        num_layers: int = 3,
+        input_channels: int,
+        hidden_features: int,
+        num_layers: int,
     ):
         super(CoreShifters, self).__init__()
         for mouse_id in mouse_ids:
