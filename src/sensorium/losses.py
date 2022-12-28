@@ -143,10 +143,10 @@ class PoissonLoss(Loss):
         reduction: REDUCTION = "sum",
     ):
         super(PoissonLoss, self).__init__(args, ds=ds, reduction=reduction)
-        self.register_buffer("eps", torch.tensor(eps))
+        self.register_buffer("eps", torch.tensor(eps, device=args.device))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=self.reduction)
+        loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction="sum")
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
@@ -175,5 +175,5 @@ class Correlation(Loss):
 def get_criterion(args, ds: t.Dict[int, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
     criterion = _CRITERION[args.criterion](args, ds=ds)
-    criterion.to(args.device)
+    # criterion.to(args.device)
     return criterion
