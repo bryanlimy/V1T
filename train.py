@@ -50,9 +50,9 @@ class AutoGradClip:
         grad_norm = self.compute_grad_norm(model)
         self.history[self.idx % self.max_history] = grad_norm
         self.idx += 1
-        clip_value = np.percentile(self.history[: self.idx], q=self.percentile)
-        print(f"total norm: {grad_norm:.02f}, clip value: {clip_value:.02f}")
-        torch.nn.utils.clip_grad_value_(model.parameters(), clip_value)
+        max_norm = np.percentile(self.history[: self.idx], q=self.percentile)
+        print(f"total norm: {grad_norm:.02f}, max norm: {max_norm:.02f}")
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm)
 
 
 def train_step(
