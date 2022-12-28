@@ -29,13 +29,12 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     }
 
 
-import math
-
-
 class AutoGradClip:
-    def __init__(self, percentile: float):
+    def __init__(self, percentile: float, max_history: int = 10000):
+        assert 0 <= percentile <= 100
+        self.idx = 0
         self.percentile = percentile
-        self.history = []
+        self.history = np.zeros(shape=(max_history,), dtype=np.float32)
 
     @staticmethod
     def compute_grad_norm(model: nn.Module):
@@ -46,13 +45,11 @@ class AutoGradClip:
                 total_norm += param_norm.item() ** 2
         return total_norm ** (1.0 / 2)
 
-    def clear(self):
-        self.history.clear()
-
     def __call__(self, model: nn.Module):
         grad_norm = self.compute_grad_norm(model)
-        self.history.append(grad_norm)
-        clip_value = np.percentile(self.history, q=self.percentile)
+        self.idx += 1
+        self.history[self.idx] = grad_norm
+        clip_value = np.percentile(self.history[: self.idx], q=self.percentile)
         print(f"total norm: {grad_norm:.02f}, clip value: {clip_value:.02f}")
         torch.nn.utils.clip_grad_value_(model.parameters(), clip_value)
 
@@ -236,7 +233,7 @@ def main(args, wandb_sweep: bool = False):
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
-    grad_clip = AutoGradClip(percentile=0.1)
+    grad_clip = AutoGradClip(percentile=10)
 
     utils.save_args(args)
 
