@@ -269,6 +269,7 @@ def main(args, wandb_sweep: bool = False):
                     "train_corr": train_result["single_trial_correlation"],
                     "val_loss": val_result["loss"],
                     "val_corr": val_result["single_trial_correlation"],
+                    "best_corr": scheduler.best_value,
                 }
             )
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
@@ -286,7 +287,10 @@ def main(args, wandb_sweep: bool = False):
         save_result=args.output_dir,
     )
     if args.use_wandb:
-        wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
+        wandb.log(
+            {"test_corr": eval_result["single_trial_correlation"]},
+            step=epoch,
+        )
     utils.plot_samples(
         model,
         ds=test_ds,
