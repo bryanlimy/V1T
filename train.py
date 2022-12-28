@@ -52,10 +52,10 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-    print(f"conv2d norm: {torch.norm(model.core.tokenizer.tokenizer[0].weight)}")
-    print(
-        f"conv2d grad norm: {torch.norm(model.core.tokenizer.tokenizer[0].weight.grad)}"
-    )
+    # print(f"conv2d norm: {torch.norm(model.core.tokenizer.tokenizer[0].weight)}")
+    # print(
+    #     f"conv2d grad norm: {torch.norm(model.core.tokenizer.tokenizer[0].weight.grad)}"
+    # )
     if update:
         print("update")
         optimizer.step()
