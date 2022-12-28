@@ -153,7 +153,7 @@ class PoissonLoss(Loss):
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=self.reduction)
         print(f"loss before scale: {loss:.06f}")
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
-        print(f"loss after scale: {loss:.06f}")
+        print(f"loss after scale: {loss:.06f}\n\n")
         return loss
 
 

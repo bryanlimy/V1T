@@ -63,8 +63,17 @@ class Tokenizer(nn.Module):
             nn.init.kaiming_normal_(m.weight)
 
     def forward(self, inputs: torch.Tensor):
+        print(
+            f"tokenizer input min: {torch.min(inputs):.04f} max: {torch.max(inputs):.04f}"
+        )
         outputs = self.tokenizer(inputs)
+        print(
+            f"tokenizer output min: {torch.min(outputs):.04f} max: {torch.max(outputs):.04f}"
+        )
         outputs = rearrange(outputs, "b c h w -> b (h w) c")
+        print(
+            f"tokenizer rearrange min: {torch.min(outputs):.04f} max: {torch.max(outputs):.04f}"
+        )
         return outputs
 
 
