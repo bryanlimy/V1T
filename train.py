@@ -236,7 +236,7 @@ def main(args, wandb_sweep: bool = False):
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
-    grad_clip = AutoGradClip(percentile=0.9)
+    grad_clip = AutoGradClip(percentile=0.1)
 
     utils.save_args(args)
 
