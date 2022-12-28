@@ -50,8 +50,9 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-    print(f"total_loss grad: {total_loss.grad}")
+    print(f"grad: {model.core.tokenizer.tokenizer.grad}")
     if update:
+        print("update")
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
     result = {
@@ -93,6 +94,7 @@ def train(
             update=(i + 1) % update_frequency == 0,
             device=args.device,
         )
+        print("\n\n")
         utils.update_dict(results[mouse_id], result)
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
