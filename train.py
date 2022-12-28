@@ -16,6 +16,8 @@ from sensorium.utils.logger import Logger
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
+import math
+
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
@@ -61,8 +63,10 @@ def train_step(
             total_norm += param_norm.item() ** 2
     total_norm = total_norm ** (1.0 / 2)
     print(f"total grad norm: {total_norm:.02f}")
+    if total_norm in (math.inf, math.nan):
+        print(f"loss: {loss:.04f}")
     if update:
-        print("update\n\n")
+        print("update\n")
         optimizer.step()
         optimizer.zero_grad()
     result = {
