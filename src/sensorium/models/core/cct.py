@@ -315,5 +315,9 @@ class CCTCore(Core):
         if self.behavior_mode in (3, 4):
             behaviors = torch.cat((behaviors, pupil_centers), dim=-1)
         outputs = self.transformer(outputs, mouse_id=mouse_id, behaviors=behaviors)
+        print(
+            f"cct transformer {torch.min(outputs):.04f} max: {torch.max(outputs):.04f}"
+        )
         outputs = self.rearrange(outputs)
+        print(f"cct rearrange {torch.min(outputs):.04f} max: {torch.max(outputs):.04f}")
         return outputs
