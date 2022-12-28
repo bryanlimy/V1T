@@ -52,9 +52,7 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-    torch.nn.utils.clip_grad_value_(
-        model.parameters(), clip_value=torch.finfo(torch.float32).max
-    )
+    torch.nn.utils.clip_grad_value_(model.parameters(), clip_value=100)
     total_norm = 0
     parameters = model.parameters()
     for p in parameters:
