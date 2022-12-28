@@ -43,7 +43,7 @@ class Tokenizer(nn.Module):
                         bias=use_bias,
                     ),
                     nn.ReLU(),
-                    nn.MaxPool2d(kernel_size=6, stride=1, padding=1),
+                    nn.MaxPool2d(kernel_size=3, stride=1, padding=1),
                 ]
             )
         self.tokenizer = nn.Sequential(*layers)
@@ -78,8 +78,11 @@ class Attention(nn.Module):
     ):
         super().__init__()
         self.num_heads = num_heads
-        # head_dim = emb_dim // num_heads
-        inner_dim = emb_dim * num_heads
+        inner_dim = emb_dim // num_heads
+        assert (
+            inner_dim % num_heads == 0
+        ), f"MHA inner_dim ({inner_dim}) must be divisible by num_heads ({num_heads})"
+        # inner_dim = emb_dim * num_heads
 
         self.register_buffer("scale", torch.tensor(inner_dim**-0.5))
         self.layer_norm = nn.LayerNorm(normalized_shape=emb_dim)
