@@ -77,10 +77,10 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-    if grad_clip is not None:
-        grad_clip(model)
+
     if update:
-        print("update\n")
+        if grad_clip is not None:
+            grad_clip(model)
         optimizer.step()
         optimizer.zero_grad()
     result = {
