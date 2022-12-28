@@ -16,8 +16,6 @@ from sensorium.utils.logger import Logger
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
-torch.autograd.set_detect_anomaly(True)
-
 
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
@@ -52,18 +50,10 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-    print(f"conv2d norm: {torch.norm(model.core.tokenizer.tokenizer[0].weight)}")
-    print(
-        f"conv2d grad norm: {torch.norm(model.core.tokenizer.tokenizer[0].weight.grad)}"
-    )
     torch.nn.utils.clip_grad_norm_(
         model.core.tokenizer.parameters(), max_norm=2.0, norm_type=2
     )
-    print(
-        f"conv2d grad norm after: {torch.norm(model.core.tokenizer.tokenizer[0].weight.grad)}"
-    )
     if update:
-        print("update")
         optimizer.step()
         optimizer.zero_grad()
     result = {
@@ -95,7 +85,6 @@ def train(
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
-        print(f"step {i}")
         result = train_step(
             mouse_id=mouse_id,
             batch=mouse_batch,
@@ -105,7 +94,6 @@ def train(
             update=(i + 1) % update_frequency == 0,
             device=args.device,
         )
-        print("\n\n")
         utils.update_dict(results[mouse_id], result)
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
@@ -222,13 +210,13 @@ def main(args, wandb_sweep: bool = False):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    # utils.plot_samples(
-    #     model,
-    #     ds=train_ds,
-    #     summary=summary,
-    #     epoch=epoch,
-    #     device=args.device,
-    # )
+    utils.plot_samples(
+        model,
+        ds=train_ds,
+        summary=summary,
+        epoch=epoch,
+        device=args.device,
+    )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
