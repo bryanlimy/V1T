@@ -30,6 +30,13 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 class AutoGradClip:
+    """
+    Automatic gradient clipping
+    reference:
+    - https://arxiv.org/abs/2007.14469
+    - https://github.com/pseeth/autoclip
+    """
+
     def __init__(self, percentile: float, max_history: int = 10000):
         assert 0 <= percentile <= 100
         self.idx = 0
@@ -77,7 +84,6 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
-
     if update:
         if grad_clip is not None:
             grad_clip(model)
