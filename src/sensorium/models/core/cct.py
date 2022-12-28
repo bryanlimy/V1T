@@ -3,6 +3,7 @@ from .core import register, Core
 import math
 import torch
 import typing as t
+import numpy as np
 from torch import nn
 import torch.nn.functional as F
 from einops.layers.torch import Rearrange
@@ -194,7 +195,7 @@ class Transformer(nn.Module):
 
         self.p_dropout = nn.Dropout(p=p_dropout)
 
-        drop_path_rates = [x.item() for x in torch.linspace(0, drop_path, num_blocks)]
+        drop_path_rates = np.linspace(0, drop_path, num_blocks).tolist()
 
         mlp_dim = int(emb_dim * mlp_ratio)
         self.blocks = nn.ModuleList(
