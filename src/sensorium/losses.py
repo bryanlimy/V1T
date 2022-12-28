@@ -96,7 +96,7 @@ class Loss(_Loss):
         ds: t.Dict[int, DataLoader],
         size_average: bool = None,
         reduce: bool = None,
-        reduction: str = "mean",
+        reduction: REDUCTION = "sum",
     ):
         super(Loss, self).__init__(
             size_average=size_average, reduce=reduce, reduction=reduction
@@ -146,11 +146,8 @@ class PoissonLoss(Loss):
         self.register_buffer("eps", torch.tensor(eps))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        print(f"eps: {self.eps:.04e}, reduction: {self.reduction}")
         loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=self.reduction)
-        print(f"loss before scale: {loss:.4f}")
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
-        print(f"loss after scale: {loss:.4f}")
         return loss
 
 
