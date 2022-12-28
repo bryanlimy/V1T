@@ -42,12 +42,12 @@ class Tokenizer(nn.Module):
                         padding=padding,
                         bias=use_bias,
                     ),
-                    nn.GELU(),
+                    nn.ReLU(),
                     nn.MaxPool2d(kernel_size=6, stride=1, padding=1),
                 ]
             )
         self.tokenizer = nn.Sequential(*layers)
-        self.apply(self.init_weight)
+        # self.apply(self.init_weight)
 
     @property
     def output_shape(self):
