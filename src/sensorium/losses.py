@@ -4,6 +4,7 @@ import typing as t
 from torch.utils.data import DataLoader
 from torch.nn.modules.loss import _Loss
 
+from sensorium.models.utils import BufferDict
 
 _CRITERION = dict()
 
@@ -103,16 +104,18 @@ class Loss(_Loss):
             size_average=size_average, reduce=reduce, reduction=reduction
         )
         self.ds_scale = args.ds_scale
-        self.ds_sizes = {
-            mouse_id: torch.tensor(len(mouse_ds.dataset))
-            for mouse_id, mouse_ds in ds.items()
-        }
+        self.ds_sizes = BufferDict(
+            buffers={
+                str(mouse_id): torch.tensor(len(mouse_ds.dataset), dtype=torch.float32)
+                for mouse_id, mouse_ds in ds.items()
+            }
+        )
 
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
         if self.ds_scale:
-            loss_scale = torch.sqrt(self.ds_sizes[mouse_id] / batch_size)
-            loss = loss_scale * loss
+            scale = torch.sqrt(self.ds_sizes[str(mouse_id)] / batch_size)
+            loss = scale * loss
         return loss
 
 
@@ -174,5 +177,5 @@ class Correlation(Loss):
 def get_criterion(args, ds: t.Dict[int, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
     criterion = _CRITERION[args.criterion](args, ds=ds)
-    # criterion.to(args.device)
+    criterion.to(args.device)
     return criterion
