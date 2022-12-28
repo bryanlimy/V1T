@@ -266,6 +266,7 @@ def main(args, wandb_sweep: bool = False):
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
+        early_stop = scheduler.step(val_result["single_trial_correlation"], epoch=epoch)
         if args.use_wandb:
             wandb.log(
                 {
@@ -276,12 +277,12 @@ def main(args, wandb_sweep: bool = False):
                     "best_corr": scheduler.best_value,
                 }
             )
-        if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
-            break
         if np.isnan(train_result["loss"]) or np.isnan(val_result["loss"]):
             if args.use_wandb:
                 wandb.finish(exit_code=1)  # mark run as failed
             exit("\nNaN loss detected, determinate training.")
+        if early_stop:
+            break
 
     scheduler.restore()
     eval_result = utils.evaluate(
