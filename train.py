@@ -215,6 +215,7 @@ def main(args, wandb_sweep: bool = False):
         device=args.device,
     )
 
+    failed = False  # failed signal for wandb
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
@@ -276,8 +277,9 @@ def main(args, wandb_sweep: bool = False):
         if scheduler.step(val_result["single_trial_correlation"], epoch=epoch):
             break
         if np.isnan(train_result["loss"]) or np.isnan(val_result["loss"]):
-            print("\nNaN loss detected, determinate training.\n")
-            break
+            if args.use_wandb:
+                wandb.finish(exit_code=1)  # mark run as failed
+            exit("\nNaN loss detected, determinate training.\n")
 
     scheduler.restore()
     eval_result = utils.evaluate(
