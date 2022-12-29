@@ -84,8 +84,8 @@ def train_step(
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
     if update:
-        if grad_clip is not None:
-            grad_clip(model)
+        # if grad_clip is not None:
+        #     grad_clip(model)
         optimizer.step()
         optimizer.zero_grad()
     result = {

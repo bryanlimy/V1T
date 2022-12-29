@@ -328,8 +328,8 @@ class Transformer(nn.Module):
                 b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            outputs = self.drop_path(block["mha"](outputs)) + outputs
-            outputs = self.drop_path(block["mlp"](outputs)) + outputs
+            outputs = block["mha"](outputs) + outputs
+            outputs = block["mlp"](outputs) + outputs
         return outputs
 
 
@@ -359,7 +359,6 @@ class ViTCore(Core):
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
         )
-
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,
@@ -372,7 +371,6 @@ class ViTCore(Core):
             use_lsa=args.use_lsa,
             drop_path=args.drop_path,
         )
-
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
