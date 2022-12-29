@@ -104,6 +104,7 @@ def train_step(
         total_norm = grad_clip.compute_grad_norm(model)
         if total_norm in (math.inf, math.nan):
             print(f"\ttotal_norm: {total_norm:.02f}\n")
+            exit()
         optimizer.step()
         optimizer.zero_grad()
     result = {
