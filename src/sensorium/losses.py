@@ -19,7 +19,7 @@ def register(name):
 
 
 REDUCTION = t.Literal["sum", "mean"]
-EPS = torch.finfo(torch.float32).eps
+EPS = torch.finfo(torch.float32).tiny
 
 
 def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):
