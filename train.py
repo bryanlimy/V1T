@@ -79,6 +79,7 @@ def train_step(
         behaviors=batch["behavior"].to(device),
         pupil_centers=batch["pupil_center"].to(device),
     )
+    print(f"output min: {torch.min(outputs):.04f}")
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
