@@ -70,7 +70,7 @@ def train_step(
     update: bool,
     grad_clip: AutoGradClip = None,
     device: torch.device = "cpu",
-) -> t.Dict[str, torch.Tensor]:
+) -> (t.Dict[str, torch.Tensor], t.Dict[str, float]):
     model.to(device)
     responses = batch["response"].to(device)
     outputs, _, _ = model(
@@ -83,19 +83,20 @@ def train_step(
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
+    module_grad_norms = None
     if update:
         # if grad_clip is not None:
         #     grad_clip(model)
-        image_cropper_grad = grad_clip.compute_grad_norm(model.image_cropper)
-        core_grad = grad_clip.compute_grad_norm(model.core)
-        core_shifter_grad = grad_clip.compute_grad_norm(model.core_shifter)
-        readout_grad = grad_clip.compute_grad_norm(model.readouts[str(mouse_id)])
-        print(
-            f"image_cropper: {image_cropper_grad:.02f}\n"
-            f"core: {core_grad:.02f}\n"
-            f"core_shifter: {core_shifter_grad:.02f}\n"
-            f"readout: {readout_grad:.02f}\n"
-        )
+        module_grad_norms = {
+            "grad_norm/image_cropper": grad_clip.compute_grad_norm(model.image_cropper),
+            "grad_norm/core": grad_clip.compute_grad_norm(model.core),
+            "grad_norm/core_shifter": grad_clip.compute_grad_norm(model.core_shifter),
+            f"grad_norm/mouse{mouse_id}_readout": grad_clip.compute_grad_norm(
+                model.readouts[str(mouse_id)]
+            ),
+        }
+        total_norm = grad_clip.compute_grad_norm(model)
+        print(f"total_norm: {total_norm:.02f}")
         optimizer.step()
         optimizer.zero_grad()
     result = {
@@ -104,7 +105,7 @@ def train_step(
         "loss/total_loss": total_loss.item(),
         **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
     }
-    return result
+    return result, module_grad_norms
 
 
 def train(
@@ -128,7 +129,7 @@ def train(
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
-        result = train_step(
+        result, grad_norms = train_step(
             mouse_id=mouse_id,
             batch=mouse_batch,
             model=model,
@@ -139,6 +140,9 @@ def train(
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
+        if grad_norms is not None:
+            for m, grad_norm in grad_norms:
+                summary.scalar(m, value=grad_norm, step=epoch * (i + 1))
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
 
