@@ -94,7 +94,9 @@ def train_step(
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
+    same = False
     if torch.isinf(total_loss) or torch.isnan(total_loss) or torch.min(outputs) == 0.0:
+        same = True
         print(
             f"outputs min: {torch.min(outputs):.06e}\n"
             f"\ttotal_loss {total_loss.item():.02f}\t"
@@ -119,7 +121,7 @@ def train_step(
         }
         total_norm = grad_clip.compute_grad_norm(model)
         if total_norm in (math.inf, math.nan):
-            print(f"\ttotal_norm: {total_norm:.02f}\n")
+            print(f"total_norm: {total_norm:.02f} (same: {same})\n")
             exit()
         optimizer.step()
         optimizer.zero_grad()
