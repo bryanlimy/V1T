@@ -61,18 +61,6 @@ class AutoGradClip:
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)
 
 
-import math
-
-
-def get_max_weight(model: nn.Module):
-    max_weight = -torch.inf
-    for p in model.parameters():
-        temp = torch.max(p.data)
-        if temp > max_weight:
-            max_weight = temp
-    return max_weight
-
-
 def train_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
@@ -80,7 +68,6 @@ def train_step(
     optimizer: torch.optim,
     criterion: losses.Loss,
     update: bool,
-    grad_clip: AutoGradClip = None,
     device: torch.device = "cpu",
 ) -> (t.Dict[str, torch.Tensor], t.Dict[str, float]):
     model.to(device)
@@ -94,34 +81,8 @@ def train_step(
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
-    same = False
-    if torch.isinf(total_loss) or torch.isnan(total_loss) or torch.min(outputs) == 0.0:
-        same = True
-        print(
-            f"outputs min: {torch.min(outputs):.06e}\n"
-            f"\ttotal_loss {total_loss.item():.02f}\t"
-            f"loss: {loss.item():.02f}\t\t"
-            f"reg_loss: {reg_loss.item()}\n"
-            f"\tmax core: {get_max_weight(model.core):.02f}\n"
-            f"\tmax shifter: {get_max_weight(model.core_shifter):.02f}\n"
-            f"\tmax readout: {get_max_weight(model.readouts[str(mouse_id)]):.02f}"
-        )
     total_loss.backward()  # calculate and accumulate gradients
-    module_grad_norms = None
     if update:
-        # if grad_clip is not None:
-        #     grad_clip(model)
-        module_grad_norms = {
-            "grad_norm/image_cropper": grad_clip.compute_grad_norm(model.image_cropper),
-            "grad_norm/core": grad_clip.compute_grad_norm(model.core),
-            "grad_norm/core_shifter": grad_clip.compute_grad_norm(model.core_shifter),
-            f"grad_norm/mouse{mouse_id}_readout": grad_clip.compute_grad_norm(
-                model.readouts[str(mouse_id)]
-            ),
-        }
-        total_norm = grad_clip.compute_grad_norm(model)
-        if total_norm in (math.inf, math.nan):
-            print(f"total_norm: {total_norm:.02f} (same: {same})\n")
         optimizer.step()
         optimizer.zero_grad()
 
@@ -131,7 +92,7 @@ def train_step(
         "loss/total_loss": total_loss.item(),
         **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
     }
-    return result, module_grad_norms
+    return result
 
 
 def train(
@@ -140,7 +101,6 @@ def train(
     model: nn.Module,
     optimizer: torch.optim,
     criterion: losses.Loss,
-    grad_clip: AutoGradClip,
     epoch: int,
     summary: tensorboard.Summary,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
@@ -162,7 +122,6 @@ def train(
             optimizer=optimizer,
             criterion=criterion,
             update=(i + 1) % update_frequency == 0,
-            grad_clip=grad_clip,
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
@@ -279,7 +238,6 @@ def main(args, wandb_sweep: bool = False):
     )
     scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
-    grad_clip = AutoGradClip(percentile=10)
 
     utils.save_args(args)
 
@@ -304,7 +262,6 @@ def main(args, wandb_sweep: bool = False):
             model=model,
             optimizer=optimizer,
             criterion=criterion,
-            grad_clip=grad_clip,
             epoch=epoch,
             summary=summary,
         )
