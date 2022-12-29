@@ -61,6 +61,9 @@ class AutoGradClip:
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)
 
 
+import math
+
+
 def train_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
@@ -97,7 +100,7 @@ def train_step(
             ),
         }
         total_norm = grad_clip.compute_grad_norm(model)
-        if torch.isinf(total_norm):
+        if math.isinf(total_norm):
             print(f"total_norm: {total_norm:.02f}\n")
         optimizer.step()
         optimizer.zero_grad()
