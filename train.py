@@ -84,6 +84,8 @@ def train_step(
     )
     print(f"output min: {torch.min(outputs):.06e}")
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+    if torch.min(outputs) == 0.0:
+        print(f"\tloss: {loss:.04f}")
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
@@ -100,8 +102,8 @@ def train_step(
             ),
         }
         total_norm = grad_clip.compute_grad_norm(model)
-        if math.isinf(total_norm):
-            print(f"total_norm: {total_norm:.02f}\n")
+        if total_norm in (math.inf, math.nan):
+            print(f"\ttotal_norm: {total_norm:.02f}\n")
         optimizer.step()
         optimizer.zero_grad()
     result = {
