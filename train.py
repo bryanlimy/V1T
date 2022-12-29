@@ -141,7 +141,7 @@ def train(
         )
         utils.update_dict(results[mouse_id], result)
         if grad_norms is not None:
-            for m, grad_norm in grad_norms:
+            for m, grad_norm in grad_norms.items():
                 summary.scalar(m, value=grad_norm, step=epoch * (i + 1))
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
