@@ -96,8 +96,9 @@ def train_step(
                 model.readouts[str(mouse_id)]
             ),
         }
-        # total_norm = grad_clip.compute_grad_norm(model)
-        # print(f"total_norm: {total_norm:.02f}")
+        total_norm = grad_clip.compute_grad_norm(model)
+        if torch.isinf(total_norm):
+            print(f"total_norm: {total_norm:.02f}\n")
         optimizer.step()
         optimizer.zero_grad()
     result = {
