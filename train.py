@@ -432,12 +432,7 @@ if __name__ == "__main__":
         type=str,
         help="criterion (loss function) to use.",
     )
-    parser.add_argument(
-        "--lr",
-        default=0.001647,
-        type=float,
-        help="initial learning rate",
-    )
+
     parser.add_argument(
         "--ds_scale",
         action="store_true",
@@ -522,11 +517,13 @@ if __name__ == "__main__":
         parser.add_argument("--num_filters", type=int, default=8)
         parser.add_argument("--dropout", type=float, default=0.0)
         parser.add_argument("--core_reg_scale", type=float, default=0)
+        parser.add_argument("--lr", default=0.001, type=float)
     elif temp_args.core == "stacked2d":
         parser.add_argument("--num_layers", type=int, default=4)
         parser.add_argument("--dropout", type=float, default=0.0)
         parser.add_argument("--core_reg_input", type=float, default=6.3831)
         parser.add_argument("--core_reg_hidden", type=float, default=0.0)
+        parser.add_argument("--lr", default=0.009, type=float)
     elif temp_args.core == "vit":
         parser.add_argument("--patch_size", type=int, default=8)
         parser.add_argument(
@@ -562,6 +559,7 @@ if __name__ == "__main__":
             "--use_lsa", action="store_true", help="Use Locality Self Attention"
         )
         parser.add_argument("--core_reg_scale", type=float, default=0.5379)
+        parser.add_argument("--lr", default=0.001647, type=float)
     elif temp_args.core == "cct":
         parser.add_argument("--patch_size", type=int, default=8)
         parser.add_argument(
@@ -587,11 +585,13 @@ if __name__ == "__main__":
             "--drop_path", type=float, default=0.0, help="stochastic depth dropout rate"
         )
         parser.add_argument("--core_reg_scale", type=float, default=0)
+        parser.add_argument("--lr", default=0.001, type=float)
     elif temp_args.core == "stn":
         parser.add_argument("--num_layers", type=int, default=7)
         parser.add_argument("--num_filters", type=int, default=63)
         parser.add_argument("--dropout", type=float, default=0.1135)
         parser.add_argument("--core_reg_scale", type=float, default=0.0450)
+        parser.add_argument("--lr", default=0.001, type=float)
     else:
         parser.add_argument("--core_reg_scale", type=float, default=0)
 
