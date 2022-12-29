@@ -82,10 +82,9 @@ def train_step(
         behaviors=batch["behavior"].to(device),
         pupil_centers=batch["pupil_center"].to(device),
     )
-    print(f"output min: {torch.min(outputs):.06e}")
     loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
     if torch.min(outputs) == 0.0:
-        print(f"\tloss: {loss:.04f}")
+        print(f"\toutput min: {torch.min(outputs):.06e}\tloss: {loss:.04f}")
     reg_loss = model.regularizer(mouse_id=mouse_id)
     total_loss = loss + reg_loss
     total_loss.backward()  # calculate and accumulate gradients
