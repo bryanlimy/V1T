@@ -86,6 +86,16 @@ def train_step(
     if update:
         # if grad_clip is not None:
         #     grad_clip(model)
+        image_cropper_grad = grad_clip.compute_grad_norm(model.image_cropper)
+        core_grad = grad_clip.compute_grad_norm(model.core)
+        core_cropper_grad = grad_clip.compute_grad_norm(model.core_cropper)
+        readout_grad = grad_clip.compute_grad_norm(model.readouts[str(mouse_id)])
+        print(
+            f"image_cropper: {image_cropper_grad:.02f}\n"
+            f"core: {core_grad:.02f}\n"
+            f"core_cropper: {core_cropper_grad:.02f}\n"
+            f"readout: {readout_grad:.02f}\n"
+        )
         optimizer.step()
         optimizer.zero_grad()
     result = {
