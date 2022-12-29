@@ -311,7 +311,8 @@ def main(args, wandb_sweep: bool = False):
                     "val_loss": val_result["loss"],
                     "val_corr": val_result["single_trial_correlation"],
                     "best_corr": scheduler.best_value,
-                }
+                },
+                step=epoch,
             )
         if np.isnan(train_result["loss"]) or np.isnan(val_result["loss"]):
             if args.use_wandb:
