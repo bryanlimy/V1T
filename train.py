@@ -64,6 +64,15 @@ class AutoGradClip:
 import math
 
 
+def get_max_weight(model: nn.Module):
+    max_weight = -torch.inf
+    for p in model.parameters():
+        temp = torch.max(p.data)
+        if temp > max_weight:
+            max_weight = temp
+    return max_weight
+
+
 def train_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
@@ -88,9 +97,12 @@ def train_step(
     if torch.isinf(total_loss) or torch.isnan(total_loss) or torch.min(outputs) == 0.0:
         print(
             f"outputs min: {torch.min(outputs):.06e}\n"
-            f"total_loss {total_loss.item():.02f}\t"
-            f"loss:{loss.item():.02f}\t"
-            f"reg_loss: {reg_loss.item()}"
+            f"\ttotal_loss {total_loss.item():.02f}\t"
+            f"loss: {loss.item():.02f}\t"
+            f"reg_loss: {reg_loss.item()}\n"
+            f"\tmax core: {get_max_weight(model.core):.02f}\n"
+            f"\tmax shifter: {get_max_weight(model.core_shifter):.02f}\n"
+            f"\tmax readout: {get_max_weight(model.readouts[str(mouse_id)]):.02f}"
         )
     total_loss.backward()  # calculate and accumulate gradients
     module_grad_norms = None
