@@ -100,7 +100,7 @@ def train_step(
         print(
             f"outputs min: {torch.min(outputs):.06e}\n"
             f"\ttotal_loss {total_loss.item():.02f}\t"
-            f"loss: {loss.item():.02f}\t"
+            f"loss: {loss.item():.02f}\t\t"
             f"reg_loss: {reg_loss.item()}\n"
             f"\tmax core: {get_max_weight(model.core):.02f}\n"
             f"\tmax shifter: {get_max_weight(model.core_shifter):.02f}\n"
@@ -122,7 +122,6 @@ def train_step(
         total_norm = grad_clip.compute_grad_norm(model)
         if total_norm in (math.inf, math.nan):
             print(f"total_norm: {total_norm:.02f} (same: {same})\n")
-            exit()
         optimizer.step()
         optimizer.zero_grad()
 
@@ -286,13 +285,13 @@ def main(args, wandb_sweep: bool = False):
 
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    # utils.plot_samples(
-    #     model,
-    #     ds=train_ds,
-    #     summary=summary,
-    #     epoch=epoch,
-    #     device=args.device,
-    # )
+    utils.plot_samples(
+        model,
+        ds=train_ds,
+        summary=summary,
+        epoch=epoch,
+        device=args.device,
+    )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:

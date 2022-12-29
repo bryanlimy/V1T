@@ -148,8 +148,11 @@ class PoissonLoss(Loss):
         self.register_buffer("eps", torch.tensor(eps))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        loss = poisson_loss(y_true + EPS, y_pred + EPS, eps=0, reduction=self.reduction)
-        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        batch_size = y_true.size(0)
+        y_pred, y_true = y_pred + self.eps, y_true + self.eps
+        loss = y_pred - y_true * torch.log(y_pred)
+        loss = torch.sum(loss)
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=batch_size)
         return loss
 
 
