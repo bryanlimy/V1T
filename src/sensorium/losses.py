@@ -19,7 +19,7 @@ def register(name):
 
 
 REDUCTION = t.Literal["sum", "mean"]
-EPS = torch.finfo(torch.float32).eps
+EPS = torch.finfo(torch.float32).smallest_normal
 
 
 def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):
@@ -148,7 +148,8 @@ class PoissonLoss(Loss):
         self.register_buffer("eps", torch.tensor(eps))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=self.reduction)
+        y_true, y_pred = y_true + EPS, y_pred + EPS
+        loss = poisson_loss(y_true, y_pred, eps=0, reduction=self.reduction)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
 
