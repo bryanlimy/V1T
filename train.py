@@ -82,7 +82,7 @@ def train(
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
-        result, grad_norms = train_step(
+        result = train_step(
             mouse_id=mouse_id,
             batch=mouse_batch,
             model=model,
@@ -92,9 +92,6 @@ def train(
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
-        if grad_norms is not None:
-            for m, grad_norm in grad_norms.items():
-                summary.scalar(m, value=grad_norm, step=epoch * (i + 1))
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
 
