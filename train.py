@@ -37,7 +37,7 @@ def train_step(
     criterion: losses.Loss,
     update: bool,
     device: torch.device = "cpu",
-) -> (t.Dict[str, torch.Tensor], t.Dict[str, float]):
+) -> t.Dict[str, torch.Tensor]:
     model.to(device)
     responses = batch["response"].to(device)
     outputs, _, _ = model(
