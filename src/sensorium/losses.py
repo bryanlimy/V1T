@@ -149,9 +149,8 @@ class PoissonLoss(Loss):
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         batch_size = y_true.size(0)
-        y_pred, y_true = y_pred + self.eps, y_true + self.eps
-        loss = y_pred - y_true * torch.log(y_pred)
-        loss = torch.sum(loss)
+        y_true, y_pred = y_true + self.eps, y_pred + self.eps
+        loss = torch.sum(y_pred - y_true * torch.log(y_pred))
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=batch_size)
         return loss
 

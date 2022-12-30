@@ -405,3 +405,35 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
     if args.verbose > 1:
         print(f"set batch size to {batch_size}")
     args.batch_size = batch_size
+
+
+class AutoGradClip:
+    """
+    Automatic gradient clipping
+    reference:
+    - https://arxiv.org/abs/2007.14469
+    - https://github.com/pseeth/autoclip
+    """
+
+    def __init__(self, percentile: float, max_history: int = 10000):
+        assert 0 <= percentile <= 100
+        self.idx = 0
+        self.percentile = percentile
+        self.max_history = max_history
+        self.history = np.zeros(shape=(max_history,), dtype=np.float32)
+
+    @staticmethod
+    def compute_grad_norm(model: nn.Module):
+        total_norm = 0
+        for p in model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        return total_norm ** (1.0 / 2)
+
+    def __call__(self, model: nn.Module):
+        grad_norm = self.compute_grad_norm(model)
+        self.history[self.idx % self.max_history] = grad_norm
+        self.idx += 1
+        max_norm = np.percentile(self.history[: self.idx], q=self.percentile)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)

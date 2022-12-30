@@ -29,38 +29,6 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     }
 
 
-class AutoGradClip:
-    """
-    Automatic gradient clipping
-    reference:
-    - https://arxiv.org/abs/2007.14469
-    - https://github.com/pseeth/autoclip
-    """
-
-    def __init__(self, percentile: float, max_history: int = 10000):
-        assert 0 <= percentile <= 100
-        self.idx = 0
-        self.percentile = percentile
-        self.max_history = max_history
-        self.history = np.zeros(shape=(max_history,), dtype=np.float32)
-
-    @staticmethod
-    def compute_grad_norm(model: nn.Module):
-        total_norm = 0
-        for p in model.parameters():
-            if p.grad is not None:
-                param_norm = p.grad.data.norm(2)
-                total_norm += param_norm.item() ** 2
-        return total_norm ** (1.0 / 2)
-
-    def __call__(self, model: nn.Module):
-        grad_norm = self.compute_grad_norm(model)
-        self.history[self.idx % self.max_history] = grad_norm
-        self.idx += 1
-        max_norm = np.percentile(self.history[: self.idx], q=self.percentile)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)
-
-
 def train_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
@@ -85,7 +53,6 @@ def train_step(
     if update:
         optimizer.step()
         optimizer.zero_grad()
-
     result = {
         "loss/loss": loss.item(),
         "loss/reg_loss": reg_loss.item(),
@@ -281,7 +248,6 @@ def main(args, wandb_sweep: bool = False):
                 f'model/lr/{param_group["name"] if "name" in param_group else "model"}',
                 value=param_group["lr"],
                 step=epoch,
-                mode=0,
             )
         if epoch % 10 == 0:
             utils.plot_samples(
