@@ -268,6 +268,9 @@ def get_device(args):
         device = "cpu"
         if torch.cuda.is_available():
             device = "cuda"
+            # allow TensorFloat32 computation
+            torch.backends.cudnn.allow_tf32 = True
+            torch.backends.cuda.matmul.allow_tf32 = True
         elif torch.backends.mps.is_available():
             device = "mps"
     args.device = torch.device(device)

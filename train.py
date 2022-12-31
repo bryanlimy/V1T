@@ -19,10 +19,6 @@ from sensorium.utils.scheduler import Scheduler
 from torch.cuda.amp import autocast, GradScaler
 
 
-torch.backends.cudnn.allow_tf32 = True
-torch.backends.cuda.matmul.allow_tf32 = True
-
-
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     msse = losses.msse(y_true=y_true, y_pred=y_pred)
