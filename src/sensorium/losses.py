@@ -141,14 +141,18 @@ class PoissonLoss(Loss):
         self,
         args,
         ds: t.Dict[int, DataLoader],
-        eps: float = EPS,
         reduction: REDUCTION = "sum",
     ):
         super(PoissonLoss, self).__init__(args, ds=ds, reduction=reduction)
-        self.register_buffer("eps", torch.tensor(eps))
+        self.register_buffer(
+            "eps", torch.tensor(torch.finfo(torch.float32).eps, dtype=torch.float32)
+        )
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         batch_size = y_true.size(0)
+        print(
+            f"eps dtype {self.eps.dtype}, y_true dtype {y_true.dtype}, y_pred dtype {y_pred.dtype}"
+        )
         # add eps to targets and predictions to avoid numeric instability
         y_true, y_pred = y_true + self.eps, y_pred + self.eps
         loss = torch.sum(y_pred - y_true * torch.log(y_pred))
