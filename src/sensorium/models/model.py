@@ -1,4 +1,5 @@
 import os
+import wandb
 import torch
 import torchinfo
 import typing as t
@@ -187,6 +188,8 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     )
     if args.verbose > 2:
         print(str(model_info))
+    if args.use_wandb:
+        wandb.log({"trainable_params": model_info.trainable_params}, epoch=0)
 
     get_model_info(
         model=model.core,
