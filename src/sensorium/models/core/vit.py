@@ -123,16 +123,17 @@ class MLP(nn.Module):
         hidden_dim: int,
         out_dim: int = None,
         dropout: float = 0.0,
+        use_bias: bool = False,
     ):
         super(MLP, self).__init__()
         if out_dim is None:
             out_dim = in_dim
         self.model = nn.Sequential(
             nn.LayerNorm(in_dim),
-            nn.Linear(in_features=in_dim, out_features=hidden_dim),
+            nn.Linear(in_features=in_dim, out_features=hidden_dim, bias=use_bias),
             nn.GELU(),
             nn.Dropout(p=dropout),
-            nn.Linear(in_features=hidden_dim, out_features=out_dim),
+            nn.Linear(in_features=hidden_dim, out_features=out_dim, bias=use_bias),
             nn.Dropout(p=dropout),
         )
 
@@ -147,6 +148,7 @@ class BehaviorMLP(nn.Module):
         out_dim: int,
         dropout: float = 0.0,
         mouse_ids: t.List[int] = None,
+        use_bias: bool = True,
     ):
         """
         behavior mode:
@@ -164,7 +166,10 @@ class BehaviorMLP(nn.Module):
             self.model = nn.ModuleDict(
                 {
                     str(mouse_id): self.build_model(
-                        in_dim=in_dim, out_dim=out_dim, dropout=dropout
+                        in_dim=in_dim,
+                        out_dim=out_dim,
+                        dropout=dropout,
+                        use_bias=use_bias,
                     )
                     for mouse_id in mouse_ids
                 }
@@ -174,12 +179,18 @@ class BehaviorMLP(nn.Module):
                 in_dim=in_dim, out_dim=out_dim, dropout=dropout
             )
 
-    def build_model(self, in_dim: int, out_dim: int, dropout: float = 0.0):
+    def build_model(
+        self,
+        in_dim: int,
+        out_dim: int,
+        dropout: float = 0.0,
+        use_bias: bool = False,
+    ):
         return nn.Sequential(
-            nn.Linear(in_features=in_dim, out_features=out_dim // 2),
+            nn.Linear(in_features=in_dim, out_features=out_dim // 2, bias=use_bias),
             nn.Tanh(),
             nn.Dropout(p=dropout),
-            nn.Linear(in_features=out_dim // 2, out_features=out_dim),
+            nn.Linear(in_features=out_dim // 2, out_features=out_dim, bias=use_bias),
             nn.Tanh(),
         )
 
@@ -199,6 +210,7 @@ class Attention(nn.Module):
         num_heads: int = 8,
         dropout: float = 0.0,
         use_lsa: bool = False,
+        use_bias: bool = False,
     ):
         super(Attention, self).__init__()
         inner_dim = emb_dim * num_heads
@@ -274,6 +286,7 @@ class Transformer(nn.Module):
         mouse_ids: t.List[int],
         use_lsa: bool = False,
         drop_path: float = 0.0,
+        use_bias: bool = True,
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
@@ -286,11 +299,13 @@ class Transformer(nn.Module):
                         num_heads=num_heads,
                         dropout=dropout,
                         use_lsa=use_lsa,
+                        use_bias=use_bias,
                     ),
                     "mlp": MLP(
                         in_dim=emb_dim,
                         hidden_dim=mlp_dim,
                         dropout=dropout,
+                        use_bias=use_bias,
                     ),
                 }
             )
@@ -299,6 +314,7 @@ class Transformer(nn.Module):
                     behavior_mode=behavior_mode,
                     out_dim=emb_dim,
                     mouse_ids=mouse_ids,
+                    use_bias=use_bias,
                 )
             self.blocks.append(block)
         self.drop_path = DropPath(dropout=drop_path)
@@ -370,6 +386,7 @@ class ViTCore(Core):
             mouse_ids=list(args.output_shapes.keys()),
             use_lsa=args.use_lsa,
             drop_path=args.drop_path,
+            use_bias=not args.disable_bias,
         )
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)

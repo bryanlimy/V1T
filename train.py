@@ -544,6 +544,11 @@ if __name__ == "__main__":
         parser.add_argument(
             "--use_lsa", action="store_true", help="Use Locality Self Attention"
         )
+        parser.add_argument(
+            "--disable_bias",
+            action="store_true",
+            help="Disable bias terms in linear layers in ViT.",
+        )
         parser.add_argument("--core_reg_scale", type=float, default=0.5379)
         parser.add_argument("--lr", default=0.001647, type=float)
     elif temp_args.core == "cct":
