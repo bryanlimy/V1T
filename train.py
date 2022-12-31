@@ -182,8 +182,8 @@ def main(args, wandb_sweep: bool = False):
                 args.use_wandb = False
 
     Logger(args)
-    utils.set_random_seed(args.seed)
     utils.get_device(args)
+    utils.set_random_seed(args.seed)
 
     if not args.mouse_ids:
         args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
