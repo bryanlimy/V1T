@@ -214,15 +214,14 @@ def main(args, wandb_sweep: bool = False):
         eps=args.adam_eps,
         weight_decay=0,
     )
-    scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
     criterion = losses.get_criterion(args, ds=train_ds)
-
     scaler = GradScaler(enabled=args.amp)
     if args.amp and args.verbose:
         print(f"Enable automatic mixed precision training.")
 
-    utils.save_args(args)
+    scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
 
+    utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
     utils.plot_samples(
