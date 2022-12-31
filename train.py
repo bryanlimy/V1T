@@ -291,6 +291,7 @@ def main(args, wandb_sweep: bool = False):
                     "val_loss": val_result["loss"],
                     "val_corr": val_result["single_trial_correlation"],
                     "best_corr": scheduler.best_value,
+                    "elapse": elapse,
                 },
                 step=epoch,
             )
