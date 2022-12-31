@@ -150,9 +150,6 @@ class PoissonLoss(Loss):
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         batch_size = y_true.size(0)
-        print(
-            f"eps dtype {self.eps.dtype}, y_true dtype {y_true.dtype}, y_pred dtype {y_pred.dtype}"
-        )
         # add eps to targets and predictions to avoid numeric instability
         y_true, y_pred = y_true + self.eps, y_pred + self.eps
         loss = torch.sum(y_pred - y_true * torch.log(y_pred))
