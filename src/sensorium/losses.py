@@ -141,12 +141,11 @@ class PoissonLoss(Loss):
         self,
         args,
         ds: t.Dict[int, DataLoader],
+        eps: float = EPS,
         reduction: REDUCTION = "sum",
     ):
         super(PoissonLoss, self).__init__(args, ds=ds, reduction=reduction)
-        self.register_buffer(
-            "eps", torch.tensor(torch.finfo(torch.float32).eps, dtype=torch.float32)
-        )
+        self.register_buffer("eps", torch.tensor(eps))
 
     def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
         batch_size = y_true.size(0)
