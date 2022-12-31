@@ -53,11 +53,9 @@ def train_step(
         loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
         reg_loss = model.regularizer(mouse_id=mouse_id)
         total_loss = loss + reg_loss
-    # total_loss.backward()  # calculate and accumulate gradients
+    # calculate and accumulate gradients
     scaler.scale(total_loss).backward()
     if update:
-        # optimizer.step()
-        # optimizer.zero_grad()
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
