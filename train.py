@@ -219,7 +219,9 @@ def main(args, wandb_sweep: bool = False):
     if args.amp and args.verbose:
         print(f"Enable automatic mixed precision training.")
 
-    scheduler = Scheduler(args, model=model, optimizer=optimizer, mode="max")
+    scheduler = Scheduler(
+        args, model=model, optimizer=optimizer, scaler=scaler, mode="max"
+    )
 
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
