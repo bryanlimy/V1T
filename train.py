@@ -218,6 +218,8 @@ def main(args, wandb_sweep: bool = False):
     criterion = losses.get_criterion(args, ds=train_ds)
 
     scaler = GradScaler(enabled=args.amp)
+    if args.amp and args.verbose:
+        print(f"enable automatic mixed precision training.")
 
     utils.save_args(args)
 
