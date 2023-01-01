@@ -102,6 +102,10 @@ def evaluate(
     metrics = ["single_trial_correlation", "correlation_to_average", "feve"]
     outputs, results = {}, {k: {} for k in metrics}
 
+    batch_size = args.batch_size
+    if hasattr(args, "micro_batch_size"):
+        batch_size = args.micro_batch_size
+
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose < 2
     ):
@@ -110,7 +114,7 @@ def evaluate(
         outputs[mouse_id] = inference(
             ds=mouse_ds,
             model=model,
-            micro_batch_size=args.micro_batch_size,
+            micro_batch_size=batch_size,
             device=args.device,
         )
 
