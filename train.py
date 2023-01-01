@@ -245,16 +245,16 @@ def main(args, wandb_sweep: bool = False):
             print(f"\nEpoch {epoch:03d}/{args.epochs:03d}")
 
         start = time()
-        # train_result = train(
-        #     args,
-        #     ds=train_ds,
-        #     model=model,
-        #     optimizer=optimizer,
-        #     criterion=criterion,
-        #     scaler=scaler,
-        #     epoch=epoch,
-        #     summary=summary,
-        # )
+        train_result = train(
+            args,
+            ds=train_ds,
+            model=model,
+            optimizer=optimizer,
+            criterion=criterion,
+            scaler=scaler,
+            epoch=epoch,
+            summary=summary,
+        )
         val_result = validate(
             args,
             ds=val_ds,
