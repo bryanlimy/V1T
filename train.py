@@ -108,7 +108,7 @@ def train(
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
-        if (i + 1) % update_frequency == 0:
+        if i >= 14:
             break
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 

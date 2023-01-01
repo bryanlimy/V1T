@@ -321,8 +321,11 @@ def log_metrics(
     for mouse_id in mouse_ids:
         for metric in metrics:
             value = results[mouse_id][metric]
-            if not isinstance(value, float):
-                results[mouse_id][metric] = np.mean(value)
+            if isinstance(value, list):
+                if torch.is_tensor(value[0]):
+                    results[mouse_id][metric] = torch.mean(torch.stack(value)).item()
+                else:
+                    results[mouse_id][metric] = np.mean(value)
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
                 value=results[mouse_id][metric],
