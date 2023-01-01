@@ -213,5 +213,4 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     )
 
     model.to(args.device)
-
     return model
