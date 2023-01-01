@@ -82,7 +82,7 @@ def train(
     results = {mouse_id: {} for mouse_id in mouse_ids}
     ds = data.CycleDataloaders(ds)
     # number of micro forward passes needed for one batch
-    num_passes = (args.batch_size - args.micro_batch_size) // 8
+    num_passes = ((args.batch_size - args.micro_batch_size) // 8) + 1
     # accumulate gradients over all mouse for one batch
     update_frequency = len(mouse_ids) * num_passes
     model.train(True)
