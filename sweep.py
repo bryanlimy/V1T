@@ -13,7 +13,6 @@ class Args:
         id: str,
         config: wandb.Config,
         dataset: str,
-        batch_size: int,
         num_workers: int = 2,
         verbose: int = 1,
     ):
@@ -21,7 +20,6 @@ class Args:
         self.output_dir = os.path.join(
             config.output_dir, f"{datetime.now():%Y%m%d-%Hh%Mm}-{id}"
         )
-        self.batch_size = batch_size
         self.num_workers = num_workers
         self.device = ""
         self.mouse_ids = None
@@ -30,7 +28,6 @@ class Args:
         self.dpi = 120
         self.format = "svg"
         self.clear_output_dir = False
-        self.disable_bias = False
         self.amp = False
         self.verbose = verbose
         self.use_wandb = True
@@ -39,17 +36,14 @@ class Args:
                 setattr(self, key, value)
 
 
-def main(wandb_group: str, dataset: str, batch_size: int, num_workers: int = 2):
+def main(wandb_group: str, dataset: str, num_workers: int = 2):
     run = wandb.init(group=wandb_group)
     config = run.config
     run.name = run.id
-    wandb.config.update({"batch_size": batch_size})
-
     args = Args(
         id=run.id,
         config=config,
         dataset=dataset,
-        batch_size=batch_size,
         num_workers=num_workers,
     )
     trainer.main(args, wandb_sweep=True)
@@ -63,7 +57,6 @@ if __name__ == "__main__":
         default="data/sensorium",
         help="path to directory where the dataset is stored.",
     )
-    parser.add_argument("--batch_size", type=int, default=0)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--sweep_id", type=str, required=True)
     parser.add_argument("--wandb_group", type=str, required=True)
