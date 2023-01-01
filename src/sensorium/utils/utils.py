@@ -410,7 +410,7 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
     assert micro_batch_size > 0 and micro_batch_size % 8 == 0
     if args.verbose > 1:
         print(f"set micro batch size to {micro_batch_size}")
-    args.batch_size = micro_batch_size
+    args.micro_batch_size = micro_batch_size
 
 
 class AutoGradClip:
