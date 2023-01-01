@@ -418,7 +418,7 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
                 optimizer.zero_grad()
             micro_batch_size += 1 if micro_batch_size == 1 else 2
         except RuntimeError:
-            if args.verbose > 1:
+            if args.verbose:
                 print(f"OOM at micro batch size {micro_batch_size}")
             micro_batch_size -= 1 if micro_batch_size == 2 else 2
             break
@@ -426,7 +426,7 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
     torch.cuda.empty_cache()
 
     assert micro_batch_size > 0
-    if args.verbose > 1:
+    if args.verbose:
         print(f"set micro batch size to {micro_batch_size}")
     args.micro_batch_size = micro_batch_size
 
