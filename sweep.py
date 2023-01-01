@@ -70,7 +70,6 @@ if __name__ == "__main__":
             main,
             wandb_group=params.wandb_group,
             dataset=params.dataset,
-            batch_size=params.batch_size,
             num_workers=params.num_workers,
         ),
         count=params.num_trials,
