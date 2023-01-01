@@ -81,8 +81,10 @@ def train(
     mouse_ids = list(ds.keys())
     results = {mouse_id: {} for mouse_id in mouse_ids}
     ds = data.CycleDataloaders(ds)
-    # call optimizer.step() after iterate one batch from each mouse
-    update_frequency = len(mouse_ids)
+    # number of micro forward passes needed for one batch
+    num_passes = (args.batch_size - args.micro_batch_size) // 8
+    # accumulate gradients over all mouse for one batch
+    update_frequency = len(mouse_ids) * num_passes
     model.train(True)
     model.requires_grad_(True)
     optimizer.zero_grad()
@@ -163,38 +165,22 @@ def main(args, wandb_sweep: bool = False):
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
 
-    if args.use_wandb:
-        os.environ["WANDB_SILENT"] = "true"
-        if not wandb_sweep:
-            try:
-                wandb.init(
-                    config=args,
-                    dir=os.path.join(args.output_dir, "wandb"),
-                    project="sensorium",
-                    entity="bryanlimy",
-                    group=args.wandb_group,
-                    name=os.path.basename(args.output_dir),
-                )
-            except AssertionError as e:
-                print(f"wandb.init error: {e}")
-                args.use_wandb = False
-
     Logger(args)
     utils.get_device(args)
     utils.set_random_seed(args.seed)
 
     if not args.mouse_ids:
         args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
-    if args.batch_size == 0 and "cuda" in args.device.type:
-        utils.auto_batch_size(args)
-        if args.use_wandb:
-            wandb.config.update({"batch_size": args.batch_size}, allow_val_change=True)
+
+    # find micro batch size
+    assert args.batch_size > 0 and args.batch_size % 8 == 0
+    utils.compute_micro_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
         args,
         data_dir=args.dataset,
         mouse_ids=args.mouse_ids,
-        batch_size=args.batch_size,
+        batch_size=args.micro_batch_size,
         device=args.device,
     )
 
@@ -222,15 +208,31 @@ def main(args, wandb_sweep: bool = False):
     )
 
     utils.save_args(args)
+    if args.use_wandb:
+        os.environ["WANDB_SILENT"] = "true"
+        if not wandb_sweep:
+            try:
+                wandb.init(
+                    config=args,
+                    dir=os.path.join(args.output_dir, "wandb"),
+                    project="sensorium",
+                    entity="bryanlimy",
+                    group=args.wandb_group,
+                    name=os.path.basename(args.output_dir),
+                )
+            except AssertionError as e:
+                print(f"wandb.init error: {e}\n")
+                args.use_wandb = False
+
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(
-        model,
-        ds=train_ds,
-        summary=summary,
-        epoch=epoch,
-        device=args.device,
-    )
+    # utils.plot_samples(
+    #     model,
+    #     ds=train_ds,
+    #     summary=summary,
+    #     epoch=epoch,
+    #     device=args.device,
+    # )
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -386,13 +388,7 @@ if __name__ == "__main__":
         type=int,
         help="maximum epochs to train the model.",
     )
-    parser.add_argument(
-        "--batch_size",
-        default=8,
-        type=int,
-        help="If batch_size == 0 and CUDA is available, then dynamically test "
-        "batch size. Otherwise use the provided value.",
-    )
+    parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument(
         "--device",
         type=str,

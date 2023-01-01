@@ -1,6 +1,7 @@
 import os
 import sys
 import copy
+import math
 import torch
 import random
 import subprocess
@@ -343,14 +344,19 @@ def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
+def compute_micro_batch_size(args, num_iterations: int = 5):
     """
-    Calculate the maximum batch size that can fill the GPU memory if CUDA device
-    is set and args.batch_size is not set.
+    Calculate the maximum micro batch size that can fill the GPU memory if
+    CUDA device is set.
     """
-    device, mouse_ids = args.device, args.mouse_ids
-    assert "cuda" in device.type
+    device = args.device
+    if "cuda" not in device.type:
+        args.micro_batch_size = args.batch_size
+        return
 
+    mouse_ids = args.mouse_ids
+
+    # create dummy dataloaders, model, optimizer and criterion
     train_ds, _, _ = data.get_training_ds(
         args,
         data_dir=args.dataset,
@@ -358,36 +364,32 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
         batch_size=1,
         device=device,
     )
-
-    image_shape, output_shapes = args.input_shape, args.output_shapes
     model = Model(args, ds=train_ds)
     model.to(device)
     model.train(True)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     criterion = losses.get_criterion(args, ds=train_ds)
 
-    ds_size = len(train_ds[mouse_ids[0]].dataset)
+    image_shape = args.input_shape
     random_input = lambda size: torch.rand(*size, device=device)
 
-    batch_size = 1
+    micro_batch_size = 8
     while True:
-        if max_batch_size is not None and batch_size >= max_batch_size:
-            batch_size = max_batch_size
-            break
-        if batch_size >= ds_size:
-            batch_size //= 2
+        if micro_batch_size >= args.batch_size:
+            micro_batch_size = args.batch_size
             break
         try:
+            # dummy training loop to mimic training and gradient accumulation
             for _ in range(num_iterations):
-                for mouse_id in mouse_ids:  # accumulate gradient
+                for mouse_id in mouse_ids:
                     outputs, _, _ = model(
-                        inputs=random_input((batch_size, *image_shape)),
+                        inputs=random_input((micro_batch_size, *image_shape)),
                         mouse_id=mouse_id,
-                        behaviors=random_input((batch_size, 3)),
-                        pupil_centers=random_input((batch_size, 2)),
+                        behaviors=random_input((micro_batch_size, 3)),
+                        pupil_centers=random_input((micro_batch_size, 2)),
                     )
                     loss = criterion(
-                        y_true=random_input((batch_size, *output_shapes[mouse_id])),
+                        y_true=random_input((micro_batch_size, *outputs.shape)),
                         y_pred=outputs,
                         mouse_id=mouse_id,
                     )
@@ -396,18 +398,19 @@ def auto_batch_size(args, max_batch_size: int = None, num_iterations: int = 5):
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            batch_size *= 2
+            micro_batch_size += 8
         except RuntimeError:
             if args.verbose > 1:
-                print(f"OOM at batch size {batch_size}")
-            batch_size //= 2
+                print(f"OOM at micro batch size {micro_batch_size}")
+            micro_batch_size -= 8
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
-    batch_size = max(1, batch_size)
+
+    assert micro_batch_size > 0 and micro_batch_size % 8 == 0
     if args.verbose > 1:
-        print(f"set batch size to {batch_size}")
-    args.batch_size = batch_size
+        print(f"set micro batch size to {micro_batch_size}")
+    args.batch_size = micro_batch_size
 
 
 class AutoGradClip:
