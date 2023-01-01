@@ -123,7 +123,7 @@ class MLP(nn.Module):
         hidden_dim: int,
         out_dim: int = None,
         dropout: float = 0.0,
-        use_bias: bool = False,
+        use_bias: bool = True,
     ):
         super(MLP, self).__init__()
         if out_dim is None:
@@ -184,7 +184,7 @@ class BehaviorMLP(nn.Module):
         in_dim: int,
         out_dim: int,
         dropout: float = 0.0,
-        use_bias: bool = False,
+        use_bias: bool = True,
     ):
         return nn.Sequential(
             nn.Linear(in_features=in_dim, out_features=out_dim // 2, bias=use_bias),
@@ -210,7 +210,7 @@ class Attention(nn.Module):
         num_heads: int = 8,
         dropout: float = 0.0,
         use_lsa: bool = False,
-        use_bias: bool = False,
+        use_bias: bool = True,
     ):
         super(Attention, self).__init__()
         inner_dim = emb_dim * num_heads
@@ -225,7 +225,7 @@ class Attention(nn.Module):
         )
 
         self.projection = nn.Sequential(
-            nn.Linear(in_features=inner_dim, out_features=emb_dim),
+            nn.Linear(in_features=inner_dim, out_features=emb_dim, bias=use_bias),
             nn.Dropout(p=dropout),
         )
         self.layer_norm = nn.LayerNorm(emb_dim)
