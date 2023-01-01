@@ -19,15 +19,16 @@ from sensorium.utils.scheduler import Scheduler
 from torch.cuda.amp import autocast, GradScaler
 
 
+@torch.no_grad()
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     msse = losses.msse(y_true=y_true, y_pred=y_pred)
     poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
     correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
     return {
-        "metrics/msse": msse.item(),
-        "metrics/poisson_loss": poisson_loss.item(),
-        "metrics/single_trial_correlation": correlation.item(),
+        "metrics/msse": msse,
+        "metrics/poisson_loss": poisson_loss,
+        "metrics/single_trial_correlation": correlation,
     }
 
 
@@ -39,33 +40,39 @@ def train_step(
     criterion: losses.Loss,
     scaler: GradScaler,
     update: bool,
+    micro_batch_size: int,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
+    result = {}
     model.to(device)
-    with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
-        responses = batch["response"].to(device)
-        outputs, _, _ = model(
-            inputs=batch["image"].to(device),
-            mouse_id=mouse_id,
-            behaviors=batch["behavior"].to(device),
-            pupil_centers=batch["pupil_center"].to(device),
+    for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
+        with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
+            responses = micro_batch["response"].to(device)
+            outputs, _, _ = model(
+                inputs=micro_batch["image"].to(device),
+                mouse_id=mouse_id,
+                behaviors=micro_batch["behavior"].to(device),
+                pupil_centers=micro_batch["pupil_center"].to(device),
+            )
+            loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+            reg_loss = model.regularizer(mouse_id=mouse_id)
+            total_loss = loss + reg_loss
+        # calculate and accumulate gradients
+        scaler.scale(total_loss).backward()
+        utils.update_dict(
+            result,
+            {
+                "loss/loss": loss.detach(),
+                "loss/reg_loss": reg_loss.detach(),
+                "loss/total_loss": total_loss.detach(),
+                **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+            },
         )
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        reg_loss = model.regularizer(mouse_id=mouse_id)
-        total_loss = loss + reg_loss
-    # calculate and accumulate gradients
-    scaler.scale(total_loss).backward()
     if update:
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
-    result = {
-        "loss/loss": loss.item(),
-        "loss/reg_loss": reg_loss.item(),
-        "loss/total_loss": total_loss.item(),
-        **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
-    }
-    return result
+    return {k: torch.mean(torch.stack(v)) for k, v in result.items()}
 
 
 def train(
@@ -81,10 +88,8 @@ def train(
     mouse_ids = list(ds.keys())
     results = {mouse_id: {} for mouse_id in mouse_ids}
     ds = data.CycleDataloaders(ds)
-    # number of micro forward passes needed for one batch
-    num_passes = ((args.batch_size - args.micro_batch_size) // 8) + 1
     # accumulate gradients over all mouse for one batch
-    update_frequency = len(mouse_ids) * num_passes
+    update_frequency = len(mouse_ids)
     model.train(True)
     model.requires_grad_(True)
     optimizer.zero_grad()
@@ -99,9 +104,12 @@ def train(
             criterion=criterion,
             scaler=scaler,
             update=(i + 1) % update_frequency == 0,
+            micro_batch_size=args.micro_batch_size,
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
+        if (i + 1) % update_frequency == 0:
+            break
     return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
 
 
@@ -111,21 +119,28 @@ def validation_step(
     model: nn.Module,
     criterion: losses.Loss,
     scaler: GradScaler,
+    micro_batch_size: int,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     result = {}
     model.to(device)
-    with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
-        responses = batch["response"].to(device)
-        outputs, _, _ = model(
-            inputs=batch["image"].to(device),
-            mouse_id=mouse_id,
-            behaviors=batch["behavior"].to(device),
-            pupil_centers=batch["pupil_center"].to(device),
+    for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
+        with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
+            responses = micro_batch["response"].to(device)
+            outputs, _, _ = model(
+                inputs=micro_batch["image"].to(device),
+                mouse_id=mouse_id,
+                behaviors=micro_batch["behavior"].to(device),
+                pupil_centers=micro_batch["pupil_center"].to(device),
+            )
+            loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
+        utils.update_dict(
+            result,
+            {
+                "loss/loss": loss.item(),
+                **compute_metrics(y_true=responses, y_pred=outputs),
+            },
         )
-        loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-    result["loss/loss"] = loss.item()
-    result.update(compute_metrics(y_true=responses, y_pred=outputs))
     return result
 
 
@@ -151,6 +166,7 @@ def validate(
                     model=model,
                     criterion=criterion,
                     scaler=scaler,
+                    micro_batch_size=args.micro_batch_size,
                     device=args.device,
                 )
                 utils.update_dict(mouse_result, result)
@@ -180,7 +196,7 @@ def main(args, wandb_sweep: bool = False):
         args,
         data_dir=args.dataset,
         mouse_ids=args.mouse_ids,
-        batch_size=args.micro_batch_size,
+        batch_size=args.batch_size,
         device=args.device,
     )
     summary = tensorboard.Summary(args)
@@ -224,13 +240,7 @@ def main(args, wandb_sweep: bool = False):
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(
-        model,
-        ds=train_ds,
-        summary=summary,
-        epoch=epoch,
-        device=args.device,
-    )
+    utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -267,11 +277,7 @@ def main(args, wandb_sweep: bool = False):
             )
         if epoch % 10 == 0:
             utils.plot_samples(
-                model,
-                ds=val_ds,
-                summary=summary,
-                epoch=epoch,
-                device=args.device,
+                args, model=model, ds=val_ds, summary=summary, epoch=epoch
             )
         if args.verbose:
             print(

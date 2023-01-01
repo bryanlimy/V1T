@@ -1,7 +1,5 @@
 import os
-import sys
 import copy
-import math
 import torch
 import random
 import subprocess
@@ -34,7 +32,10 @@ def set_random_seed(seed: int, deterministic: bool = False):
 
 @torch.no_grad()
 def inference(
-    ds: DataLoader, model: torch.nn.Module, device: torch.device = "cpu"
+    ds: DataLoader,
+    model: torch.nn.Module,
+    micro_batch_size: int,
+    device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     """Inference data in DataLoader ds
     Returns:
@@ -54,17 +55,20 @@ def inference(
     mouse_id = ds.dataset.mouse_id
     model.to(device)
     model.train(False)
-    for data in ds:
-        predictions, _, _ = model(
-            inputs=data["image"].to(device),
-            mouse_id=mouse_id,
-            behaviors=data["behavior"].to(device),
-            pupil_centers=data["pupil_center"].to(device),
-        )
-        results["predictions"].append(predictions.cpu())
-        results["targets"].append(data["response"])
-        results["image_ids"].append(data["image_id"])
-        results["trial_ids"].append(data["trial_id"])
+    for batch in ds:
+        for micro_batch in data.micro_batching(
+            batch, micro_batch_size=micro_batch_size
+        ):
+            predictions, _, _ = model(
+                inputs=micro_batch["image"].to(device),
+                mouse_id=mouse_id,
+                behaviors=micro_batch["behavior"].to(device),
+                pupil_centers=micro_batch["pupil_center"].to(device),
+            )
+            results["predictions"].append(predictions.cpu())
+            results["targets"].append(micro_batch["response"])
+            results["image_ids"].append(micro_batch["image_id"])
+            results["trial_ids"].append(micro_batch["trial_id"])
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
@@ -103,7 +107,12 @@ def evaluate(
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
-        outputs[mouse_id] = inference(ds=mouse_ds, model=model, device=args.device)
+        outputs[mouse_id] = inference(
+            ds=mouse_ds,
+            model=model,
+            micro_batch_size=args.micro_batch_size,
+            device=args.device,
+        )
 
         mouse_metric = Metrics(ds=mouse_ds, results=outputs[mouse_id])
 
@@ -173,14 +182,15 @@ def evaluate(
 
 @torch.no_grad()
 def plot_samples(
+    args,
     model: nn.Module,
     ds: t.Dict[int, DataLoader],
     summary: tensorboard.Summary,
     epoch: int,
     mode: int = 1,
     num_samples: int = 5,
-    device: torch.device = "cpu",
 ):
+    device = args.device
     model.to(device)
     model.train(False)
     for mouse_id, mouse_ds in ds.items():
@@ -195,27 +205,32 @@ def plot_samples(
             "image_ids": [],
         }
         i_transform_image = mouse_ds.dataset.i_transform_image
-        for data in mouse_ds:
-            images = data["image"]
-            predictions, crop_images, image_grids = model(
-                inputs=images.to(device),
-                mouse_id=mouse_id,
-                pupil_centers=data["pupil_center"].to(device),
-                behaviors=data["behavior"].to(device),
-            )
-            images = i_transform_image(images)
-            crop_images = i_transform_image(crop_images.cpu())
-            image_grids = image_grids.cpu()
-            predictions = predictions.cpu()
-            for i in range(len(predictions)):
-                results["images"].append(images[i])
-                results["crop_images"].append(crop_images[i])
-                results["image_grids"].append(image_grids[i])
-                results["targets"].append(data["response"][i])
-                results["predictions"].append(predictions[i])
-                results["pupil_center"].append(data["pupil_center"][i])
-                results["behaviors"].append(data["behavior"][i])
-                results["image_ids"].append(data["image_id"][i])
+        for batch in mouse_ds:
+            for micro_batch in data.micro_batching(
+                batch, micro_batch_size=args.micro_batch_size
+            ):
+                images = micro_batch["image"]
+                predictions, crop_images, image_grids = model(
+                    inputs=images.to(device),
+                    mouse_id=mouse_id,
+                    pupil_centers=micro_batch["pupil_center"].to(device),
+                    behaviors=micro_batch["behavior"].to(device),
+                )
+                images = i_transform_image(images)
+                crop_images = i_transform_image(crop_images.cpu())
+                image_grids = image_grids.cpu()
+                predictions = predictions.cpu()
+                for i in range(len(predictions)):
+                    results["images"].append(images[i])
+                    results["crop_images"].append(crop_images[i])
+                    results["image_grids"].append(image_grids[i])
+                    results["targets"].append(micro_batch["response"][i])
+                    results["predictions"].append(predictions[i])
+                    results["pupil_center"].append(micro_batch["pupil_center"][i])
+                    results["behaviors"].append(micro_batch["behavior"][i])
+                    results["image_ids"].append(micro_batch["image_id"][i])
+                    if len(results["images"]) == num_samples:
+                        break
                 if len(results["images"]) == num_samples:
                     break
             if len(results["images"]) == num_samples:
@@ -373,7 +388,7 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
     image_shape = args.input_shape
     random_input = lambda size: torch.rand(*size, device=device)
 
-    micro_batch_size = 8
+    micro_batch_size = 1
     while True:
         if micro_batch_size >= args.batch_size:
             micro_batch_size = args.batch_size
@@ -398,16 +413,16 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            micro_batch_size += 8
+            micro_batch_size += 1 if micro_batch_size == 1 else 2
         except RuntimeError:
             if args.verbose > 1:
                 print(f"OOM at micro batch size {micro_batch_size}")
-            micro_batch_size -= 8
+            micro_batch_size -= 1 if micro_batch_size == 2 else 2
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
 
-    assert micro_batch_size > 0 and micro_batch_size % 8 == 0
+    assert micro_batch_size > 0
     if args.verbose > 1:
         print(f"set micro batch size to {micro_batch_size}")
     args.micro_batch_size = micro_batch_size
