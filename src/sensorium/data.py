@@ -210,7 +210,6 @@ class MiceDataset(Dataset):
         self.trial_ids = metadata["trial_id"][self.indexes]
         # standardizer for responses
         self.compute_response_precision()
-        self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
@@ -252,8 +251,6 @@ class MiceDataset(Dataset):
                 if len(image.shape) == 3
                 else torch.unsqueeze(image[:, 0, :, :], dim=1)
             )
-        stats = self.image_stats
-        image = (image * stats["std"]) + stats["mean"]
         stats = self.image_stats
         image = (image * stats["std"]) + stats["mean"]
         return image
