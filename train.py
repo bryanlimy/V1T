@@ -326,12 +326,7 @@ def main(args, wandb_sweep: bool = False):
     if args.use_wandb:
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
     utils.plot_samples(
-        model,
-        ds=test_ds,
-        summary=summary,
-        epoch=epoch,
-        mode=2,
-        device=args.device,
+        args, model=model, ds=test_ds, summary=summary, epoch=epoch, mode=2
     )
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
