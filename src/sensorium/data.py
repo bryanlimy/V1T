@@ -210,6 +210,7 @@ class MiceDataset(Dataset):
         self.trial_ids = metadata["trial_id"][self.indexes]
         # standardizer for responses
         self.compute_response_precision()
+        self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
@@ -253,6 +254,8 @@ class MiceDataset(Dataset):
             )
         stats = self.image_stats
         image = (image * stats["std"]) + stats["mean"]
+        stats = self.image_stats
+        image = (image * stats["std"]) + stats["mean"]
         return image
 
     def transform_pupil_center(self, pupil_center: np.ndarray):
@@ -275,6 +278,7 @@ class MiceDataset(Dataset):
         idx = std > threshold
         response_precision = np.ones_like(std) / threshold
         response_precision[idx] = 1 / std[idx]
+        self._response_precision = response_precision
         self._response_precision = response_precision
 
     def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):

@@ -305,8 +305,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--resize_image",
-        default=1,
         type=int,
+        default=1,
         choices=[0, 1],
         help="resize image mode:"
         "0: no resizing, return full image (1, 144, 256)"
