@@ -421,29 +421,6 @@ if __name__ == "__main__":
         type=str,
         help="criterion (loss function) to use.",
     )
-
-    parser.add_argument(
-        "--ds_scale",
-        action="store_true",
-        help="scale loss by the size of the dataset",
-    )
-
-    # optimizer settings
-    parser.add_argument("--adam_beta1", type=float, default=0.9)
-    parser.add_argument("--adam_beta2", type=float, default=0.9999)
-    parser.add_argument("--adam_eps", type=float, default=1e-8)
-    parser.add_argument(
-        "--criterion",
-        default="poisson",
-        type=str,
-        help="criterion (loss function) to use.",
-    )
-    parser.add_argument(
-        "--lr",
-        default=1e-3,
-        type=float,
-        help="initial learning rate",
-    )
     parser.add_argument(
         "--ds_scale",
         action="store_true",

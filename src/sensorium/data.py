@@ -276,7 +276,6 @@ class MiceDataset(Dataset):
         response_precision = np.ones_like(std) / threshold
         response_precision[idx] = 1 / std[idx]
         self._response_precision = response_precision
-        self._response_precision = response_precision
 
     def transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response * self._response_precision
