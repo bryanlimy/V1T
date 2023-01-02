@@ -345,6 +345,8 @@ class Stacked2dCore(Core, nn.Module):
     ):
         if depth_separable and attention_conv:
             raise ValueError("depth_separable and attention_conv can not both be true")
+        if args.behavior_mode not in (0, 1):
+            raise ValueError("stacked2d core only support behavior mode 0 and 1.")
 
         self.batch_norm = batch_norm
         self.final_batchnorm_scale = final_batchnorm_scale
@@ -358,8 +360,8 @@ class Stacked2dCore(Core, nn.Module):
         regularizer_config = dict(padding=laplace_padding)
         self._input_weights_regularizer = LaplaceL2norm(**regularizer_config)
         self.num_layers = args.num_layers
-        self.gamma_input = torch.tensor(args.core_reg_input, device=args.device)
-        self.gamma_hidden = torch.tensor(args.core_reg_hidden, device=args.device)
+        self.register_buffer("gamma_input", torch.tensor(args.core_reg_input))
+        self.register_buffer("gamma_hidden", torch.tensor(args.core_reg_hidden))
         self.input_channels = self.input_shape[0]
         self.hidden_channels = hidden_channels
         self.skip = skip
@@ -574,11 +576,13 @@ class Stacked2dCore(Core, nn.Module):
         term2 = self.gamma_input * self.laplace()
         return term1 + term2
 
-    @property
-    def outchannels(self):
-        return len(self.features) * self.hidden_channels
-
-    def forward(self, inputs: torch.Tensor):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        mouse_id: int,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+    ):
         outputs = []
         for layer, fn in enumerate(self.features):
             do_skip = layer >= 1 and self.skip > 1

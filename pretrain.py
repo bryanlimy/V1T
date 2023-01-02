@@ -304,13 +304,13 @@ if __name__ == "__main__":
         help="initial learning rate",
     )
     parser.add_argument(
-        "--crop_mode",
+        "--resize_image",
         type=int,
         default=1,
         choices=[0, 1],
-        help="image crop mode:"
-        "0: no cropping and return full image (1, 144, 256)"
-        "1: rescale image by 0.25 in both width and height (1, 36, 64)",
+        help="resize image mode:"
+        "0: no resizing, return full image (1, 144, 256)"
+        "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(
         "--device",

@@ -26,7 +26,7 @@ class RandomReadout(Readout):
 
         self.weight = nn.Parameter(torch.rand(1))
 
-    def forward(self, inputs: torch.Tensor, shift: torch.Tensor = None):
+    def forward(self, inputs: torch.Tensor, shifts: torch.Tensor = None):
         batch_size = inputs.size(0)
         random = torch.rand(*(batch_size, *self.output_shape), device=inputs.device)
         return random + self.weight - self.weight

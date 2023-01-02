@@ -55,7 +55,7 @@ class MixerCore(Core):
         self.expansion_factor = expansion_factor
         self.expansion_factor_token = expansion_factor_token
         self.dropout = args.dropout
-        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
+        self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
 
         num_channels, height, width = input_shape
         assert (height % patch_size) == 0 and (

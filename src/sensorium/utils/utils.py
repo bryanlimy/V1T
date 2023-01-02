@@ -31,44 +31,49 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
 
 
-def inference(ds: DataLoader, model: torch.nn.Module) -> t.Dict[str, torch.Tensor]:
+@torch.no_grad()
+def inference(
+    ds: DataLoader,
+    model: torch.nn.Module,
+    micro_batch_size: int,
+    device: torch.device = "cpu",
+) -> t.Dict[str, torch.Tensor]:
     """Inference data in DataLoader ds
     Returns:
         results: t.Dict[int, t.Dict[str, torch.Tensor]]
             - mouse_id
                 - predictions: torch.Tensor, predictions given images
                 - targets: torch.Tensor, the ground-truth responses
-                - images: torch.Tensor, the natural images
                 - trial_ids: torch.Tensor, trial ID of the responses
                 - image_ids: torch.Tensor, image ID of the responses
     """
     results = {
-        "images": [],
         "predictions": [],
         "targets": [],
         "trial_ids": [],
         "image_ids": [],
     }
-    mouse_id, device = ds.dataset.mouse_id, model.device
+    mouse_id = ds.dataset.mouse_id
+    model.to(device)
     model.train(False)
-    with torch.no_grad():
-        for data in ds:
-            predictions = model(
-                data["image"].to(device),
+    for batch in ds:
+        for micro_batch in data.micro_batching(
+            batch, micro_batch_size=micro_batch_size
+        ):
+            predictions, _, _ = model(
+                inputs=micro_batch["image"].to(device),
                 mouse_id=mouse_id,
-                pupil_center=data["pupil_center"].to(device),
+                behaviors=micro_batch["behavior"].to(device),
+                pupil_centers=micro_batch["pupil_center"].to(device),
             )
             results["predictions"].append(predictions.cpu())
-            results["targets"].append(data["response"])
-            results["images"].append(data["image"])
-            results["image_ids"].append(data["image_id"])
-            results["trial_ids"].append(data["trial_id"])
+            results["targets"].append(micro_batch["response"])
+            results["image_ids"].append(micro_batch["image_id"])
+            results["trial_ids"].append(micro_batch["trial_id"])
     results = {
         k: torch.cat(v, dim=0) if isinstance(v[0], torch.Tensor) else v
         for k, v in results.items()
     }
-    # convert images to their original range for plotting
-    results["images"] = ds.dataset.i_transform_image(results["images"])
     return results
 
 
@@ -98,12 +103,21 @@ def evaluate(
     metrics = ["single_trial_correlation", "correlation_to_average", "feve"]
     outputs, results = {}, {k: {} for k in metrics}
 
+    batch_size = args.batch_size
+    if hasattr(args, "micro_batch_size"):
+        batch_size = args.micro_batch_size
+
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose < 2
     ):
         if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
             continue
-        outputs[mouse_id] = inference(ds=mouse_ds, model=model)
+        outputs[mouse_id] = inference(
+            ds=mouse_ds,
+            model=model,
+            micro_batch_size=batch_size,
+            device=args.device,
+        )
 
         mouse_metric = Metrics(ds=mouse_ds, results=outputs[mouse_id])
 
@@ -117,19 +131,14 @@ def evaluate(
             results["feve"][mouse_id] = mouse_metric.feve(per_neuron=True)
 
     if summary is not None:
-        # create image-response pair plots
-        for mouse_id in outputs.keys():
-            summary.plot_image_response(
-                tag=f"image_response/mouse{mouse_id}",
-                results=outputs[mouse_id],
-                step=epoch,
-                mode=mode,
-            )
         # create box plot for each metric
         for metric, values in results.items():
             if values:
                 summary.box_plot(
-                    metric, data=metrics2df(results[metric]), step=epoch, mode=mode
+                    metric,
+                    data=metrics2df(results[metric]),
+                    step=epoch,
+                    mode=mode,
                 )
 
     # compute the average value for each mouse
@@ -176,6 +185,67 @@ def evaluate(
     return overall_result
 
 
+@torch.no_grad()
+def plot_samples(
+    args,
+    model: nn.Module,
+    ds: t.Dict[int, DataLoader],
+    summary: tensorboard.Summary,
+    epoch: int,
+    mode: int = 1,
+    num_samples: int = 5,
+):
+    device = args.device
+    model.to(device)
+    model.train(False)
+    for mouse_id, mouse_ds in ds.items():
+        results = {
+            "images": [],
+            "crop_images": [],
+            "image_grids": [],
+            "targets": [],
+            "predictions": [],
+            "pupil_center": [],
+            "behaviors": [],
+            "image_ids": [],
+        }
+        i_transform_image = mouse_ds.dataset.i_transform_image
+        for batch in mouse_ds:
+            for micro_batch in data.micro_batching(
+                batch, micro_batch_size=args.micro_batch_size
+            ):
+                images = micro_batch["image"]
+                predictions, crop_images, image_grids = model(
+                    inputs=images.to(device),
+                    mouse_id=mouse_id,
+                    pupil_centers=micro_batch["pupil_center"].to(device),
+                    behaviors=micro_batch["behavior"].to(device),
+                )
+                images = i_transform_image(images)
+                crop_images = i_transform_image(crop_images.cpu())
+                image_grids = image_grids.cpu()
+                predictions = predictions.cpu()
+                for i in range(len(predictions)):
+                    results["images"].append(images[i])
+                    results["crop_images"].append(crop_images[i])
+                    results["image_grids"].append(image_grids[i])
+                    results["targets"].append(micro_batch["response"][i])
+                    results["predictions"].append(predictions[i])
+                    results["pupil_center"].append(micro_batch["pupil_center"][i])
+                    results["behaviors"].append(micro_batch["behavior"][i])
+                    results["image_ids"].append(micro_batch["image_id"][i])
+                    if len(results["images"]) == num_samples:
+                        break
+                if len(results["images"]) == num_samples:
+                    break
+            if len(results["images"]) == num_samples:
+                break
+        results = {k: torch.stack(v, dim=0).numpy() for k, v in results.items()}
+        summary.plot_image_response(
+            f"image_response/mouse{mouse_id}", results=results, step=epoch, mode=mode
+        )
+
+
 def update_dict(target: dict, source: dict, replace: bool = False):
     """Update target dictionary with values from source dictionary"""
     for k, v in source.items():
@@ -219,6 +289,9 @@ def get_device(args):
         device = "cpu"
         if torch.cuda.is_available():
             device = "cuda"
+            # allow TensorFloat32 computation
+            torch.backends.cudnn.allow_tf32 = True
+            torch.backends.cuda.matmul.allow_tf32 = True
         elif torch.backends.mps.is_available():
             device = "mps"
     args.device = torch.device(device)
@@ -253,8 +326,11 @@ def log_metrics(
     for mouse_id in mouse_ids:
         for metric in metrics:
             value = results[mouse_id][metric]
-            if not isinstance(value, float):
-                results[mouse_id][metric] = np.mean(value)
+            if isinstance(value, list):
+                if torch.is_tensor(value[0]):
+                    results[mouse_id][metric] = torch.mean(torch.stack(value)).item()
+                else:
+                    results[mouse_id][metric] = np.mean(value)
             summary.scalar(
                 f"{metric}/mouse{mouse_id}",
                 value=results[mouse_id][metric],
@@ -274,11 +350,11 @@ def num_steps(ds: t.Dict[int, DataLoader]):
     return sum([len(ds[k]) for k in ds.keys()])
 
 
-def load_pretrain_core(args, model: Model):
+def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
     filename = os.path.join(args.pretrain_core, "ckpt", "model_state.pt")
     assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
     model_dict = model.state_dict()
-    core_ckpt = torch.load(filename, map_location=model.device)
+    core_ckpt = torch.load(filename, map_location=device)
     # add 'core.' to parameters in pretrained core
     core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
     # check pretrained core has the same parameters in core module
@@ -291,67 +367,102 @@ def load_pretrain_core(args, model: Model):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def get_batch_size(
-    args,
-    max_batch_size: int = None,
-    num_iterations: int = 5,
-):
+def compute_micro_batch_size(args, num_iterations: int = 5):
     """
-    Calculate the maximum batch size that can fill the GPU memory if CUDA device
-    is set and args.batch_size is not set.
+    Calculate the maximum micro batch size that can fill the GPU memory if
+    CUDA device is set.
     """
-    device = args.device.type
+    device = args.device
+    if "cuda" not in device.type:
+        args.micro_batch_size = args.batch_size
+        return
 
-    if ("cuda" not in device) or ("cuda" in device and args.batch_size != 0):
-        assert args.batch_size > 1
-    else:
-        device, mouse_id = args.device, 2
-        train_ds, _, _ = data.get_training_ds(
-            args,
-            data_dir=args.dataset,
-            mouse_ids=[mouse_id],
-            batch_size=1,
-            device=device,
-        )
+    mouse_ids = args.mouse_ids
 
-        output_shape = (train_ds[mouse_id].dataset.num_neurons,)
-        model = Model(args, ds=train_ds)
-        model.to(device)
-        model.train(True)
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-        criterion = losses.get_criterion(args, ds=train_ds)
+    # create dummy dataloaders, model, optimizer and criterion
+    train_ds, _, _ = data.get_training_ds(
+        args,
+        data_dir=args.dataset,
+        mouse_ids=mouse_ids,
+        batch_size=1,
+        device=device,
+    )
+    model = Model(args, ds=train_ds)
+    model.to(device)
+    model.train(True)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    criterion = losses.get_criterion(args, ds=train_ds)
 
-        ds_size = len(train_ds[mouse_id].dataset)
+    image_shape = args.input_shape
+    random_input = lambda size: torch.rand(*size, device=device)
 
-        batch_size = 1
-        while True:
-            if max_batch_size is not None and batch_size >= max_batch_size:
-                batch_size = max_batch_size
-                break
-            if batch_size >= ds_size:
-                batch_size //= 2
-                break
-            try:
-                for _ in range(num_iterations):
-                    targets = torch.rand(*(batch_size, *output_shape), device=device)
-                    outputs = model(
-                        torch.rand(*(batch_size, *args.input_shape), device=device),
+    micro_batch_size = 1
+    while True:
+        if micro_batch_size >= args.batch_size:
+            micro_batch_size = args.batch_size
+            break
+        try:
+            # dummy training loop to mimic training and gradient accumulation
+            for _ in range(num_iterations):
+                for mouse_id in mouse_ids:
+                    outputs, _, _ = model(
+                        inputs=random_input((micro_batch_size, *image_shape)),
                         mouse_id=mouse_id,
-                        pupil_center=torch.rand(batch_size, 2, device=device),
+                        behaviors=random_input((micro_batch_size, 3)),
+                        pupil_centers=random_input((micro_batch_size, 2)),
                     )
-                    loss = criterion(y_true=targets, y_pred=outputs, mouse_id=mouse_id)
-                    loss += model.regularizer(mouse_id=mouse_id)
-                    loss.backward()
-                    optimizer.step()
-                    optimizer.zero_grad()
-                batch_size *= 2
-            except RuntimeError:
-                if args.verbose > 1:
-                    print(f"OOM at batch size: {batch_size}")
-                batch_size //= 2
-                break
-        del train_ds, model, optimizer, criterion
-        torch.cuda.empty_cache()
-        if args.verbose > 1:
-            print(f"set batch size: {batch_size}")
-        args.batch_size = batch_size
+                    loss = criterion(
+                        y_true=random_input((micro_batch_size, *outputs.shape)),
+                        y_pred=outputs,
+                        mouse_id=mouse_id,
+                    )
+                    reg_loss = model.regularizer(mouse_id=mouse_id)
+                    total_loss = loss + reg_loss
+                    total_loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+            micro_batch_size += 1 if micro_batch_size == 1 else 2
+        except RuntimeError:
+            if args.verbose:
+                print(f"OOM at micro batch size {micro_batch_size}")
+            micro_batch_size -= 1 if micro_batch_size == 2 else 2
+            break
+    del train_ds, model, optimizer, criterion
+    torch.cuda.empty_cache()
+
+    assert micro_batch_size > 0
+    if args.verbose:
+        print(f"set micro batch size to {micro_batch_size}")
+    args.micro_batch_size = micro_batch_size
+
+
+class AutoGradClip:
+    """
+    Automatic gradient clipping
+    reference:
+    - https://arxiv.org/abs/2007.14469
+    - https://github.com/pseeth/autoclip
+    """
+
+    def __init__(self, percentile: float, max_history: int = 10000):
+        assert 0 <= percentile <= 100
+        self.idx = 0
+        self.percentile = percentile
+        self.max_history = max_history
+        self.history = np.zeros(shape=(max_history,), dtype=np.float32)
+
+    @staticmethod
+    def compute_grad_norm(model: nn.Module):
+        total_norm = 0
+        for p in model.parameters():
+            if p.grad is not None:
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        return total_norm ** (1.0 / 2)
+
+    def __call__(self, model: nn.Module):
+        grad_norm = self.compute_grad_norm(model)
+        self.history[self.idx % self.max_history] = grad_norm
+        self.idx += 1
+        max_norm = np.percentile(self.history[: self.idx], q=self.percentile)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=max_norm)

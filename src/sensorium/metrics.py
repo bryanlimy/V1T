@@ -131,3 +131,78 @@ class Metrics:
         # ignore neurons below FEV threshold
         feve_val = feve_val[fev_val >= fev_threshold]
         return feve_val if per_neuron else feve_val.mean()
+
+    @staticmethod
+    def compute_oracle_corr(repeated_outputs: np.ndarray):
+        if len(repeated_outputs.shape) == 3:
+            _, r, n = repeated_outputs.shape
+            oracles = (
+                (repeated_outputs.mean(axis=1, keepdims=True) - repeated_outputs / r)
+                * r
+                / (r - 1)
+            )
+            if np.any(np.isnan(oracles)):
+                print(
+                    f"Warning: {np.isnan(oracles).mean() * 100}% values are NaN "
+                    f"when calculating the oracle. NaNs will be set to Zero."
+                )
+                oracles[np.isnan(oracles)] = 0
+            return losses.correlation(
+                y1=oracles.reshape(-1, n), y2=repeated_outputs.reshape(-1, n), dim=0
+            )
+        else:
+            oracles = []
+            for outputs in repeated_outputs:
+                r, n = outputs.shape
+                # compute the mean over repeats, for each neuron
+                mu = outputs.mean(axis=0, keepdims=True)
+                # compute oracle predictor
+                oracle = (mu - outputs / r) * r / (r - 1)
+
+                if np.any(np.isnan(oracle)):
+                    print(
+                        f"Warning: {np.isnan(oracles).mean() * 100}% values are NaN "
+                        f"when calculating the oracle. NaNs will be set to Zero."
+                    )
+                    oracle[np.isnan(oracle)] = 0
+
+                oracles.append(oracle)
+            return losses.correlation(
+                y1=np.vstack(repeated_outputs), y2=np.vstack(oracles), dim=0
+            )
+
+    @staticmethod
+    def compute_oracle_corr_corrected(repeated_outputs: np.ndarray):
+        if len(repeated_outputs.shape) == 3:
+            var_noise = repeated_outputs.var(axis=1).mean(0)
+            var_mean = repeated_outputs.mean(axis=1).var(0)
+        else:
+            var_noise, var_mean = [], []
+            for repeat in repeated_outputs:
+                var_noise.append(repeat.var(axis=0))
+                var_mean.append(repeat.mean(axis=0))
+            var_noise = np.mean(np.array(var_noise), axis=0)
+            var_mean = np.var(np.array(var_mean), axis=0)
+        return var_mean / np.sqrt(var_mean * (var_mean + var_noise))
+
+    def get_oracles(self, corrected: bool = False, per_neuron: bool = True):
+        oracles = []
+        repeated_targets, _ = self.split_responses()
+        for repeated_target in repeated_targets:
+            if corrected:
+                oracle = self.compute_oracle_corr_corrected(repeated_target)
+            else:
+                oracle = self.compute_oracle_corr(repeated_target)
+            oracles.append(oracle)
+        oracles = np.hstack(oracles)
+        if not per_neuron:
+            oracles = np.mean(oracles)
+        return oracles
+
+    def get_fraction_oracles(self, corrected: bool = False):
+        oracles = self.get_oracles(corrected=corrected, per_neuron=True)
+        pred_correlations = self.single_trial_correlation(per_neuron=True)
+        oracle_performance, _, _, _ = np.linalg.lstsq(
+            np.hstack(oracles)[:, np.newaxis], np.hstack(pred_correlations)
+        )
+        return oracle_performance

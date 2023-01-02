@@ -1,11 +1,10 @@
 import torch
-import typing as t
 import numpy as np
+import typing as t
 from torch.utils.data import DataLoader
 from torch.nn.modules.loss import _Loss
 
-
-REDUCTION = t.Literal["sum", "mean"]
+from sensorium.models.utils import BufferDict
 
 _CRITERION = dict()
 
@@ -17,6 +16,10 @@ def register(name):
         return fn
 
     return add_to_dict
+
+
+REDUCTION = t.Literal["sum", "mean"]
+EPS = torch.finfo(torch.float32).eps
 
 
 def msse(y_true: torch.Tensor, y_pred: torch.Tensor, reduction: REDUCTION = "sum"):
@@ -76,7 +79,7 @@ def correlation(
     y1: t.Union[torch.Tensor, np.ndarray],
     y2: t.Union[torch.Tensor, np.ndarray],
     dim: t.Union[None, int, t.Tuple[int]] = -1,
-    eps: float = 1e-8,
+    eps: t.Union[torch.Tensor, float] = 1e-8,
     **kwargs,
 ):
     return (
@@ -95,29 +98,25 @@ class Loss(_Loss):
         ds: t.Dict[int, DataLoader],
         size_average: bool = None,
         reduce: bool = None,
-        reduction: str = "mean",
+        reduction: REDUCTION = "sum",
     ):
         super(Loss, self).__init__(
             size_average=size_average, reduce=reduce, reduction=reduction
         )
-        self._device = args.device
-        self._ds_scale = args.ds_scale
-        self._get_ds_sizes(ds)
-
-    def _get_ds_sizes(self, ds: t.Dict[int, DataLoader]):
-        self._ds_sizes = {
-            mouse_id: torch.tensor(
-                len(mouse_ds.dataset), dtype=torch.int32, device=self._device
-            )
-            for mouse_id, mouse_ds in ds.items()
-        }
+        self.ds_scale = args.ds_scale
+        self.ds_sizes = BufferDict(
+            buffers={
+                str(mouse_id): torch.tensor(len(mouse_ds.dataset), dtype=torch.float32)
+                for mouse_id, mouse_ds in ds.items()
+            }
+        )
 
     def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
         """Scale loss based on the size of the dataset"""
-        loss_scale = (
-            torch.sqrt(self._ds_sizes[mouse_id] / batch_size) if self._ds_scale else 1.0
-        )
-        return loss_scale * loss
+        if self.ds_scale:
+            scale = torch.sqrt(self.ds_sizes[str(mouse_id)] / batch_size)
+            loss = scale * loss
+        return loss
 
 
 @register("msse")
@@ -138,19 +137,22 @@ class MSSE(Loss):
 
 @register("poisson")
 class PoissonLoss(Loss):
-    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = 1e-12):
-        super(PoissonLoss, self).__init__(args, ds=ds)
-        self.eps = torch.tensor(eps, device=args.device)
-
-    def forward(
+    def __init__(
         self,
-        y_true: torch.Tensor,
-        y_pred: torch.Tensor,
-        mouse_id: int,
+        args,
+        ds: t.Dict[int, DataLoader],
+        eps: float = EPS,
         reduction: REDUCTION = "sum",
     ):
-        loss = poisson_loss(y_true, y_pred, eps=self.eps, reduction=reduction)
-        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        super(PoissonLoss, self).__init__(args, ds=ds, reduction=reduction)
+        self.register_buffer("eps", torch.tensor(eps))
+
+    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
+        batch_size = y_true.size(0)
+        # add eps to targets and predictions to avoid numeric instability
+        y_true, y_pred = y_true + self.eps, y_pred + self.eps
+        loss = torch.sum(y_pred - y_true * torch.log(y_pred))
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=batch_size)
         return loss
 
 
@@ -158,15 +160,18 @@ class PoissonLoss(Loss):
 class Correlation(Loss):
     """single trial correlation"""
 
+    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = EPS):
+        super(Correlation, self).__init__(args, ds=ds)
+        self.register_buffer("eps", torch.tensor(eps))
+
     def forward(
         self,
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
         mouse_id: int,
-        eps: float = 1e-8,
     ):
         num_neurons = y_true.size(1)
-        corr = correlation(y1=y_true, y2=y_pred, dim=0, eps=eps)
+        corr = correlation(y1=y_true, y2=y_pred, dim=0, eps=self.eps)
         loss = num_neurons - torch.sum(corr)
         loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
         return loss
@@ -174,4 +179,6 @@ class Correlation(Loss):
 
 def get_criterion(args, ds: t.Dict[int, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
-    return _CRITERION[args.criterion](args, ds=ds)
+    criterion = _CRITERION[args.criterion](args, ds=ds)
+    criterion.to(args.device)
+    return criterion

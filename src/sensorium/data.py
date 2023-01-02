@@ -5,7 +5,6 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
-from skimage.transform import rescale, resize, rotate
 from torch.utils.data import Dataset, DataLoader
 
 from sensorium.utils import utils
@@ -21,6 +20,46 @@ MICE = {
     5: "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
     6: "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
 }
+
+
+class CycleDataloaders:
+    """
+    Cycles through dataloaders until the loader with the largest size is
+    exhausted.
+    """
+
+    def __init__(self, ds: t.Dict[int, DataLoader]):
+        self.ds = ds
+        self.max_iterations = max([len(ds) for ds in self.ds.values()])
+
+    @staticmethod
+    def cycle(iterable: t.Iterable):
+        # see https://github.com/pytorch/pytorch/issues/23900
+        iterator = iter(iterable)
+        while True:
+            try:
+                yield next(iterator)
+            except StopIteration:
+                iterator = iter(iterable)
+
+    def __iter__(self):
+        cycles = [self.cycle(loader) for loader in self.ds.values()]
+        for mouse_id, mouse_ds, _ in zip(
+            self.cycle(self.ds.keys()),
+            (self.cycle(cycles)),
+            range(len(self.ds) * self.max_iterations),
+        ):
+            yield mouse_id, next(mouse_ds)
+
+    def __len__(self):
+        return len(self.ds) * self.max_iterations
+
+
+def micro_batching(batch: t.Dict[str, torch.Tensor], micro_batch_size: int):
+    """Divide batch into micro batches"""
+    indexes = np.arange(0, len(batch["image"]), step=micro_batch_size, dtype=int)
+    for i in indexes:
+        yield {k: v[i : i + micro_batch_size] for k, v in batch.items()}
 
 
 def unzip(filename: str, unzip_dir: str):
@@ -158,8 +197,8 @@ class MiceDataset(Dataset):
         self.tier = tier
         self.mouse_id = mouse_id
         metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
-        self.include_behaviour = args.include_behaviour
-        if self.include_behaviour and mouse_id == 0:
+        self.behavior_mode = args.behavior_mode
+        if self.behavior_mode and mouse_id == 0:
             raise ValueError("Mouse 0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
@@ -175,15 +214,7 @@ class MiceDataset(Dataset):
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
-        image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
-        assert args.crop_mode in (0, 1, 2, 3)
-        self.crop_mode = args.crop_mode
-        if self.crop_mode == 1:
-            image_shape = (1, 36, 64)
-        # include the 3 behaviour data as channel of the image
-        if self.include_behaviour:
-            image_shape = (image_shape[0] + 3, image_shape[1], image_shape[2])
-        self.image_shape = image_shape
+        self.image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
 
     def __len__(self):
         return len(self.indexes)
@@ -208,27 +239,13 @@ class MiceDataset(Dataset):
     def num_neurons(self):
         return len(self.neuron_ids)
 
-    @staticmethod
-    def resize_image(image: np.ndarray, height: int = 36, width: int = 64):
-        image = resize(
-            image,
-            output_shape=(image.shape[0], height, width),
-            clip=True,
-            preserve_range=True,
-            anti_aliasing=False,
-        )
-        return image
-
     def transform_image(self, image: np.ndarray):
         stats = self.image_stats
-        image = (image - stats["mean"]) / stats["std"]
-        if self.crop_mode == 1:
-            image = self.resize_image(image)
-        return image
+        return (image - stats["mean"]) / stats["std"]
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
-        if self.include_behaviour:
+        if self.behavior_mode == 1:
             image = (
                 torch.unsqueeze(image[0], dim=0)
                 if len(image.shape) == 3
@@ -266,14 +283,6 @@ class MiceDataset(Dataset):
     def i_transform_response(self, response: t.Union[np.ndarray, torch.Tensor]):
         return response / self._response_precision
 
-    def add_behavior_to_image(self, image: np.ndarray, behavior: np.ndarray):
-        # broadcast each behavior variable to (height, width)
-        behaviour = np.tile(behavior, reps=(image.shape[1], image.shape[2], 1))
-        # transpose to (channel, height, width)
-        behaviour = np.transpose(behaviour, axes=[2, 0, 1])
-        image = np.concatenate((image, behaviour), axis=0)
-        return image
-
     def __getitem__(self, idx: t.Union[int, torch.Tensor]):
         """Return data and metadata
 
@@ -293,10 +302,6 @@ class MiceDataset(Dataset):
         data["response"] = self.transform_response(data["response"])
         data["behavior"] = self.transform_behavior(data["behavior"])
         data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
-        if self.include_behaviour:
-            data["image"] = self.add_behavior_to_image(
-                image=data["image"], behavior=data["behavior"]
-            )
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]
         data["mouse_id"] = self.mouse_id
@@ -306,7 +311,7 @@ class MiceDataset(Dataset):
 def get_training_ds(
     args,
     data_dir: str,
-    mouse_ids: t.List[int] = None,
+    mouse_ids: t.List[int],
     batch_size: int = 1,
     device: torch.device = torch.device("cpu"),
 ):
@@ -326,12 +331,9 @@ def get_training_ds(
         test_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the test
             sets where keys are the mouse IDs.
     """
-    if mouse_ids is None:
-        mouse_ids = list(range(1, 7)) if args.include_behaviour else list(range(0, 7))
-
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}
-    if device.type in ["cuda", "mps"]:
+    if device.type in ("cuda", "mps"):
         gpu_kwargs = {"prefetch_factor": 2, "pin_memory": True}
         dataloader_kwargs.update(gpu_kwargs)
 
@@ -402,36 +404,3 @@ def get_submission_ds(
             )
 
     return test_ds, final_test_ds
-
-
-class CycleDataloaders:
-    """
-    Cycles through dataloaders until the loader with the largest size is
-    exhausted.
-    """
-
-    def __init__(self, ds: t.Dict[int, DataLoader]):
-        self.ds = ds
-        self.max_iterations = max([len(ds) for ds in self.ds.values()])
-
-    @staticmethod
-    def cycle(iterable: t.Iterable):
-        # see https://github.com/pytorch/pytorch/issues/23900
-        iterator = iter(iterable)
-        while True:
-            try:
-                yield next(iterator)
-            except StopIteration:
-                iterator = iter(iterable)
-
-    def __iter__(self):
-        cycles = [self.cycle(loader) for loader in self.ds.values()]
-        for mouse_id, mouse_ds, _ in zip(
-            self.cycle(self.ds.keys()),
-            (self.cycle(cycles)),
-            range(len(self.ds) * self.max_iterations),
-        ):
-            yield mouse_id, next(mouse_ds)
-
-    def __len__(self):
-        return len(self.ds) * self.max_iterations

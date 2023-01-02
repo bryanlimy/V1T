@@ -11,6 +11,7 @@ import seaborn as sns
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from torchvision import transforms
+import matplotlib.font_manager as font_manager
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -37,6 +38,16 @@ GRAY = cm.get_cmap("gray")
 TURBO = cm.get_cmap("turbo")
 COLORMAP = TURBO
 GRAY2RGB = COLORMAP(np.arange(256))[:, :3]
+
+
+def set_font():
+    font_path = "/Users/bryanlimy/Git/font-lexend/Lexend-Regular.ttf"
+    if os.path.exists(font_path):
+        font_manager.fontManager.addfont(path=font_path)
+        prop = font_manager.FontProperties(fname=font_path)
+        plt.rcParams.update(
+            {"font.family": "sans-serif", "font.sans-serif": prop.get_name()}
+        )
 
 
 def remove_spines(axis: matplotlib.axes.Axes):
@@ -67,12 +78,14 @@ def set_right_label(axis: matplotlib.axes.Axes, label: str, fontsize: int = None
 def set_xticks(
     axis: matplotlib.axes.Axes,
     ticks_loc: t.Union[np.ndarray, list],
-    ticks: t.Union[np.ndarray, list],
+    ticks: t.Union[np.ndarray, list] = None,
     label: str = "",
     tick_fontsize: int = None,
     label_fontsize: int = None,
 ):
     axis.set_xticks(ticks_loc)
+    if ticks is None:
+        ticks = ticks_loc
     axis.set_xticklabels(ticks, fontsize=tick_fontsize)
     if label:
         axis.set_xlabel(label, fontsize=label_fontsize)
@@ -81,15 +94,23 @@ def set_xticks(
 def set_yticks(
     axis: matplotlib.axes.Axes,
     ticks_loc: t.Union[np.ndarray, list],
-    ticks: t.Union[np.ndarray, list],
+    ticks: t.Union[np.ndarray, list] = None,
     label: str = "",
     tick_fontsize: int = None,
     label_fontsize: int = None,
 ):
     axis.set_yticks(ticks_loc)
+    if ticks is None:
+        ticks = ticks_loc
     axis.set_yticklabels(ticks, fontsize=tick_fontsize)
     if label:
         axis.set_ylabel(label, fontsize=label_fontsize)
+
+
+def set_ticks_params(
+    axis: matplotlib.axes.Axes, length: int = PARAMS_LENGTH, pad: int = PARAMS_PAD
+):
+    axis.tick_params(axis="both", which="both", length=length, pad=pad, colors="black")
 
 
 def save_figure(figure: plt.Figure, filename: str, dpi: int = 120, close: bool = True):
@@ -206,51 +227,133 @@ class Summary(object):
     def plot_image_response(
         self,
         tag: str,
-        results: t.Dict[str, torch.Tensor],
+        results: t.Dict[str, np.ndarray],
         step: int = 0,
         mode: int = 1,
-        num_samples: int = 3,
     ):
-        """Plot 3 image-prediction-response for each mouse"""
-        label_fontsize, tick_fontsize = 12, 10
-        figure, axes = plt.subplots(
-            nrows=num_samples,
-            ncols=3,
-            gridspec_kw={"wspace": 0.1, "hspace": 0.2},
-            figsize=(10, 2 * num_samples),
-            dpi=self.dpi,
-        )
+        """Plot image-prediction-response for each mouse"""
+        num_samples = len(results["images"])
+        wspace, hspace = 0.1, 1.0
+        label_fontsize, tick_fontsize = 10, 9
+        figure = plt.figure(figsize=(10, 1.8 * num_samples), dpi=self.dpi)
+        sub_figures = figure.subfigures(nrows=num_samples, ncols=1, hspace=hspace)
+        num_neurons = results["predictions"].shape[1]
+        x_axis = np.arange(num_neurons)
 
-        x_axis = np.arange(results["predictions"].shape[1])
+        # the (x, y) coordinates in crop_grids are in range [-1, 1]
+        # need to convert to [0, 144] and [0, 256] in height and width
+        # matplotlib assume top left corner of the image is (0, 0)
+        _, _, h, w = results["images"].shape
+        image_grids = [w, h] * (results["image_grids"] + 1) / 2
+        image_grids = np.round(image_grids, 0)
 
         for i in range(num_samples):
-            image = results["images"][i].numpy()
-            target = results["targets"][i].numpy()
-            prediction = results["predictions"][i].numpy()
+            axes = sub_figures[i].subplots(
+                nrows=1,
+                ncols=4,
+                gridspec_kw={
+                    "width_ratios": [0.5, 0.5, 1, 1],
+                    "wspace": wspace,
+                    "hspace": hspace,
+                },
+            )
+            image = results["images"][i]
+            crop_image = results["crop_images"][i]
+            image_grid = image_grids[i]
+            target = results["targets"][i]
+            prediction = results["predictions"][i]
+            pupil_center = results["pupil_center"][i]
+            behavior = results["behaviors"][i]
+            axes[0].scatter(
+                x=x_axis,
+                y=target,
+                s=2,
+                alpha=0.8,
+                color="orangered",
+                label="target",
+            )
+            axes[1].scatter(
+                x=x_axis,
+                y=prediction,
+                s=2,
+                alpha=0.8,
+                color="dodgerblue",
+                label="prediction",
+            )
             y_max = np.ceil(max(np.max(target), np.max(prediction)))
-            axes[i, 0].scatter(x=x_axis, y=target, s=2, alpha=0.8, color="orangered")
-            axes[i, 0].set_ylim(bottom=0, top=y_max)
-            axes[i, 1].scatter(
-                x=x_axis, y=prediction, s=2, alpha=0.8, color="dodgerblue"
+            set_yticks(
+                axes[0],
+                ticks_loc=np.linspace(0, y_max, 3, dtype=int),
+                tick_fontsize=tick_fontsize,
             )
-            axes[i, 1].set_ylim(bottom=0, top=y_max)
-            axes[i, 1].set_yticks([])
-            axes[i, 2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255, aspect="auto")
-            axes[i, 2].set_xticks([])
-            axes[i, 2].set_yticks([])
-            remove_top_right_spines(axis=axes[i, 0])
-            remove_top_right_spines(axis=axes[i, 1])
-            remove_spines(axis=axes[i, 2])
-            axes[i, 2].set_xlabel(
-                f"Image ID: {results['image_ids'][i]}",
-                labelpad=0,
-                fontsize=tick_fontsize,
-            )
+            axes[0].set_ylim(0, y_max)
+            axes[1].set_ylim(0, y_max)
+            axes[1].set_yticks([])
+            remove_top_right_spines(axis=axes[0])
+            remove_top_right_spines(axis=axes[1])
 
-        axes[0, 0].set_title("Targets", fontsize=label_fontsize)
-        axes[0, 1].set_title("Predictions", fontsize=label_fontsize)
-        axes[1, 0].set_ylabel("Response", fontsize=label_fontsize)
-        axes[2, 1].set_xlabel("Neurons", fontsize=label_fontsize)
+            # plot image
+            axes[2].imshow(image[0], cmap=GRAY, vmin=0, vmax=255)
+            # overlay the cropping grid as a red rectangle box
+            axes[2].add_patch(
+                matplotlib.patches.Rectangle(
+                    image_grid[0, 0],
+                    width=image_grid.shape[1],
+                    height=image_grid.shape[0],
+                    alpha=1,
+                    edgecolor="red",
+                    facecolor="none",
+                    linewidth=2,
+                )
+            )
+            axes[2].set_xticks([])
+            axes[2].set_yticks([])
+            remove_spines(axis=axes[2])
+            axes[3].imshow(crop_image[0], cmap=GRAY, vmin=0, vmax=255)
+            axes[3].set_xticks([])
+            axes[3].set_yticks([])
+            remove_spines(axis=axes[3])
+
+            sub_figures[i].suptitle(
+                f"Image ID: {results['image_ids'][i]}\n"
+                f"pupil dilation: {behavior[0]:.02f}, "
+                f"derivative: {behavior[1]:.02f}, "
+                f"speed: {behavior[2]:.02f}, "
+                f"pupil center: ({pupil_center[0]:.02f}, {pupil_center[1]:.02f})",
+                y=1.05,
+                fontsize=label_fontsize,
+            )
+            if i == 0:
+                axes[0].legend(
+                    frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
+                )
+                axes[1].legend(
+                    frameon=False, handletextpad=0.3, handlelength=0.6, markerscale=2
+                )
+            if i == num_samples // 2:
+                axes[0].set_ylabel("Standardized responses", fontsize=label_fontsize)
+            if i == num_samples - 1:
+                x_ticks = np.linspace(0, num_neurons, num=3, dtype=int)
+                set_xticks(
+                    axis=axes[0],
+                    ticks_loc=x_ticks,
+                    tick_fontsize=tick_fontsize,
+                )
+                set_xticks(
+                    axis=axes[1],
+                    ticks_loc=x_ticks,
+                    label="Neurons",
+                    tick_fontsize=tick_fontsize,
+                    label_fontsize=label_fontsize,
+                )
+                axes[2].set_xlabel("Model input", fontsize=label_fontsize)
+                axes[3].set_xlabel("Core input", fontsize=label_fontsize)
+                sub_figures[i].align_ylabels(axes)
+            else:
+                axes[0].set_xticks([])
+                axes[1].set_xticks([])
+            for ax in axes:
+                set_ticks_params(axis=ax, pad=1, length=2)
 
         self.figure(
             tag=tag,

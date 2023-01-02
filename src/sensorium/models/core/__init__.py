@@ -1,5 +1,6 @@
-__all__ = ["conv", "get_core", "linear", "stacked2d", "mixer", "random", "stn", "vit"]
+__all__ = ["cct", "conv", "linear", "stacked2d", "mixer", "random", "stn", "vit"]
 
+from .cct import CCTCore
 from .conv import ConvCore
 from .core import get_core
 from .linear import LinearCore

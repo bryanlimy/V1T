@@ -169,11 +169,13 @@ def train(
     optimizer: torch.optim,
     summary: tensorboard.Summary,
     epoch: int,
+    device: torch.device = "cpu",
 ):
     results = {}
+    model.to(device)
     model.train(True)
     for images, _ in tqdm(ds, desc="Train", disable=args.verbose == 0):
-        images = images.to(model.device)
+        images = images.to(device)
         outputs = model(images)
         loss = criterion(y_true=images, y_pred=outputs)
         reg_loss = model.regularizer()
@@ -203,12 +205,14 @@ def validate(
     summary: tensorboard.Summary,
     epoch: int,
     mode: int = 1,
+    device: torch.device = "cpu",
 ):
     results, make_plot = {}, True
+    model.to(device)
     model.train(False)
     with torch.no_grad():
         for images, _ in tqdm(ds, desc="Val", disable=args.verbose == 0):
-            images = images.to(model.device)
+            images = images.to(device)
             outputs = model(images)
             loss = criterion(y_true=images, y_pred=outputs)
             utils.update_dict(

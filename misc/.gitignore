@@ -3,3 +3,5 @@
 *.svg
 *.pkl
 *.h5
+plots/
+.ipynb_checkpoints/

@@ -157,7 +157,8 @@ class Gaussian2DReadout(Readout):
                 bias = torch.from_numpy(bias)
             else:
                 raise NotImplementedError(
-                    f"Gaussian2dReadout: bias mode {self.bias_mode} has not been implemented."
+                    f"Gaussian2dReadout: bias mode {self.bias_mode} has not "
+                    f"been implemented."
                 )
             self.bias = nn.Parameter(bias)
         else:
@@ -230,7 +231,10 @@ class Gaussian2DReadout(Readout):
             )
 
     def forward(
-        self, inputs: torch.Tensor, sample: bool = None, shift: torch.Tensor = None
+        self,
+        inputs: torch.Tensor,
+        sample: bool = None,
+        shifts: torch.Tensor = None,
     ):
         """
         Propagates the input forwards through the readout
@@ -246,29 +250,23 @@ class Gaussian2DReadout(Readout):
                                 If sample is True/False, overrides the
                                 model_state (i.e. training or eval) and does
                                 as instructed
-            shift (torch.Tensor): shifts the location of the grid from
+            shifts (torch.Tensor): shifts the location of the grid from
                 eye-tracking data
         """
         batch_size, c, w, h = inputs.size()
-        c_in, w_in, h_in = self.input_shape
-        if (c_in, w_in, h_in) != (c, w, h):
-            raise ValueError(
-                f"shape mismatch between expected ({self.input_shape}) and "
-                f"received ({inputs.size()}) inputs."
-            )
         features = self.features.view(1, c, self.num_neurons)
         bias = self.bias
 
         # sample the grid_locations separately per image per batch
         grid = self.sample_grid(batch_size=batch_size, sample=sample)
 
-        if shift is not None:
-            grid = grid + shift[:, None, None, :]
+        if shifts is not None:
+            grid = grid + shifts[:, None, None, :]
 
         outputs = F.grid_sample(inputs, grid=grid, align_corners=True)
-        outputs = torch.squeeze(outputs, dim=-1) * features
+        outputs = torch.squeeze(outputs, dim=-1)
+        outputs = outputs * features
         outputs = torch.sum(outputs, dim=1)
-        outputs = outputs.view(batch_size, self.num_neurons)
 
         if bias is not None:
             outputs = outputs + bias

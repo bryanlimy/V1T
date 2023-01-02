@@ -26,7 +26,7 @@ class SpatialTransformerCore(Core):
         super(SpatialTransformerCore, self).__init__(
             args, input_shape=input_shape, name=name
         )
-        self.reg_scale = torch.tensor(args.core_reg_scale, device=args.device)
+        self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
 
         c, h, w = input_shape
 

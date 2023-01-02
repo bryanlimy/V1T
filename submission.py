@@ -35,7 +35,7 @@ def inference(
     ds: DataLoader,
     model: nn.Module,
     mouse_id: int,
-    device: torch.device = torch.device("cpu"),
+    device: torch.device = "cpu",
     desc: str = "",
 ) -> t.Dict[str, t.List[t.Union[float, int]]]:
     """
@@ -59,9 +59,12 @@ def inference(
     model.train(False)
     model.requires_grad_(False)
     for data in tqdm(ds, desc=desc, disable=args.verbose < 2):
-        images = data["image"].to(device)
-        pupil_center = data["pupil_center"].to(device)
-        predictions = model(images, mouse_id=mouse_id, pupil_center=pupil_center)
+        predictions, _, _ = model(
+            inputs=data["image"].to(device),
+            mouse_id=mouse_id,
+            behaviors=data["behavior"].to(device),
+            pupil_centers=data["pupil_center"].to(device),
+        )
         results["predictions"].extend(predictions.cpu().numpy().tolist())
         results["image_ids"].extend(data["image_id"].numpy().tolist())
         results["trial_ids"].extend(data["trial_id"])
@@ -174,13 +177,13 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--dataset",
+        "--dataset/sensorium",
         type=str,
         default="data",
         help="path to directory where the compressed dataset is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", default=16, type=int)
     parser.add_argument(
         "--device",
         type=str,

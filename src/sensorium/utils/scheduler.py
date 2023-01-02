@@ -5,6 +5,7 @@ import numpy as np
 from torch import nn
 from torch.optim import Optimizer
 from collections import OrderedDict
+from torch.cuda.amp import GradScaler
 
 
 class Scheduler:
@@ -13,8 +14,9 @@ class Scheduler:
         args,
         model: nn.Module,
         optimizer: Optimizer = None,
+        scaler: GradScaler = None,
         mode: t.Literal["min", "max"] = "max",
-        max_reduce: int = 3,
+        max_reduce: int = 2,
         lr_patience: int = 10,
         factor: float = 0.3,
         min_epochs: int = 0,
@@ -27,6 +29,7 @@ class Scheduler:
             args: argparse parameters.
             model: Model, model.
             optimizer: (optional) torch.optim, optimizer.
+            scaler: (optional), GradScaler.
             mode: 'min' or 'max', compare objective by minimum or maximum
             max_reduce: int, maximum number of learning rate reductions before
                 terminating early stopping.
@@ -36,7 +39,7 @@ class Scheduler:
                 i.e. new_lr = factor * old_lr
             min_epochs: int, number of epochs to train the model before early
                 stopping begins monitoring.
-            save_optimizer: bool, save optimizer state dict to checkpoint.
+            save_optimizer: bool, save optimizer and scaler (if provided) state dict to checkpoint.
             save_scheduler: bool, save scheduler state dict to checkpoint.
             module_names: t.List[str], a list of module names in the model to
                 save in the checkpoint, save all modules if None.
@@ -48,6 +51,7 @@ class Scheduler:
         self.mode = mode
         self.model = model
         self.optimizer = optimizer
+        self.scaler = scaler
         self.module_names = module_names
         self.max_reduce = max_reduce
         self.num_reduce = 0
@@ -89,6 +93,8 @@ class Scheduler:
         }
         if self.save_optimizer:
             ckpt["optimizer"] = self.optimizer.state_dict()
+            if self.scaler is not None:
+                ckpt["scaler"] = self.scaler.state_dict()
         if self.save_scheduler:
             ckpt["scheduler"] = self.state_dict()
         torch.save(ckpt, f=filename)
@@ -105,7 +111,7 @@ class Scheduler:
         Load the best model in self.checkpoint_dir and return the epoch
         Args:
             force: bool, raise an error if checkpoint is not found.
-            load_optimizer: bool, load optimizer from checkpoint.
+            load_optimizer: bool, load optimizer and scaler (if exists) from checkpoint.
             load_scheduler: bool, load scheduler from checkpoint.
         Return:
             epoch: int, the number of epoch the model has been trained for,
@@ -124,10 +130,15 @@ class Scheduler:
             self.model.load_state_dict(state_dict)
             if load_optimizer and "optimizer" in ckpt:
                 self.optimizer.load_state_dict(ckpt["optimizer"])
+                if self.scaler is not None and "scaler" in ckpt:
+                    self.scaler.load_state_dict(ckpt["scaler"])
             if load_scheduler and "scheduler" in ckpt:
                 self.load_state_dict(ckpt["scheduler"])
             if self.verbose:
-                print(f"\nLoaded checkpoint (epoch {epoch}) from {filename}.\n")
+                print(
+                    f"\nLoaded checkpoint from epoch {epoch} "
+                    f"(correlation: {ckpt['value']:.04f}).\n"
+                )
         elif force:
             raise FileNotFoundError(f"Cannot find checkpoint in {self.checkpoint_dir}.")
         return epoch
@@ -153,10 +164,10 @@ class Scheduler:
         for i, param_group in enumerate(self.optimizer.param_groups):
             new_lr = self.factor * float(param_group["lr"])
             param_group["lr"] = new_lr
-            if self.verbose >= 2:
+            if self.verbose:
                 print(
                     f"Reduce learning rate of {param_group['name']} to "
-                    f"{new_lr:.04e} (num_reduce: {self.num_reduce})."
+                    f"{new_lr:.04e} (num. reduce: {self.num_reduce})."
                 )
 
     def step(self, value: t.Union[float, np.ndarray, torch.Tensor], epoch: int):

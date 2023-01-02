@@ -31,5 +31,5 @@ class LinearReadout(Readout):
             ),
         )
 
-    def forward(self, inputs: torch.Tensor, shift: torch.Tensor = None):
+    def forward(self, inputs: torch.Tensor, shifts: torch.Tensor = None):
         return self.linear(inputs)
