@@ -32,6 +32,13 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     }
 
 
+def gather(result: t.Dict[str, t.List[torch.Tensor]]):
+    return {
+        k: torch.sum(torch.stack(v)) if "loss" in k else torch.mean(torch.stack(v))
+        for k, v in result.items()
+    }
+
+
 def train_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
@@ -72,7 +79,7 @@ def train_step(
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
-    return {k: torch.mean(torch.stack(v)) for k, v in result.items()}
+    return gather(result)
 
 
 def train(
@@ -140,7 +147,7 @@ def validation_step(
                 **compute_metrics(y_true=responses, y_pred=outputs),
             },
         )
-    return {k: torch.mean(torch.stack(v)) for k, v in result.items()}
+    return gather(result)
 
 
 def validate(
