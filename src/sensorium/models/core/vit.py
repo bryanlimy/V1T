@@ -387,7 +387,7 @@ class ViTCore(Core):
         )
         grad_checkpointing = "cuda" in args.device.type
         if grad_checkpointing and args.verbose:
-            print(f"enable gradient checkpointing.\n")
+            print(f"Enable gradient checkpointing.")
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,
