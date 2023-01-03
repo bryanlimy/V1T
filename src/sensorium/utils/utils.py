@@ -421,19 +421,16 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            micro_batch_size += 1 if micro_batch_size == 1 else 2
+            micro_batch_size *= 2
         except RuntimeError:
             if args.verbose:
                 print(f"OOM at micro batch size {micro_batch_size}")
-            micro_batch_size -= 1 if micro_batch_size == 2 else 2
+            micro_batch_size /= 2
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
 
     assert micro_batch_size > 0
-    if micro_batch_size > 16:
-        # ensure no OOM due to sudden increase of GPU memory usage
-        micro_batch_size -= 2
     if args.verbose:
         print(f"set micro batch size to {micro_batch_size}")
     args.micro_batch_size = micro_batch_size
