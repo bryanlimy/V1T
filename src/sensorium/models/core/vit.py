@@ -333,6 +333,10 @@ class Transformer(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
+    def checkpoint_forward(self, fn, inputs: torch.Tensor):
+        outputs = checkpoint(fn, inputs, preserve_rng_state=False)
+        return self.drop_path(outputs) + inputs
+
     def forward(
         self,
         inputs: torch.Tensor,
@@ -345,8 +349,7 @@ class Transformer(nn.Module):
                 b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            mha_outputs = checkpoint(block["mha"], outputs, preserve_rng_state=False)
-            outputs = self.drop_path(mha_outputs) + outputs
+            outputs = self.checkpoint_forward(block["mha"], outputs)
             outputs = self.drop_path(block["mlp"](outputs)) + outputs
         return outputs
 
