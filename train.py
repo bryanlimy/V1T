@@ -409,6 +409,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument(
+        "--micro_batch_size",
+        default=0,
+        type=int,
+        help="micro batch size to train the model. if the model is being "
+        "trained on CUDA device and micro batch size 0 is provided, then "
+        "automatically increase micro batch size until OOM.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         choices=["cpu", "cuda", "mps"],
