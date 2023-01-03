@@ -29,6 +29,7 @@ class Args:
         self.format = "svg"
         self.clear_output_dir = False
         self.amp = False
+        self.grad_checkpointing = None
         self.verbose = verbose
         self.use_wandb = True
         for key, value in config.items():
