@@ -365,7 +365,7 @@ def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def compute_micro_batch_size(args, num_iterations: int = 5):
+def compute_micro_batch_size(args, num_iterations: int = 10):
     """
     Calculate the maximum micro batch size that can fill the GPU memory if
     CUDA device is set.
@@ -396,10 +396,10 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
     image_shape = args.input_shape
     random_input = lambda size: torch.rand(*size, device=device)
 
-    micro_batch_size = 1
+    batch_size, micro_batch_size = args.batch_size, 1
     while True:
-        if micro_batch_size >= args.batch_size:
-            micro_batch_size = args.batch_size
+        if micro_batch_size >= batch_size:
+            micro_batch_size = batch_size
             break
         try:
             # dummy training loop to mimic training and gradient accumulation
@@ -415,17 +415,18 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
                         y_true=random_input((micro_batch_size, *outputs.shape)),
                         y_pred=outputs,
                         mouse_id=mouse_id,
+                        batch_size=batch_size,
                     )
                     reg_loss = model.regularizer(mouse_id=mouse_id)
                     total_loss = loss + reg_loss
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            micro_batch_size *= 2
+            micro_batch_size += 1 if micro_batch_size == 1 else 2
         except RuntimeError:
             if args.verbose:
                 print(f"OOM at micro batch size {micro_batch_size}")
-            micro_batch_size //= 2
+            micro_batch_size -= 1 if micro_batch_size == 2 else 2
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()

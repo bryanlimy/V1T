@@ -7,6 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
+from torch.utils.checkpoint import checkpoint
 
 from sensorium.models.utils import DropPath
 
