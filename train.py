@@ -4,15 +4,14 @@ import wandb
 import argparse
 import numpy as np
 import typing as t
-from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
 from torch.utils.data import DataLoader
 
 from sensorium import losses, data
-from sensorium.models import get_model
 from sensorium.utils.logger import Logger
+from sensorium.models import get_model, Model
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
 
@@ -42,7 +41,7 @@ def gather(result: t.Dict[str, t.List[torch.Tensor]]):
 def train_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
-    model: nn.Module,
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
     scaler: GradScaler,
@@ -50,8 +49,8 @@ def train_step(
     micro_batch_size: int,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
-    result = {}
     model.to(device)
+    result, total_loss = {}, 0.0
     for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
@@ -62,30 +61,36 @@ def train_step(
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
             loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-            reg_loss = model.regularizer(mouse_id=mouse_id)
-            total_loss = loss + reg_loss
-        # calculate and accumulate gradients
-        scaler.scale(total_loss).backward()
-        utils.update_dict(
-            result,
-            {
-                "loss/loss": loss.detach(),
-                "loss/reg_loss": reg_loss.detach(),
-                "loss/total_loss": total_loss.detach(),
-                **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
-            },
-        )
+            total_loss += loss
+            utils.update_dict(
+                result,
+                {
+                    "loss/loss": loss.detach(),
+                    **compute_metrics(responses.detach(), outputs.detach()),
+                },
+            )
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = total_loss + reg_loss
+    # calculate and accumulate gradients
+    scaler.scale(total_loss).backward()
     if update:
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
+    utils.update_dict(
+        result,
+        {
+            "loss/reg_loss": reg_loss.detach(),
+            "loss/total_loss": total_loss.detach(),
+        },
+    )
     return gather(result)
 
 
 def train(
     args,
     ds: t.Dict[int, DataLoader],
-    model: nn.Module,
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
     scaler: GradScaler,
@@ -122,14 +127,14 @@ def train(
 def validation_step(
     mouse_id: int,
     batch: t.Dict[str, torch.Tensor],
-    model: nn.Module,
+    model: Model,
     criterion: losses.Loss,
     scaler: GradScaler,
     micro_batch_size: int,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
-    result = {}
     model.to(device)
+    result, total_loss = {}, 0.0
     for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
@@ -140,20 +145,30 @@ def validation_step(
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
             loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        utils.update_dict(
-            result,
-            {
-                "loss/loss": loss.detach(),
-                **compute_metrics(y_true=responses, y_pred=outputs),
-            },
-        )
+            total_loss += loss
+            utils.update_dict(
+                result,
+                {
+                    "loss/loss": loss.detach(),
+                    **compute_metrics(responses.detach(), outputs.detach()),
+                },
+            )
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = total_loss + reg_loss
+    utils.update_dict(
+        result,
+        {
+            "loss/reg_loss": reg_loss.detach(),
+            "loss/total_loss": total_loss.detach(),
+        },
+    )
     return gather(result)
 
 
 def validate(
     args,
     ds: t.Dict[int, DataLoader],
-    model: nn.Module,
+    model: Model,
     criterion: losses.Loss,
     scaler: GradScaler,
     epoch: int,
@@ -245,7 +260,7 @@ def main(args, wandb_sweep: bool = False):
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
+    # utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
