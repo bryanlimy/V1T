@@ -345,7 +345,8 @@ class Transformer(nn.Module):
                 b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            outputs = self.drop_path(checkpoint(block["mha"], outputs)) + outputs
+            mha_outputs = checkpoint(block["mha"], outputs, preserve_rng_state=False)
+            outputs = self.drop_path(mha_outputs) + outputs
             outputs = self.drop_path(block["mlp"](outputs)) + outputs
         return outputs
 
