@@ -431,6 +431,9 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
     torch.cuda.empty_cache()
 
     assert micro_batch_size > 0
+    if micro_batch_size > 16:
+        # ensure no OOM due to sudden increase of GPU memory usage
+        micro_batch_size -= 2
     if args.verbose:
         print(f"set micro batch size to {micro_batch_size}")
     args.micro_batch_size = micro_batch_size
