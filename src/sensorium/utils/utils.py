@@ -425,7 +425,7 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
         except RuntimeError:
             if args.verbose:
                 print(f"OOM at micro batch size {micro_batch_size}")
-            micro_batch_size /= 2
+            micro_batch_size //= 2
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()
