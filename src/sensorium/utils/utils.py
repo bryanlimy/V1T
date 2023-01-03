@@ -375,13 +375,13 @@ def compute_micro_batch_size(
     if hasattr(args, "micro_batch_size") and args.micro_batch_size:
         assert args.micro_batch_size <= args.batch_size
         return
+
     device = args.device
     if "cuda" not in device.type:
         args.micro_batch_size = args.batch_size
         return
 
     mouse_ids = args.mouse_ids
-
     # create dummy dataloaders, model, optimizer and criterion
     train_ds, _, _ = data.get_training_ds(
         args,
@@ -428,11 +428,11 @@ def compute_micro_batch_size(
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            micro_batch_size += 1 if micro_batch_size == 1 else 2
+            micro_batch_size += 7 if micro_batch_size == 1 else 8
         except RuntimeError:
             if args.verbose:
                 print(f"OOM at micro batch size {micro_batch_size}")
-            micro_batch_size -= 1 if micro_batch_size == 2 else 2
+            micro_batch_size -= 7 if micro_batch_size == 8 else 8
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()

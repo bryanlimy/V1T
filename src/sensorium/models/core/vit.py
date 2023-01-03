@@ -288,9 +288,11 @@ class Transformer(nn.Module):
         use_lsa: bool = False,
         drop_path: float = 0.0,
         use_bias: bool = True,
+        grad_checkpointing: bool = False,
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
+        self.grad_checkpointing = grad_checkpointing
         for i in range(num_blocks):
             block = nn.ModuleDict(
                 {
@@ -334,7 +336,10 @@ class Transformer(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def checkpoint_forward(self, fn, inputs: torch.Tensor):
-        outputs = checkpoint(fn, inputs, preserve_rng_state=False)
+        if self.grad_checkpointing:
+            outputs = checkpoint(fn, inputs, preserve_rng_state=False)
+        else:
+            outputs = fn(inputs)
         return self.drop_path(outputs) + inputs
 
     def forward(
@@ -380,6 +385,9 @@ class ViTCore(Core):
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
         )
+        grad_checkpointing = "cuda" in args.device.type
+        if grad_checkpointing and args.verbose:
+            print(f"enable gradient checkpointing.\n")
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,
@@ -392,6 +400,7 @@ class ViTCore(Core):
             use_lsa=args.use_lsa,
             drop_path=args.drop_path,
             use_bias=not args.disable_bias,
+            grad_checkpointing=grad_checkpointing,
         )
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
