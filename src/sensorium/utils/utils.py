@@ -365,7 +365,9 @@ def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def compute_micro_batch_size(args, num_iterations: int = 10):
+def compute_micro_batch_size(
+    args, batch_iterations: int = 5, micro_iterations: int = 10
+):
     """
     Calculate the maximum micro batch size that can fill the GPU memory if
     CUDA device is set.
@@ -403,22 +405,25 @@ def compute_micro_batch_size(args, num_iterations: int = 10):
             break
         try:
             # dummy training loop to mimic training and gradient accumulation
-            for _ in range(num_iterations):
+            for _ in range(batch_iterations):
                 for mouse_id in mouse_ids:
-                    outputs, _, _ = model(
-                        inputs=random_input((micro_batch_size, *image_shape)),
-                        mouse_id=mouse_id,
-                        behaviors=random_input((micro_batch_size, 3)),
-                        pupil_centers=random_input((micro_batch_size, 2)),
-                    )
-                    loss = criterion(
-                        y_true=random_input((micro_batch_size, *outputs.shape)),
-                        y_pred=outputs,
-                        mouse_id=mouse_id,
-                        batch_size=batch_size,
-                    )
+                    batch_loss = 0.0
+                    for _ in range(micro_iterations):
+                        outputs, _, _ = model(
+                            inputs=random_input((micro_batch_size, *image_shape)),
+                            mouse_id=mouse_id,
+                            behaviors=random_input((micro_batch_size, 3)),
+                            pupil_centers=random_input((micro_batch_size, 2)),
+                        )
+                        loss = criterion(
+                            y_true=random_input((micro_batch_size, *outputs.shape)),
+                            y_pred=outputs,
+                            mouse_id=mouse_id,
+                            batch_size=batch_size,
+                        )
+                        batch_loss += loss
                     reg_loss = model.regularizer(mouse_id=mouse_id)
-                    total_loss = loss + reg_loss
+                    total_loss = batch_loss + reg_loss
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
