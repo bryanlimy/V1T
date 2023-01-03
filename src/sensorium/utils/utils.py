@@ -373,6 +373,7 @@ def compute_micro_batch_size(
     CUDA device is set.
     """
     if hasattr(args, "micro_batch_size") and args.micro_batch_size:
+        assert args.micro_batch_size <= args.batch_size
         return
     device = args.device
     if "cuda" not in device.type:
