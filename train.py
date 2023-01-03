@@ -50,7 +50,8 @@ def train_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    result, total_loss = {}, 0.0
+    result, batch_loss = {}, 0.0
+    batch_size = batch["image"].size(0)
     for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
@@ -60,17 +61,19 @@ def train_step(
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
-            loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-            total_loss += loss
+            loss = criterion(
+                y_true=responses,
+                y_pred=outputs,
+                mouse_id=mouse_id,
+                batch_size=batch_size,
+            )
+            batch_loss += loss
             utils.update_dict(
                 result,
-                {
-                    "loss/loss": loss.detach(),
-                    **compute_metrics(responses.detach(), outputs.detach()),
-                },
+                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
             )
     reg_loss = model.regularizer(mouse_id=mouse_id)
-    total_loss = total_loss + reg_loss
+    total_loss = batch_loss + reg_loss
     # calculate and accumulate gradients
     scaler.scale(total_loss).backward()
     if update:
@@ -80,6 +83,7 @@ def train_step(
     utils.update_dict(
         result,
         {
+            "loss/loss": batch_loss.detach(),
             "loss/reg_loss": reg_loss.detach(),
             "loss/total_loss": total_loss.detach(),
         },
@@ -134,7 +138,8 @@ def validation_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    result, total_loss = {}, 0.0
+    result, batch_loss = {}, 0.0
+    batch_size = batch["image"].size(0)
     for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
@@ -144,20 +149,23 @@ def validation_step(
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
-            loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-            total_loss += loss
+            loss = criterion(
+                y_true=responses,
+                y_pred=outputs,
+                mouse_id=mouse_id,
+                batch_size=batch_size,
+            )
+            batch_loss += loss
             utils.update_dict(
                 result,
-                {
-                    "loss/loss": loss.detach(),
-                    **compute_metrics(responses.detach(), outputs.detach()),
-                },
+                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
             )
     reg_loss = model.regularizer(mouse_id=mouse_id)
-    total_loss = total_loss + reg_loss
+    total_loss = batch_loss + reg_loss
     utils.update_dict(
         result,
         {
+            "loss/loss": batch_loss.detach(),
             "loss/reg_loss": reg_loss.detach(),
             "loss/total_loss": total_loss.detach(),
         },
@@ -260,7 +268,7 @@ def main(args, wandb_sweep: bool = False):
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    # utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
+    utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
