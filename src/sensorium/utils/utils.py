@@ -366,7 +366,7 @@ def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
 
 
 def compute_micro_batch_size(
-    args, batch_iterations: int = 5, micro_iterations: int = 10
+    args, batch_iterations: int = 5, micro_iterations: int = 5
 ):
     """
     Calculate the maximum micro batch size that can fill the GPU memory if
