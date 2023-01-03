@@ -217,7 +217,6 @@ def main(args, wandb_sweep: bool = False):
         args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
 
     # find micro batch size
-    assert args.batch_size > 0 and args.batch_size % 8 == 0
     utils.compute_micro_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
