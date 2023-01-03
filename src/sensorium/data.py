@@ -55,11 +55,11 @@ class CycleDataloaders:
         return len(self.ds) * self.max_iterations
 
 
-def micro_batching(batch: t.Dict[str, torch.Tensor], micro_batch_size: int):
+def micro_batching(batch: t.Dict[str, torch.Tensor], batch_size: int):
     """Divide batch into micro batches"""
-    indexes = np.arange(0, len(batch["image"]), step=micro_batch_size, dtype=int)
+    indexes = np.arange(0, len(batch["image"]), step=batch_size, dtype=int)
     for i in indexes:
-        yield {k: v[i : i + micro_batch_size] for k, v in batch.items()}
+        yield {k: v[i : i + batch_size] for k, v in batch.items()}
 
 
 def unzip(filename: str, unzip_dir: str):

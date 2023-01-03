@@ -57,9 +57,7 @@ def inference(
     model.to(device)
     model.train(False)
     for batch in ds:
-        for micro_batch in data.micro_batching(
-            batch, micro_batch_size=micro_batch_size
-        ):
+        for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
             predictions, _, _ = model(
                 inputs=micro_batch["image"].to(device),
                 mouse_id=mouse_id,
@@ -212,7 +210,7 @@ def plot_samples(
         i_transform_image = mouse_ds.dataset.i_transform_image
         for batch in mouse_ds:
             for micro_batch in data.micro_batching(
-                batch, micro_batch_size=args.micro_batch_size
+                batch, batch_size=args.micro_batch_size
             ):
                 images = micro_batch["image"]
                 predictions, crop_images, image_grids = model(

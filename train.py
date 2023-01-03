@@ -51,7 +51,7 @@ def train_step(
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
     result, total_loss = {}, 0.0
-    for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
+    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
             outputs, _, _ = model(
@@ -135,7 +135,7 @@ def validation_step(
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
     result, total_loss = {}, 0.0
-    for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
+    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
             outputs, _, _ = model(
