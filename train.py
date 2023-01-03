@@ -216,7 +216,10 @@ def main(args, wandb_sweep: bool = False):
     if not args.mouse_ids:
         args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
 
-    # find micro batch size
+    if args.grad_checkpointing is None:
+        args.grad_checkpointing = "cuda" in args.device.type
+    if args.grad_checkpointing and args.verbose:
+        print(f"Enable gradient checkpointing for ViT.")
     utils.compute_micro_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
@@ -434,6 +437,13 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument(
         "--amp", action="store_true", help="automatic mixed precision training"
+    )
+    parser.add_argument(
+        "--grad_checkpointing",
+        type=bool,
+        default=None,
+        help="Enable gradient checkpointing. If None is provided, then enable "
+        "by default if CUDA is detected.",
     )
 
     # optimizer settings

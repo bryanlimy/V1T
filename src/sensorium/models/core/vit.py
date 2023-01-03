@@ -385,9 +385,8 @@ class ViTCore(Core):
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
         )
-        grad_checkpointing = "cuda" in args.device.type
-        if grad_checkpointing and args.verbose:
-            print(f"Enable gradient checkpointing.")
+        if not hasattr(args, "grad_checkpointing"):
+            args.grad_checkpointing = False
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,
@@ -400,7 +399,7 @@ class ViTCore(Core):
             use_lsa=args.use_lsa,
             drop_path=args.drop_path,
             use_bias=not args.disable_bias,
-            grad_checkpointing=grad_checkpointing,
+            grad_checkpointing=args.grad_checkpointing,
         )
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
