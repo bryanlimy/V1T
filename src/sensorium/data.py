@@ -5,13 +5,18 @@ import typing as t
 from glob import glob
 from tqdm import tqdm
 from zipfile import ZipFile
+from datetime import datetime
 from torch.utils.data import Dataset, DataLoader
 
 from sensorium.utils import utils
 
+# dataset names
+DS_NAMES = t.Literal["sensorium", "franke2022"]
+
+
 # key - mouse ID, value - filename of the recordings
-# Mouse 1: Sensorium, Mouse 2:Sensorium+, Mouse 3-7: pre-training
-MICE = {
+# Mouse 0: Sensorium, Mouse 1: Sensorium+, Mouse 3-7: pre-training
+SENSORIUM = {
     0: "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
     1: "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
     2: "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
@@ -20,6 +25,39 @@ MICE = {
     5: "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
     6: "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
 }
+
+FRANKE2022 = {
+    0: "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    1: "static25311-11-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    2: "static25311-4-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    3: "static25311-5-8-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    4: "static25311-7-34-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    5: "static25311-9-24-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    6: "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    7: "static25340-4-21-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    8: "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    9: "static25704-3-11-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    10: "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    11: "static25830-10-6-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    12: "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    13: "static26085-6-4-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    14: "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    15: "static26142-2-9-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    16: "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    17: "static26426-18-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    18: "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    19: "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    20: "static26644-6-3-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    21: "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    22: "static26872-24-3-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    23: "static26872-25-7-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    24: "static26872-26-8-ColorImageNet-b7d5a544978737ca47635aaa9307b73c",
+}
+
+
+def get_mouse2path(ds_name: DS_NAMES):
+    assert ds_name in ("sensorium", "franke2022")
+    return SENSORIUM if ds_name == "sensorium" else FRANKE2022
 
 
 class CycleDataloaders:
@@ -76,9 +114,15 @@ def get_num_trials(mouse_dir: str):
     return len(glob(os.path.join(mouse_dir, "data", "images", "*.npy")))
 
 
-def get_image_shape(data_dir: str, mouse_id: int = 0):
-    image = np.load(os.path.join(data_dir, MICE[mouse_id], "data", "images", "0.npy"))
+def get_image_shape(mouse_dir: str):
+    image = np.load(os.path.join(mouse_dir, "data", "images", "0.npy"))
     return image.shape
+
+
+def str2datetime(array: np.ndarray):
+    """Convert timestamps to datetime"""
+    fn = lambda s: np.datetime64(datetime.strptime(s[11:-2], "%Y-%m-%d %H:%M:%S"))
+    return np.vectorize(fn)(array)
 
 
 def load_trial_data(
@@ -99,7 +143,7 @@ def load_trial_data(
     }
 
 
-def load_mouse_metadata(mouse_dir: str):
+def load_mouse_metadata(ds_name: DS_NAMES, mouse_dir: str):
     """Load the relevant metadata of a specific mouse
     mouse_dir: str
         - path to the mouse data directory
@@ -136,9 +180,7 @@ def load_mouse_metadata(mouse_dir: str):
         "num_neurons": len(load_neuron("unit_ids.npy")),
         "neuron_ids": load_neuron("unit_ids.npy").astype(np.int32),
         "coordinates": load_neuron("cell_motor_coordinates.npy").astype(np.float32),
-        "image_id": load_trial("frame_image_id.npy").astype(np.int32),
         "tiers": load_trial("tiers.npy"),
-        "trial_id": load_trial("trial_idx.npy"),
         "stats": {
             "image": {k: load_stat("images", k) for k in stat_keys},
             "response": {k: load_stat("responses", k) for k in stat_keys},
@@ -146,12 +188,32 @@ def load_mouse_metadata(mouse_dir: str):
             "pupil_center": {k: load_stat("pupil_center", k) for k in stat_keys},
         },
     }
-    if np.issubdtype(metadata["trial_id"].dtype, np.integer):
-        metadata["trial_id"] = metadata["trial_id"].astype(np.int32)
+    # load image IDs
+    if ds_name == "sensorium":
+        metadata["image_ids"] = load_trial("frame_image_id.npy")
+    else:
+        metadata["image_ids"] = load_trial("colorframeprojector_image_id.npy")
+
+    # load trial timestamps
+    if ds_name == "sensorium":
+        metadata["trial_ts"] = load_trial("frame_trial_ts.npy")
+    else:
+        metadata["trial_ts"] = load_trial("colorframeprojector_trial_ts.npy")
+    metadata["trial_ts"] = str2datetime(metadata["trial_ts"])
+
+    # load animal ID
+    animal_ids = np.unique(load_neuron("animal_ids.npy"))
+    assert len(animal_ids) == 1, f"Multiple animal ID in {os.path.dirname(meta_dir)}."
+    metadata["animal_id"] = animal_ids[0]
+
+    # load trial IDs
+    metadata["trial_ids"] = load_trial("trial_idx.npy")
+    if np.issubdtype(metadata["trial_ids"].dtype, np.integer):
+        metadata["trial_ids"] = metadata["trial_ids"].astype(np.int32)
     return metadata
 
 
-def load_mouse_data(mouse_dir: str):
+def load_mouse_data(ds_name: DS_NAMES, mouse_dir: str):
     """Load data and metadata from mouse_dir"""
     if not os.path.isdir(mouse_dir):
         unzip(
@@ -166,17 +228,24 @@ def load_mouse_data(mouse_dir: str):
     mouse_data = {
         k: np.stack(v, axis=0).astype(np.float32) for k, v in mouse_data.items()
     }
-    return mouse_data, load_mouse_metadata(mouse_dir)
+    return mouse_data, load_mouse_metadata(ds_name, mouse_dir=mouse_dir)
 
 
-def load_mice_data(mice_dir: str, mouse_ids: t.List[int] = None, verbose: int = 1):
+def load_mice_data(
+    ds_name: DS_NAMES,
+    mice_dir: str,
+    mouse_ids: t.List[int] = None,
+    verbose: int = 1,
+):
     """Load data and metadata for mouse_ids into dictionaries where key is the mouse_id"""
+    mouse2path = get_mouse2path(ds_name)
     if mouse_ids is None:
-        mouse_ids = list(range(len(MICE)))
+        mouse_ids = list(range(len(mouse2path)))
     mice_data, mice_meta = {}, {}
     for mouse_id in tqdm(mouse_ids, desc="Loading", disable=verbose == 0):
         mice_data[mouse_id], mice_meta[mouse_id] = load_mouse_data(
-            mouse_dir=os.path.join(mice_dir, MICE[mouse_id])
+            ds_name=ds_name,
+            mouse_dir=os.path.join(mice_dir, mouse2path[mouse_id]),
         )
     return mice_data, mice_meta
 
@@ -196,7 +265,11 @@ class MiceDataset(Dataset):
         assert tier in ("train", "validation", "test", "final_test")
         self.tier = tier
         self.mouse_id = mouse_id
-        metadata = load_mouse_metadata(os.path.join(data_dir, MICE[mouse_id]))
+        self.ds_name = os.path.basename(data_dir)
+        assert self.ds_name in ("sensorium", "franke2022")
+        mouse2path = get_mouse2path(self.ds_name)
+        mouse_dir = os.path.join(data_dir, mouse2path[mouse_id])
+        metadata = load_mouse_metadata(self.ds_name, mouse_dir=mouse_dir)
         self.behavior_mode = args.behavior_mode
         if self.behavior_mode and mouse_id == 0:
             raise ValueError("Mouse 0 does not have behaviour data.")
@@ -206,15 +279,15 @@ class MiceDataset(Dataset):
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
         self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
-        self.image_ids = metadata["image_id"][self.indexes]
-        self.trial_ids = metadata["trial_id"][self.indexes]
+        self.image_ids = metadata["image_ids"][self.indexes]
+        self.trial_ids = metadata["trial_ids"][self.indexes]
         # standardizer for responses
         self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
         self.hashed = mouse_id in (0, 1)
 
-        self.image_shape = get_image_shape(data_dir, mouse_id=mouse_id)
+        self.image_shape = get_image_shape(mouse_dir)
 
     def __len__(self):
         return len(self.indexes)
