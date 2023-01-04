@@ -338,7 +338,7 @@ class Transformer(nn.Module):
     def checkpointing(self, fn: t.Callable, inputs: torch.Tensor):
         if self.grad_checkpointing:
             outputs = checkpoint(
-                fn, inputs, preserve_rng_state=False, use_reentrant=False
+                fn, inputs, preserve_rng_state=True, use_reentrant=False
             )
         else:
             outputs = fn(inputs)
