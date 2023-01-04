@@ -7,7 +7,9 @@ from torch import nn
 import torch.distributed
 from torch.utils.data import DataLoader
 
+
 from sensorium.utils import tensorboard
+from sensorium.models.utils import ELU1
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
 from sensorium.models.core_shifter import CoreShifters
@@ -92,7 +94,7 @@ class Model(nn.Module):
             ),
         )
 
-        self.elu = nn.ELU()
+        self.elu1 = ELU1()
 
     def get_parameters(self, core_lr: float):
         # separate learning rate for core module from the rest
@@ -153,7 +155,7 @@ class Model(nn.Module):
             shifts = self.core_shifter(pupil_centers, mouse_id=mouse_id)
         outputs = self.readouts(outputs, mouse_id=mouse_id, shifts=shifts)
         if activate:
-            outputs = self.elu(outputs) + 1
+            outputs = self.elu1(outputs)
         return outputs, images, image_grids
 
 

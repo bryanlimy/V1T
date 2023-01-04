@@ -20,23 +20,13 @@ from sensorium.utils.scheduler import Scheduler
 
 import submission
 import train as trainer
+from sensorium.models.utils import ELU1
 
 
 class Args:
     def __init__(self, args, output_dir: str):
         self.device = args.device
         self.output_dir = output_dir
-
-
-class ELU1(nn.Module):
-    """ELU activation + 1 to output standardized responses"""
-
-    def __init__(self):
-        super(ELU1, self).__init__()
-        self.elu = nn.ELU()
-
-    def forward(self, inputs: torch.Tensor):
-        return self.elu(inputs) + 1
 
 
 class OutputModule(nn.Module):
