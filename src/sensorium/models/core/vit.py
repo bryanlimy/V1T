@@ -336,8 +336,10 @@ class Transformer(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def checkpointing(self, fn: t.Callable, inputs: torch.Tensor):
-        if inputs.requires_grad and self.grad_checkpointing:
-            outputs = checkpoint(fn, inputs, preserve_rng_state=False)
+        if self.grad_checkpointing:
+            outputs = checkpoint(
+                fn, inputs, preserve_rng_state=False, use_reentrant=False
+            )
         else:
             outputs = fn(inputs)
         return self.drop_path(outputs) + inputs
