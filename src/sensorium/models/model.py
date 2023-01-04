@@ -1,7 +1,6 @@
 import os
 import wandb
 import torch
-import warnings
 import torchinfo
 import typing as t
 from torch import nn
@@ -11,8 +10,8 @@ from torch.utils.data import DataLoader
 from sensorium.utils import tensorboard
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
-from sensorium.models.image_cropper import ImageCropper
 from sensorium.models.core_shifter import CoreShifters
+from sensorium.models.image_cropper import ImageCropper
 
 
 def get_model_info(
@@ -23,15 +22,13 @@ def get_model_info(
     device: torch.device = "cpu",
     tag: str = "model/trainable_parameters",
 ):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=UserWarning)
-        model_info = torchinfo.summary(
-            model,
-            input_data=input_data,
-            depth=5,
-            device=device,
-            verbose=0,
-        )
+    model_info = torchinfo.summary(
+        model,
+        input_data=input_data,
+        depth=5,
+        device=device,
+        verbose=0,
+    )
     if filename is not None:
         with open(filename, "w") as file:
             file.write(str(model_info))
