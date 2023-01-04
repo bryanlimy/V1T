@@ -440,10 +440,11 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--grad_checkpointing",
-        type=bool,
+        type=int,
         default=None,
-        help="Enable gradient checkpointing. If None is provided, then enable "
-        "by default if CUDA is detected.",
+        choices=[0, 1],
+        help="Enable gradient checkpointing if 1. If None is provided, then "
+        "enable by default if CUDA is detected.",
     )
 
     # optimizer settings
