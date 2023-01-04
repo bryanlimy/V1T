@@ -336,7 +336,7 @@ class Transformer(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def checkpoint_forward(self, fn, inputs: torch.Tensor):
-        if self.grad_checkpointing:
+        if inputs.requires_grad and self.grad_checkpointing:
             outputs = checkpoint(fn, inputs, preserve_rng_state=False)
         else:
             outputs = fn(inputs)
