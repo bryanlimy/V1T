@@ -8,14 +8,13 @@ from tqdm import tqdm
 from time import time
 from shutil import rmtree
 from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 
 from sensorium import losses, data
 from sensorium.utils.logger import Logger
 from sensorium.models import get_model, Model
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
-
-from torch.cuda.amp import autocast, GradScaler
 
 
 @torch.no_grad()
@@ -107,7 +106,6 @@ def train(
     # accumulate gradients over all mouse for one batch
     update_frequency = len(mouse_ids)
     model.train(True)
-    model.requires_grad_(True)
     optimizer.zero_grad()
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
