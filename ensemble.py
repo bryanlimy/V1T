@@ -327,16 +327,16 @@ def main(args):
         else:
             scheduler.restore()
 
-    # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
-    timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
-    csv_dir = os.path.join(args.output_dir, "submissions", timestamp)
-
     test_ds, final_test_ds = data.get_submission_ds(
         args,
         data_dir=args.dataset,
         batch_size=args.batch_size,
         device=args.device,
     )
+
+    # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
+    timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
+    csv_dir = os.path.join(args.output_dir, "submissions", timestamp)
 
     eval_result = utils.evaluate(
         args, ds=test_ds, model=model, print_result=True, save_result=csv_dir
