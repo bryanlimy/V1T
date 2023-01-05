@@ -117,7 +117,7 @@ class EnsembleModel(nn.Module):
             ensemble.append(outputs)
         ensemble = torch.cat(ensemble, dim=-1)
         ensemble = self.output_module(ensemble, mouse_id=mouse_id)
-        return ensemble, None, None
+        return ensemble, None, None  # match output signature of Model
 
 
 def fit_ensemble(
