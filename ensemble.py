@@ -45,6 +45,18 @@ class OutputModule(nn.Module):
             self.linear = nn.Linear(in_features=in_features, out_features=1)
         self.activation = ELU1()
 
+        self.apply(self.init_weight)
+
+    @staticmethod
+    def init_weight(m: nn.Module):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
     def forward(self, inputs: torch.Tensor, mouse_id: int):
         if self.ensemble_mode == 0:
             outputs = torch.mean(inputs, dim=-1)
@@ -109,18 +121,19 @@ class EnsembleModel(nn.Module):
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):
-        ensemble = []
-        for name in self.ensemble.keys():
-            outputs, _, _ = self.ensemble[name](
-                inputs,
-                mouse_id=mouse_id,
-                behaviors=behaviors,
-                pupil_centers=pupil_centers,
-                activate=False,
-            )
-            outputs = rearrange(outputs, "b d -> b d 1")
-            ensemble.append(outputs)
-        ensemble = torch.cat(ensemble, dim=-1)
+        with torch.no_grad():
+            ensemble = []
+            for name in self.ensemble.keys():
+                outputs, _, _ = self.ensemble[name](
+                    inputs,
+                    mouse_id=mouse_id,
+                    behaviors=behaviors,
+                    pupil_centers=pupil_centers,
+                    activate=False,
+                )
+                outputs = rearrange(outputs, "b d -> b d 1")
+                ensemble.append(outputs)
+            ensemble = torch.cat(ensemble, dim=-1)
         ensemble = self.output_module(ensemble, mouse_id=mouse_id)
         return ensemble, None, None  # match output signature of Model
 
