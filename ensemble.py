@@ -136,21 +136,6 @@ def fit_ensemble(
 ):
     summary = tensorboard.Summary(args)
 
-    if args.use_wandb:
-        os.environ["WANDB_SILENT"] = "true"
-        try:
-            wandb.init(
-                config=args,
-                dir=os.path.join(args.output_dir, "wandb"),
-                project="sensorium",
-                entity="bryanlimy",
-                group=args.wandb_group,
-                name=os.path.basename(args.output_dir),
-            )
-        except AssertionError as e:
-            print(f"wandb.init error: {e}\n")
-            args.use_wandb = False
-
     epoch = scheduler.restore()
 
     while (epoch := epoch + 1) < args.epochs + 1:
@@ -247,6 +232,21 @@ def main(args):
         device=args.device,
     )
 
+    if args.use_wandb:
+        os.environ["WANDB_SILENT"] = "true"
+        try:
+            wandb.init(
+                config=args,
+                dir=os.path.join(args.output_dir, "wandb"),
+                project="sensorium",
+                entity="bryanlimy",
+                group=args.wandb_group,
+                name=os.path.basename(args.output_dir),
+            )
+        except AssertionError as e:
+            print(f"wandb.init error: {e}\n")
+            args.use_wandb = False
+
     # pretrained model to load
     args.saved_models = {
         "vit-1": "runs/vit_ensemble/001_vit_gaussian2d_seed1",
@@ -274,10 +274,15 @@ def main(args):
     )
     if args.verbose > 2:
         print(str(model_info))
+    if args.use_wandb:
+        wandb.log({"trainable_params": model_info.trainable_params}, step=0)
 
     model.to(args.device)
 
     utils.save_args(args)
+
+    if args.ensemble_mode == 0 and args.train:
+        print(f"Cannot train ensemble model with average outputs")
 
     if args.ensemble_mode == 1:
         optimizer = torch.optim.AdamW(
@@ -325,9 +330,15 @@ def main(args):
         device=args.device,
     )
 
-    utils.evaluate(
-        args, ds=test_ds, model=model, print_result=True, save_result=csv_dir
+    eval_result = utils.evaluate(
+        args,
+        ds=test_ds,
+        model=model,
+        print_result=True,
+        save_result=args.output_dir,
     )
+    if args.use_wandb:
+        wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=0)
 
     # Sensorium challenge
     if 0 in test_ds:
