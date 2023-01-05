@@ -2,16 +2,15 @@ import os
 import torch
 import wandb
 import argparse
-import torchinfo
 import typing as t
 from torch import nn
 from time import time
-from tqdm import tqdm
 from shutil import rmtree
 from einops import rearrange
 from datetime import datetime
+from torch.cuda.amp import GradScaler
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
+
 
 import submission
 import train as trainer
@@ -30,6 +29,12 @@ class Args:
 
 
 class OutputModule(nn.Module):
+    """
+    ensemble mode:
+        0 - average the outputs of the ensemble models
+        1 - linear layer to connect the outputs from the ensemble models
+    """
+
     def __init__(self, args, in_features: int):
         super(OutputModule, self).__init__()
         self.in_features = in_features
