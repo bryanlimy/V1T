@@ -309,6 +309,10 @@ def main(args):
     if args.ensemble_mode == 0 and args.train:
         print(f"Cannot train ensemble model with average outputs")
 
+    criterion = losses.get_criterion(args, ds=train_ds)
+    scaler = GradScaler(enabled=args.amp)
+    if args.amp and args.verbose:
+        print(f"Enable automatic mixed precision training.")
     if args.ensemble_mode:
         optimizer = torch.optim.AdamW(
             params=[
@@ -323,10 +327,6 @@ def main(args):
             eps=args.adam_eps,
             weight_decay=args.weight_decay,
         )
-        criterion = losses.get_criterion(args, ds=train_ds)
-        scaler = GradScaler(enabled=args.amp)
-        if args.amp and args.verbose:
-            print(f"Enable automatic mixed precision training.")
         scheduler = Scheduler(
             args,
             model=model,
@@ -349,6 +349,30 @@ def main(args):
             )
         else:
             scheduler.restore()
+    else:
+        epoch = 0
+        val_result = trainer.validate(
+            args,
+            ds=val_ds,
+            model=model,
+            criterion=criterion,
+            scaler=scaler,
+            epoch=epoch,
+        )
+        if args.verbose:
+            print(
+                f'Validation\t\tloss: {val_result["loss"]:.04f}\t\t'
+                f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
+            )
+        if args.use_wandb:
+            wandb.log(
+                {
+                    "val_loss": val_result["loss"],
+                    "val_corr": val_result["single_trial_correlation"],
+                    "best_corr": val_result["single_trial_correlation"],
+                },
+                step=epoch,
+            )
 
     test_ds, final_test_ds = data.get_submission_ds(
         args,

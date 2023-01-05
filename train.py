@@ -122,7 +122,7 @@ def train(
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
-    return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
+    return utils.log_metrics(results, epoch=epoch, summary=summary, mode=0)
 
 
 @torch.no_grad()
@@ -178,7 +178,7 @@ def validate(
     criterion: losses.Loss,
     scaler: GradScaler,
     epoch: int,
-    summary: tensorboard.Summary,
+    summary: tensorboard.Summary = None,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
     results = {}
@@ -198,7 +198,7 @@ def validate(
                 utils.update_dict(mouse_result, result)
                 pbar.update(1)
             results[mouse_id] = mouse_result
-    return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
+    return utils.log_metrics(results, epoch=epoch, summary=summary, mode=1)
 
 
 def main(args, wandb_sweep: bool = False):
