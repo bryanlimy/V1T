@@ -11,7 +11,6 @@ from shutil import rmtree
 from einops import rearrange
 from datetime import datetime
 from torch.utils.data import DataLoader
-from einops.layers.torch import Rearrange
 from torch.cuda.amp import autocast, GradScaler
 
 import submission
@@ -35,12 +34,20 @@ class OutputModule(nn.Module):
         super(OutputModule, self).__init__()
         self.in_features = in_features
         self.output_shapes = args.output_shapes
-        self.linear = nn.Linear(in_features=in_features, out_features=1)
+        self.ensemble_mode = args.ensemble_mode
+        assert self.ensemble_mode in (0, 1)
+        if self.ensemble_mode == 1:
+            self.linear = nn.Linear(in_features=in_features, out_features=1)
         self.activation = ELU1()
 
     def forward(self, inputs: torch.Tensor, mouse_id: int):
-        outputs = self.linear(inputs)
-        outputs = rearrange(outputs, "b d 1 -> b d")
+        if self.ensemble_mode == 0:
+            outputs = torch.mean(inputs, dim=-1)
+        elif self.ensemble_mode == 1:
+            outputs = self.linear(inputs)
+            outputs = rearrange(outputs, "b d 1 -> b d")
+        else:
+            raise NotImplementedError("--ensemble_model must be 0 or 1.")
         outputs = self.activation(outputs)
         return outputs
 
@@ -128,23 +135,6 @@ def fit_ensemble(
     test_ds: t.Dict[int, DataLoader],
 ):
     summary = tensorboard.Summary(args)
-    # get model summary
-    mouse_id = list(args.output_shapes.keys())[0]
-    batch_size = args.micro_batch_size
-    random_input = lambda size: torch.rand(*size)
-    model_info = get_model_info(
-        model=model,
-        input_data=[
-            random_input((batch_size, *model.input_shape)),  # image
-            mouse_id,  # mouse ID
-            random_input((batch_size, 3)),  # behaviors
-            random_input((batch_size, 2)),  # pupil centers
-        ],
-        filename=os.path.join(args.output_dir, "model.txt"),
-        summary=summary,
-    )
-    if args.verbose > 2:
-        print(str(model_info))
 
     if args.use_wandb:
         os.environ["WANDB_SILENT"] = "true"
@@ -267,44 +257,62 @@ def main(args):
     }
 
     model = EnsembleModel(args, saved_models=args.saved_models, ds=train_ds)
+
+    # get model info
+    mouse_id = list(args.output_shapes.keys())[0]
+    batch_size = args.micro_batch_size
+    random_input = lambda size: torch.rand(*size)
+    model_info = get_model_info(
+        model=model,
+        input_data=[
+            random_input((batch_size, *model.input_shape)),  # image
+            mouse_id,  # mouse ID
+            random_input((batch_size, 3)),  # behaviors
+            random_input((batch_size, 2)),  # pupil centers
+        ],
+        filename=os.path.join(args.output_dir, "model.txt"),
+    )
+    if args.verbose > 2:
+        print(str(model_info))
+
     model.to(args.device)
 
     utils.save_args(args)
 
-    optimizer = torch.optim.AdamW(
-        params=[{"params": model.parameters(), "lr": args.lr, "name": "model"}],
-        lr=args.lr,
-        betas=(args.adam_beta1, args.adam_beta2),
-        eps=args.adam_eps,
-        weight_decay=args.weight_decay,
-    )
-    criterion = losses.get_criterion(args, ds=train_ds)
-    scaler = GradScaler(enabled=args.amp)
-    if args.amp and args.verbose:
-        print(f"Enable automatic mixed precision training.")
-    scheduler = Scheduler(
-        args,
-        model=model,
-        optimizer=optimizer,
-        scaler=scaler,
-        mode="max",
-        module_names=["output_module"],
-    )
-
-    if args.train:
-        fit_ensemble(
+    if args.ensemble_mode == 1:
+        optimizer = torch.optim.AdamW(
+            params=[{"params": model.parameters(), "lr": args.lr, "name": "model"}],
+            lr=args.lr,
+            betas=(args.adam_beta1, args.adam_beta2),
+            eps=args.adam_eps,
+            weight_decay=args.weight_decay,
+        )
+        criterion = losses.get_criterion(args, ds=train_ds)
+        scaler = GradScaler(enabled=args.amp)
+        if args.amp and args.verbose:
+            print(f"Enable automatic mixed precision training.")
+        scheduler = Scheduler(
             args,
             model=model,
             optimizer=optimizer,
-            criterion=criterion,
             scaler=scaler,
-            scheduler=scheduler,
-            train_ds=train_ds,
-            val_ds=val_ds,
-            test_ds=test_ds,
+            mode="max",
+            module_names=["output_module"],
         )
-    else:
-        scheduler.restore()
+        if args.train:
+            fit_ensemble(
+                args,
+                model=model,
+                optimizer=optimizer,
+                criterion=criterion,
+                scaler=scaler,
+                scheduler=scheduler,
+                train_ds=train_ds,
+                val_ds=val_ds,
+                test_ds=test_ds,
+            )
+        else:
+            scheduler.restore()
 
     # create CSV dir to save results with timestamp Year-Month-Day-Hour-Minute
     timestamp = f"{datetime.now():%Y-%m-%d-%Hh%Mm}"
@@ -402,6 +410,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--amp", action="store_true", help="automatic mixed precision training"
     )
+    parser.add_argument(
+        "--ensemble_mode",
+        type=int,
+        required=True,
+        choices=[0, 1],
+        help="ensemble method: "
+        "0 - average the outputs of the ensemble models, "
+        "1 - linear layer to connect the outputs from the ensemble models",
+    )
+
+    parser.add_argument(
+        "--train",
+        action="store_true",
+        help="train ensemble model before inference.",
+    )
 
     # optimizer settings
     parser.add_argument("--adam_beta1", type=float, default=0.9)
@@ -424,11 +447,6 @@ if __name__ == "__main__":
         "--ds_scale",
         action="store_true",
         help="scale loss by the size of the dataset",
-    )
-    parser.add_argument(
-        "--train",
-        action="store_true",
-        help="train ensemble model before inference.",
     )
 
     # plot settings
