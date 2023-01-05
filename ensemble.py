@@ -63,16 +63,13 @@ class EnsembleModel(nn.Module):
         self.verbose = args.verbose
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
-        ensemble = {}
-        model_args = {}
+        self.ensemble = nn.ModuleDict()
         for name, output_dir in saved_models.items():
-            model_args[name] = Args(args, output_dir)
-            utils.load_args(model_args[name])
-            model = Model(args=model_args[name], ds=ds)
-            self.load_model_state(model, output_dir=model_args[name].output_dir)
-            ensemble[name] = model
-        self.ensemble = nn.ModuleDict(ensemble)
-        self.ensemble.train(False)
+            model_args = Args(args, output_dir)
+            utils.load_args(model_args)
+            model = Model(args=model_args, ds=ds)
+            self.load_model_state(model, output_dir=model_args.output_dir)
+            self.ensemble[name] = model
         self.ensemble.requires_grad_(False)
         self.output_module = OutputModule(args, in_features=len(saved_models))
 
