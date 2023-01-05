@@ -288,7 +288,13 @@ def main(args):
 
     if args.ensemble_mode == 1:
         optimizer = torch.optim.AdamW(
-            params=[{"params": model.parameters(), "lr": args.lr, "name": "model"}],
+            params=[
+                {
+                    "params": model.parameters(),
+                    "lr": args.lr,
+                    "name": "model",
+                }
+            ],
             lr=args.lr,
             betas=(args.adam_beta1, args.adam_beta2),
             eps=args.adam_eps,
@@ -443,7 +449,7 @@ if __name__ == "__main__":
     parser.add_argument("--adam_beta1", type=float, default=0.9)
     parser.add_argument("--adam_beta2", type=float, default=0.9999)
     parser.add_argument("--adam_eps", type=float, default=1e-8)
-    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument(
         "--weight_decay",
         type=float,
