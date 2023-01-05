@@ -339,11 +339,7 @@ def main(args):
     )
 
     eval_result = utils.evaluate(
-        args,
-        ds=test_ds,
-        model=model,
-        print_result=True,
-        save_result=args.output_dir,
+        args, ds=test_ds, model=model, print_result=True, save_result=csv_dir
     )
     if args.use_wandb:
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=0)
