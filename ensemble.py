@@ -121,19 +121,18 @@ class EnsembleModel(nn.Module):
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):
-        with torch.no_grad():
-            ensemble = []
-            for name in self.ensemble.keys():
-                outputs, _, _ = self.ensemble[name](
-                    inputs,
-                    mouse_id=mouse_id,
-                    behaviors=behaviors,
-                    pupil_centers=pupil_centers,
-                    activate=False,
-                )
-                outputs = rearrange(outputs, "b d -> b d 1")
-                ensemble.append(outputs)
-            ensemble = torch.cat(ensemble, dim=-1)
+        ensemble = []
+        for name in self.ensemble.keys():
+            outputs, _, _ = self.ensemble[name](
+                inputs,
+                mouse_id=mouse_id,
+                behaviors=behaviors,
+                pupil_centers=pupil_centers,
+                activate=False,
+            )
+            outputs = rearrange(outputs, "b d -> b d 1")
+            ensemble.append(outputs)
+        ensemble = torch.cat(ensemble, dim=-1)
         ensemble = self.output_module(ensemble, mouse_id=mouse_id)
         return ensemble, None, None  # match output signature of Model
 
