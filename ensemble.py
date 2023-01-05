@@ -33,6 +33,7 @@ class OutputModule(nn.Module):
     ensemble mode:
         0 - average the outputs of the ensemble models
         1 - linear layer to connect the outputs from the ensemble models
+        2 - separate linear layer per animal
     """
 
     def __init__(self, args, in_features: int):
@@ -40,9 +41,16 @@ class OutputModule(nn.Module):
         self.in_features = in_features
         self.output_shapes = args.output_shapes
         self.ensemble_mode = args.ensemble_mode
-        assert self.ensemble_mode in (0, 1)
+        assert self.ensemble_mode in (0, 1, 2)
         if self.ensemble_mode == 1:
             self.linear = nn.Linear(in_features=in_features, out_features=1)
+        elif self.ensemble_mode == 2:
+            self.linear = nn.ModuleDict(
+                {
+                    str(mouse_id): nn.Linear(in_features=in_features, out_features=1)
+                    for mouse_id in self.output_shapes.keys()
+                }
+            )
         self.activation = ELU1()
 
         self.apply(self.init_weight)
@@ -62,6 +70,9 @@ class OutputModule(nn.Module):
             outputs = torch.mean(inputs, dim=-1)
         elif self.ensemble_mode == 1:
             outputs = self.linear(inputs)
+            outputs = rearrange(outputs, "b d 1 -> b d")
+        elif self.ensemble_mode == 2:
+            outputs = self.linear[str(mouse_id)](inputs)
             outputs = rearrange(outputs, "b d 1 -> b d")
         else:
             raise NotImplementedError("--ensemble_model must be 0 or 1.")
@@ -298,7 +309,7 @@ def main(args):
     if args.ensemble_mode == 0 and args.train:
         print(f"Cannot train ensemble model with average outputs")
 
-    if args.ensemble_mode == 1:
+    if args.ensemble_mode:
         optimizer = torch.optim.AdamW(
             params=[
                 {
@@ -441,10 +452,11 @@ if __name__ == "__main__":
         "--ensemble_mode",
         type=int,
         required=True,
-        choices=[0, 1],
+        choices=[0, 1, 2],
         help="ensemble method: "
         "0 - average the outputs of the ensemble models, "
-        "1 - linear layer to connect the outputs from the ensemble models",
+        "1 - linear layer to connect the outputs from the ensemble models"
+        "2 - separate linear layer per animal",
     )
 
     parser.add_argument(
