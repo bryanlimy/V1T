@@ -119,6 +119,9 @@ def main(args):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
 
     utils.load_args(args)
+    if not hasattr(args, "ds_name"):
+        args.ds_name = os.path.basename(args.dataset)
+    assert args.ds_name == "sensorium"
 
     if "0" not in args.output_shapes:
         print("Warning: the saved model was not trained on Mouse 1")
@@ -150,7 +153,7 @@ def main(args):
     )
 
     # Sensorium challenge
-    if 0 in test_ds:
+    if "0" in test_ds:
         generate_submission(
             args,
             mouse_id=0,
@@ -161,7 +164,7 @@ def main(args):
         )
 
     # Sensorium+ challenge
-    if 1 in test_ds:
+    if "1" in test_ds:
         generate_submission(
             args,
             mouse_id=1,
@@ -177,6 +180,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--dataset",
         type=str,
         required=True,
         help="path to directory where the compressed dataset is stored.",
