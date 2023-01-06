@@ -312,7 +312,7 @@ class Transformer(nn.Module):
                     ),
                 }
             )
-            if behavior_mode in (1, 2, 3, 4):
+            if behavior_mode in (2, 3, 4):
                 block["b-mlp"] = BehaviorMLP(
                     behavior_mode=behavior_mode,
                     out_dim=emb_dim,
