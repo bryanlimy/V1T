@@ -143,8 +143,15 @@ def load_trial_data(
     }
 
 
-def load_mouse_metadata(ds_name: DS_NAMES, mouse_dir: str):
-    """Load the relevant metadata of a specific mouse
+def load_mouse_metadata(
+    ds_name: DS_NAMES, mouse_dir: str, load_timestamps: bool = False
+):
+    """
+    Args:
+        ds_name: DS_NAMES, sensorium or franke2022
+        mouse_dir: str, path to folder to host mouse recordings and metadata
+        load_timestamps: bool, load timestamps from metadata
+    Load the relevant metadata of a specific mouse
     mouse_dir: str
         - path to the mouse data directory
     coordinates: np.ndarray
@@ -195,11 +202,12 @@ def load_mouse_metadata(ds_name: DS_NAMES, mouse_dir: str):
         metadata["image_ids"] = load_trial("colorframeprojector_image_id.npy")
 
     # load trial timestamps
-    if ds_name == "sensorium":
-        metadata["trial_ts"] = load_trial("frame_trial_ts.npy")
-    else:
-        metadata["trial_ts"] = load_trial("colorframeprojector_trial_ts.npy")
-    metadata["trial_ts"] = str2datetime(metadata["trial_ts"])
+    if load_timestamps:
+        if ds_name == "sensorium":
+            metadata["trial_ts"] = load_trial("frame_trial_ts.npy")
+        else:
+            metadata["trial_ts"] = load_trial("colorframeprojector_trial_ts.npy")
+        metadata["trial_ts"] = str2datetime(metadata["trial_ts"])
 
     # load animal ID
     animal_ids = np.unique(load_neuron("animal_ids.npy"))
