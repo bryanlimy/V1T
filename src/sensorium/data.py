@@ -221,7 +221,7 @@ def load_mouse_metadata(
     return metadata
 
 
-def load_mouse_data(ds_name: DS_NAMES, mouse_dir: str):
+def load_mouse_data(ds_name: DS_NAMES, mouse_dir: str, load_timestamps: bool = False):
     """Load data and metadata from mouse_dir"""
     if not os.path.isdir(mouse_dir):
         unzip(
@@ -236,13 +236,16 @@ def load_mouse_data(ds_name: DS_NAMES, mouse_dir: str):
     mouse_data = {
         k: np.stack(v, axis=0).astype(np.float32) for k, v in mouse_data.items()
     }
-    return mouse_data, load_mouse_metadata(ds_name, mouse_dir=mouse_dir)
+    return mouse_data, load_mouse_metadata(
+        ds_name, mouse_dir=mouse_dir, load_timestamps=load_timestamps
+    )
 
 
 def load_mice_data(
     ds_name: DS_NAMES,
     mice_dir: str,
     mouse_ids: t.List[int] = None,
+    load_timestamps: bool = False,
     verbose: int = 1,
 ):
     """Load data and metadata for mouse_ids into dictionaries where key is the mouse_id"""
@@ -254,6 +257,7 @@ def load_mice_data(
         mice_data[mouse_id], mice_meta[mouse_id] = load_mouse_data(
             ds_name=ds_name,
             mouse_dir=os.path.join(mice_dir, mouse2path[mouse_id]),
+            load_timestamps=load_timestamps,
         )
     return mice_data, mice_meta
 
