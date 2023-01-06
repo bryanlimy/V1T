@@ -34,7 +34,7 @@ def inference(
     args,
     ds: DataLoader,
     model: nn.Module,
-    mouse_id: int,
+    mouse_id: str,
     device: torch.device = "cpu",
     desc: str = "",
 ) -> t.Dict[str, t.List[t.Union[float, int]]]:
@@ -79,9 +79,9 @@ def inference(
 
 def generate_submission(
     args,
-    mouse_id: int,
-    test_ds: t.Dict[int, DataLoader],
-    final_test_ds: t.Dict[int, DataLoader],
+    mouse_id: str,
+    test_ds: t.Dict[str, DataLoader],
+    final_test_ds: t.Dict[str, DataLoader],
     model: nn.Module,
     csv_dir: str,
 ):
@@ -156,7 +156,7 @@ def main(args):
     if "0" in test_ds:
         generate_submission(
             args,
-            mouse_id=0,
+            mouse_id="0",
             test_ds=test_ds,
             final_test_ds=final_test_ds,
             model=model,
@@ -167,7 +167,7 @@ def main(args):
     if "1" in test_ds:
         generate_submission(
             args,
-            mouse_id=1,
+            mouse_id="1",
             test_ds=test_ds,
             final_test_ds=final_test_ds,
             model=model,
