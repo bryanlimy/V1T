@@ -362,7 +362,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="data/sensorium",
+        required=True,
         help="path to directory where the dataset is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)

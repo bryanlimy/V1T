@@ -94,7 +94,7 @@ class ImageCropper(nn.Module):
             self.image_shifter = None
 
         self.resize = None
-        if args.resize_image == 1:
+        if args.resize_image == 1 and args.ds_name != "franke2022":
             out_h, out_w = 36, 64
             self.resize = transforms.Resize(size=(out_h, out_w), antialias=False)
 
