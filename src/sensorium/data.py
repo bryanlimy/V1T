@@ -17,47 +17,61 @@ DS_NAMES = t.Literal["sensorium", "franke2022"]
 # key - mouse ID, value - filename of the recordings
 # Mouse 0: Sensorium, Mouse 1: Sensorium+, Mouse 3-7: pre-training
 SENSORIUM = {
-    0: "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    1: "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    2: "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    3: "static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    4: "static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    5: "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    6: "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "0": "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "1": "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "2": "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "3": "static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "4": "static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "5": "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "6": "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
 }
 
 FRANKE2022 = {
-    0: "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    1: "static25311-11-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    2: "static25311-4-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    3: "static25311-5-8-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    4: "static25311-7-34-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    5: "static25311-9-24-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    6: "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    7: "static25340-4-21-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    8: "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    9: "static25704-3-11-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    10: "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    11: "static25830-10-6-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    12: "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    13: "static26085-6-4-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
-    14: "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
-    15: "static26142-2-9-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    16: "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    17: "static26426-18-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    18: "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    19: "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    20: "static26644-6-3-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    21: "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    22: "static26872-24-3-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
-    23: "static26872-25-7-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    24: "static26872-26-8-ColorImageNet-b7d5a544978737ca47635aaa9307b73c",
+    "static25311-10-26": "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    # 1: "static25311-11-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    # 2: "static25311-4-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    # 3: "static25311-5-8-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    # 4: "static25311-7-34-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    # 5: "static25311-9-24-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "static25340-3-19": "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    # 7: "static25340-4-21-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "static25704-2-12": "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    # 9: "static25704-3-11-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "static25830-10-4": "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    # 11: "static25830-10-6-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "static26085-6-3": "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    # 13: "static26085-6-4-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    "static26142-2-11": "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    # 15: "static26142-2-9-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "static26426-18-13": "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    # 17: "static26426-18-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "static26470-4-5": "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "static26644-6-2": "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    # 20: "static26644-6-3-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "static26872-21-6": "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    # 22: "static26872-24-3-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    # 23: "static26872-25-7-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    # 24: "static26872-26-8-ColorImageNet-b7d5a544978737ca47635aaa9307b73c",
 }
 
 
 def get_mouse2path(ds_name: DS_NAMES):
     assert ds_name in ("sensorium", "franke2022")
     return SENSORIUM if ds_name == "sensorium" else FRANKE2022
+
+
+def get_mouse_ids(args):
+    """retrieve the mouse IDs when args.mouse_ids is not provided"""
+    args.ds_name = os.path.basename(args.dataset)
+    assert args.ds_name in ("sensorium", "franke2022")
+    if not args.mouse_ids:
+        if args.ds_name == "sensorium":
+            mouse_ids = list(SENSORIUM.keys())
+            if args.behavior_mode > 0:
+                mouse_ids.remove("0")
+        else:
+            mouse_ids = list(FRANKE2022.keys())
+        args.mouse_ids = mouse_ids
 
 
 class CycleDataloaders:
@@ -263,7 +277,7 @@ def load_mice_data(
 
 
 class MiceDataset(Dataset):
-    def __init__(self, args, tier: str, data_dir: str, mouse_id: int):
+    def __init__(self, args, tier: str, data_dir: str, mouse_id: str):
         """Construct Dataset
 
         Note that the trial index (i.e. X in data/images/X.npy) is not the same
@@ -272,12 +286,12 @@ class MiceDataset(Dataset):
         Args:
             - tier: str, train, validation, test or final_test
             - data_dir: str, path to where all data are stored
-            - mouse_id: int, the mouse ID
+            - mouse_id: str, the mouse ID
         """
         assert tier in ("train", "validation", "test", "final_test")
         self.tier = tier
         self.mouse_id = mouse_id
-        self.ds_name = os.path.basename(data_dir)
+        self.ds_name = args.ds_name
         assert self.ds_name in ("sensorium", "franke2022")
         mouse2path = get_mouse2path(self.ds_name)
         mouse_dir = os.path.join(data_dir, mouse2path[mouse_id])
@@ -297,7 +311,7 @@ class MiceDataset(Dataset):
         self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
-        self.hashed = mouse_id in (0, 1)
+        self.hashed = self.ds_name == "sensorium" and mouse_id in ("0", "1")
 
         self.image_shape = get_image_shape(mouse_dir)
 
@@ -396,7 +410,7 @@ class MiceDataset(Dataset):
 def get_training_ds(
     args,
     data_dir: str,
-    mouse_ids: t.List[int],
+    mouse_ids: t.List[str],
     batch_size: int = 1,
     device: torch.device = torch.device("cpu"),
 ):
@@ -409,13 +423,16 @@ def get_training_ds(
         batch_size: int, batch size of the DataLoaders
         device: torch.device, the device where the data is being loaded to
     Return:
-        train_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the
+        train_ds: t.Dict[str, DataLoader], dictionary of DataLoaders of the
             training sets where keys are the mouse IDs.
-        val_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the
+        val_ds: t.Dict[str, DataLoader], dictionary of DataLoaders of the
             validation sets where keys are the mouse IDs.
-        test_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of the test
+        test_ds: t.Dict[str, DataLoader], dictionary of DataLoaders of the test
             sets where keys are the mouse IDs.
     """
+    if not hasattr(args, "ds_name"):
+        args.ds_name = os.path.basename(args.dataset)
+
     # settings for DataLoader
     dataloader_kwargs = {"batch_size": batch_size, "num_workers": args.num_workers}
     if device.type in ("cuda", "mps"):
@@ -467,6 +484,8 @@ def get_submission_ds(
         final_test_ds: t.Dict[int, DataLoader], dictionary of DataLoaders of
             the final test set where keys are the mouse IDs.
     """
+    if not hasattr(args, "ds_name"):
+        args.ds_name = os.path.basename(args.dataset)
     # settings for DataLoader
     test_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": False}
     if device.type in ["cuda", "mps"]:

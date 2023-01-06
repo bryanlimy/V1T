@@ -148,7 +148,7 @@ class BehaviorMLP(nn.Module):
         behavior_mode: int,
         out_dim: int,
         dropout: float = 0.0,
-        mouse_ids: t.List[int] = None,
+        mouse_ids: t.List[str] = None,
         use_bias: bool = True,
     ):
         """
@@ -166,7 +166,7 @@ class BehaviorMLP(nn.Module):
         if behavior_mode == 4:
             self.model = nn.ModuleDict(
                 {
-                    str(mouse_id): self.build_model(
+                    mouse_id: self.build_model(
                         in_dim=in_dim,
                         out_dim=out_dim,
                         dropout=dropout,
@@ -195,9 +195,9 @@ class BehaviorMLP(nn.Module):
             nn.Tanh(),
         )
 
-    def forward(self, inputs: torch.Tensor, mouse_id: int):
+    def forward(self, inputs: torch.Tensor, mouse_id: str):
         if self.behavior_mode == 4:
-            outputs = self.model[str(mouse_id)](inputs)
+            outputs = self.model[mouse_id](inputs)
         else:
             outputs = self.model(inputs)
         return outputs
@@ -284,7 +284,7 @@ class Transformer(nn.Module):
         mlp_dim: int,
         dropout: float,
         behavior_mode: int,
-        mouse_ids: t.List[int],
+        mouse_ids: t.List[str],
         use_lsa: bool = False,
         drop_path: float = 0.0,
         use_bias: bool = True,
@@ -347,7 +347,7 @@ class Transformer(nn.Module):
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         behaviors: torch.Tensor,
     ):
         outputs = inputs
@@ -423,7 +423,7 @@ class ViTCore(Core):
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):

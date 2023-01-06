@@ -38,7 +38,7 @@ def gather(result: t.Dict[str, t.List[torch.Tensor]]):
 
 
 def train_step(
-    mouse_id: int,
+    mouse_id: str,
     batch: t.Dict[str, torch.Tensor],
     model: Model,
     optimizer: torch.optim,
@@ -92,7 +92,7 @@ def train_step(
 
 def train(
     args,
-    ds: t.Dict[int, DataLoader],
+    ds: t.Dict[str, DataLoader],
     model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
@@ -127,7 +127,7 @@ def train(
 
 @torch.no_grad()
 def validation_step(
-    mouse_id: int,
+    mouse_id: str,
     batch: t.Dict[str, torch.Tensor],
     model: Model,
     criterion: losses.Loss,
@@ -173,7 +173,7 @@ def validation_step(
 
 def validate(
     args,
-    ds: t.Dict[int, DataLoader],
+    ds: t.Dict[str, DataLoader],
     model: Model,
     criterion: losses.Loss,
     scaler: GradScaler,
@@ -211,8 +211,7 @@ def main(args, wandb_sweep: bool = False):
     utils.get_device(args)
     utils.set_random_seed(args.seed)
 
-    if not args.mouse_ids:
-        args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
+    data.get_mouse_ids(args)
 
     if args.grad_checkpointing is None:
         args.grad_checkpointing = "cuda" in args.device.type

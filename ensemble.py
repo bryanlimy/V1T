@@ -128,7 +128,7 @@ class EnsembleModel(nn.Module):
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):
@@ -155,9 +155,9 @@ def fit_ensemble(
     criterion: losses.Loss,
     scaler: GradScaler,
     scheduler: Scheduler,
-    train_ds: t.Dict[int, DataLoader],
-    val_ds: t.Dict[int, DataLoader],
-    test_ds: t.Dict[int, DataLoader],
+    train_ds: t.Dict[str, DataLoader],
+    val_ds: t.Dict[str, DataLoader],
+    test_ds: t.Dict[str, DataLoader],
 ):
     summary = tensorboard.Summary(args)
 
@@ -245,8 +245,7 @@ def main(args):
     utils.get_device(args)
     utils.set_random_seed(seed=args.seed)
 
-    if not args.mouse_ids:
-        args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
+    data.get_mouse_ids(args)
 
     args.micro_batch_size = args.batch_size
     train_ds, val_ds, test_ds = data.get_training_ds(
@@ -289,17 +288,17 @@ def main(args):
     model = EnsembleModel(args, saved_models=args.saved_models, ds=train_ds)
 
     # get model info
-    mouse_id = list(args.output_shapes.keys())[0]
+    mouse_id = args.mouse_ids[0]
     batch_size = args.micro_batch_size
     random_input = lambda size: torch.rand(*size)
     model_info = get_model_info(
         model=model,
-        input_data=[
-            random_input((batch_size, *model.input_shape)),  # image
-            mouse_id,  # mouse ID
-            random_input((batch_size, 3)),  # behaviors
-            random_input((batch_size, 2)),  # pupil centers
-        ],
+        input_data={
+            "inputs": random_input((batch_size, *model.input_shape)),
+            "behaviors": random_input((batch_size, 3)),
+            "pupil_centers": random_input((batch_size, 2)),
+        },
+        mouse_id=mouse_id,
         filename=os.path.join(args.output_dir, "model.txt"),
     )
     if args.verbose > 2:

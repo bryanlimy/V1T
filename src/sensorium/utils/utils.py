@@ -278,6 +278,14 @@ def load_args(args):
     for key, value in content.items():
         if not hasattr(args, key):
             setattr(args, key, value)
+    # convert mouse_ids and output_shapes to str
+    if hasattr(args, "mouse_ids") and type(args.mouse_ids[0]) == int:
+        args.mouse_ids = [str(mouse_id) for mouse_id in args.mouse_ids]
+    if (
+        hasattr(args, "output_shapes")
+        and type(list(args.output_shapes.keys())[0]) == int
+    ):
+        args.output_shapes = {str(k): v for k, v in args.output_shapes.items()}
 
 
 def get_device(args):

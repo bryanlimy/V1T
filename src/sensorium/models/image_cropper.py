@@ -57,7 +57,7 @@ class ImageCropper(nn.Module):
         4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
 
-    def __init__(self, args, ds: t.Dict[int, DataLoader]):
+    def __init__(self, args, ds: t.Dict[str, DataLoader]):
         super().__init__()
         self.shift_mode = args.shift_mode
         self.input_shape = args.input_shape
@@ -80,7 +80,7 @@ class ImageCropper(nn.Module):
                 name="image_shifter",
                 module=nn.ModuleDict(
                     {
-                        str(mouse_id): ImageShifter(
+                        mouse_id: ImageShifter(
                             args,
                             max_shift=max_shift,
                             num_layers=3,
@@ -110,23 +110,23 @@ class ImageCropper(nn.Module):
         grid = grid.unsqueeze(0)
         self.register_buffer("grid", grid)
 
-    def regularizer(self, mouse_id: int):
+    def regularizer(self, mouse_id: str):
         return (
             0
             if self.image_shifter is None
-            else self.image_shifter[str(mouse_id)].regularizer()
+            else self.image_shifter[mouse_id].regularizer()
         )
 
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):
         grid = repeat(self.grid, "1 c h w -> b c h w", b=inputs.size(0))
         if self.image_shifter is not None:
-            shifts = self.image_shifter[str(mouse_id)](
+            shifts = self.image_shifter[mouse_id](
                 behaviors=behaviors, pupil_centers=pupil_centers
             )
             grid = grid + shifts[:, None, None, :]

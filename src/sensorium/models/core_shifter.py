@@ -40,7 +40,7 @@ class CoreShifters(ModuleDict):
     def __init__(
         self,
         args,
-        mouse_ids: t.List[int],
+        mouse_ids: t.List[str],
         input_channels: int,
         hidden_features: int,
         num_layers: int,
@@ -48,7 +48,7 @@ class CoreShifters(ModuleDict):
         super(CoreShifters, self).__init__()
         for mouse_id in mouse_ids:
             self.add_module(
-                name=str(mouse_id),
+                name=mouse_id,
                 module=CoreShifter(
                     args,
                     in_features=input_channels,
@@ -58,8 +58,8 @@ class CoreShifters(ModuleDict):
                 ),
             )
 
-    def regularizer(self, mouse_id: int):
-        return self[str(mouse_id)].regularizer()
+    def regularizer(self, mouse_id: str):
+        return self[mouse_id].regularizer()
 
-    def forward(self, pupil_centers: torch.Tensor, mouse_id: int):
-        return self[str(mouse_id)](pupil_centers)
+    def forward(self, pupil_centers: torch.Tensor, mouse_id: str):
+        return self[mouse_id](pupil_centers)
