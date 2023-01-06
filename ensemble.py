@@ -274,11 +274,16 @@ def main(args):
 
     # pretrained model to load
     args.saved_models = {
-        "vit-1": "runs/vit_ensemble/001_vit_gaussian2d_seed1",
-        "vit-2": "runs/vit_ensemble/002_vit_gaussian2d_seed2",
-        "vit-3": "runs/vit_ensemble/003_vit_gaussian2d_seed3",
-        "vit-4": "runs/vit_ensemble/004_vit_gaussian2d_seed4",
-        "vit-5": "runs/vit_ensemble/005_vit_gaussian2d_seed5",
+        # "1": "runs/vit_ensemble/001_vit_gaussian2d_seed1",
+        "2": "runs/vit_ensemble/002_vit_gaussian2d_seed2",
+        "3": "runs/vit_ensemble/003_vit_gaussian2d_seed3",
+        # "4": "runs/vit_ensemble/004_vit_gaussian2d_seed4",
+        # "5": "runs/vit_ensemble/005_vit_gaussian2d_seed5",
+        # "6": "runs/vit_ensemble/006_vit_gaussian2d_seed6",
+        "7": "runs/vit_ensemble/007_vit_gaussian2d_seed7",
+        "8": "runs/vit_ensemble/008_vit_gaussian2d_seed8",
+        "9": "runs/vit_ensemble/009_vit_gaussian2d_seed9",
+        # "10": "runs/vit_ensemble/010_vit_gaussian2d_seed10",
     }
 
     model = EnsembleModel(args, saved_models=args.saved_models, ds=train_ds)
