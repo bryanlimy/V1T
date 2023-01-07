@@ -156,7 +156,7 @@ def evaluate(
                 )
 
     if args.verbose and print_result:
-        _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
+        _print = lambda d: [f"{k}: {v:.04f}\t" for k, v in d.items()]
         statement = ""
         for metric in metrics:
             if results[metric]:
