@@ -285,13 +285,13 @@ def main(args):
     #     "10": "runs/vit_ensemble/010_vit_gaussian2d_seed10",
     # }
     args.saved_models = {
-        "1": "runs/stacked2d_ensemble/001_stacked2d_gaussian2d_seed1",
+        # "1": "runs/stacked2d_ensemble/001_stacked2d_gaussian2d_seed1",
         "2": "runs/stacked2d_ensemble/002_stacked2d_gaussian2d_seed2",
         "3": "runs/stacked2d_ensemble/003_stacked2d_gaussian2d_seed3",
-        "4": "runs/stacked2d_ensemble/004_stacked2d_gaussian2d_seed4",
-        "5": "runs/stacked2d_ensemble/005_stacked2d_gaussian2d_seed5",
-        "6": "runs/stacked2d_ensemble/006_stacked2d_gaussian2d_seed6",
-        "7": "runs/stacked2d_ensemble/007_stacked2d_gaussian2d_seed7",
+        # "4": "runs/stacked2d_ensemble/004_stacked2d_gaussian2d_seed4",
+        # "5": "runs/stacked2d_ensemble/005_stacked2d_gaussian2d_seed5",
+        # "6": "runs/stacked2d_ensemble/006_stacked2d_gaussian2d_seed6",
+        # "7": "runs/stacked2d_ensemble/007_stacked2d_gaussian2d_seed7",
         "8": "runs/stacked2d_ensemble/008_stacked2d_gaussian2d_seed8",
         "9": "runs/stacked2d_ensemble/009_stacked2d_gaussian2d_seed9",
         "10": "runs/stacked2d_ensemble/010_stacked2d_gaussian2d_seed10",
