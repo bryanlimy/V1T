@@ -389,6 +389,8 @@ class ViTCore(Core):
         )
         if not hasattr(args, "grad_checkpointing"):
             args.grad_checkpointing = False
+        if not hasattr(args, "disable_bias"):
+            args.disable_bias = False
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,

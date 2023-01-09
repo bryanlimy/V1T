@@ -20,7 +20,11 @@ utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
 
-MOUSE_ID = 2
+MOUSE_ID = "2"
+
+
+def normalize(x: np.ndarray):
+    return (x - np.min(x)) / (np.max(x) - np.min(x))
 
 
 class Recorder(nn.Module):
@@ -68,7 +72,7 @@ class Recorder(nn.Module):
         images: torch.Tensor,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
     ):
         """Return attention output from ViT
         attns has shape (batch size, num blocks, num heads, num patches, num patches)
@@ -92,10 +96,11 @@ def plot_attention_map(
     results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
     filename: str = None,
     colormap: str = "turbo",
+    alpha: float = 0.8,
 ):
     cmap = cm.get_cmap(colormap)
     colors = cmap(np.arange(256))[:, :3]
-    label_fontsize, tick_fontsize, alpha = 10, 8, 0.7
+    label_fontsize, tick_fontsize = 10, 8
     figure, axes = plt.subplots(
         nrows=len(results),
         ncols=2,
@@ -109,6 +114,7 @@ def plot_attention_map(
         axes[i, 0].imshow(image, cmap="gray")
         heatmap = colors[np.uint8(255.0 * heatmap)] * 255.0
         heatmap = alpha * heatmap + (1 - alpha) * image[..., np.newaxis]
+        # heatmap = heatmap * image
         axes[i, 1].imshow(heatmap.astype(np.uint8), cmap=colormap)
         if i == 0:
             axes[i, 0].set_title("Input", fontsize=label_fontsize)
@@ -187,13 +193,13 @@ def attention_rollout(image: np.ndarray, attention: np.ndarray):
     heatmap = joint_attentions[-1, 0, 1:]
     heatmap = np.reshape(heatmap, newshape=find_shape(len(heatmap)))
     # heatmap = heatmap / np.max(heatmap)
+    heatmap = normalize(heatmap)
     heatmap = resize(
         heatmap,
         output_shape=image.shape[1:],
         preserve_range=True,
         anti_aliasing=False,
     )
-    heatmap = heatmap / np.max(heatmap)
     return heatmap
 
 
@@ -220,11 +226,11 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    num_plots = 4
+    num_plots = 10
     recorder = Recorder(model.core)
 
     results = []
-    for batch in test_ds[MOUSE_ID]:
+    for batch in val_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
             # pupil_center = torch.zeros_like(pupil_center)
@@ -233,8 +239,8 @@ def main(args):
             image, _ = model.image_cropper(
                 inputs=batch["image"],
                 mouse_id=MOUSE_ID,
-                pupil_centers=pupil_center,
                 behaviors=behavior,
+                pupil_centers=pupil_center,
             )
             _, attention = recorder(
                 images=image,
