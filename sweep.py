@@ -78,5 +78,7 @@ if __name__ == "__main__":
             ),
             count=1,
         )
-        torch.cuda.empty_cache()
-        time.sleep(5)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if i < params.num_trials - 1:
+            time.sleep(5)
