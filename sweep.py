@@ -1,4 +1,6 @@
 import os
+import time
+import torch
 import wandb
 import argparse
 from functools import partial
@@ -65,13 +67,16 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
     params = parser.parse_args()
 
-    wandb.agent(
-        sweep_id=f"bryanlimy/sensorium/{params.sweep_id}",
-        function=partial(
-            main,
-            wandb_group=params.wandb_group,
-            dataset=params.dataset,
-            num_workers=params.num_workers,
-        ),
-        count=params.num_trials,
-    )
+    for i in range(params.num_trials):
+        wandb.agent(
+            sweep_id=f"bryanlimy/sensorium/{params.sweep_id}",
+            function=partial(
+                main,
+                wandb_group=params.wandb_group,
+                dataset=params.dataset,
+                num_workers=params.num_workers,
+            ),
+            count=1,
+        )
+        torch.cuda.empty_cache()
+        time.sleep(5)
