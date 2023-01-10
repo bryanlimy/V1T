@@ -6,6 +6,7 @@ import numpy as np
 import typing as t
 from torch import nn
 import matplotlib.cm as cm
+from einops import rearrange
 import matplotlib.pyplot as plt
 from skimage.transform import resize
 
@@ -20,7 +21,8 @@ utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
 
-MOUSE_ID = "2"
+# MOUSE_ID = "2"
+MOUSE_ID = "static26085-6-3"
 
 
 def normalize(x: np.ndarray):
@@ -92,6 +94,13 @@ class Recorder(nn.Module):
         return pred, attns
 
 
+def to_rgb(image: np.ndarray):
+    assert image.shape[0] == 2
+    blue, green = image[0][..., None], image[1][..., None]
+    red = np.zeros_like(blue)
+    return np.concatenate((red, blue, green), axis=-1)
+
+
 def plot_attention_map(
     results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
     filename: str = None,
@@ -110,10 +119,12 @@ def plot_attention_map(
         facecolor=BACKGROUND_COLOR,
     )
     for i, (image, heatmap, behavior, pupil_center) in enumerate(results):
-        image = image[0]
-        axes[i, 0].imshow(image, cmap="gray")
+        gray_image = image.shape[0] == 1
+        image = image[0] if gray_image else to_rgb(image)
+        axes[i, 0].imshow(image.astype(np.uint8), cmap="gray")
         heatmap = colors[np.uint8(255.0 * heatmap)] * 255.0
-        heatmap = alpha * heatmap + (1 - alpha) * image[..., np.newaxis]
+        image = image[..., None] if gray_image else image
+        heatmap = alpha * heatmap + (1 - alpha) * image
         # heatmap = heatmap * image
         axes[i, 1].imshow(heatmap.astype(np.uint8), cmap=colormap)
         if i == 0:
@@ -155,7 +166,7 @@ def plot_attention_map(
     tensorboard.set_ticks_params(axis=cbar_ax)
     plt.show()
     if filename is not None:
-        tensorboard.save_figure(figure, filename=filename, dpi=120)
+        # tensorboard.save_figure(figure, filename=filename, dpi=120)
         print(f"plot saved to {filename}.")
 
 
@@ -175,7 +186,7 @@ def attention_rollout(image: np.ndarray, attention: np.ndarray):
     - https://github.com/jeonsworld/ViT-pytorch/blob/main/visualize_attention_map.ipynb
     """
     # average the attention heads
-    attention = np.mean(attention, axis=1)
+    attention = np.max(attention, axis=1)
 
     # to account for residual connections, we add an identity matrix to the
     # attention matrix and re-normalize the weights.
