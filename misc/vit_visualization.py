@@ -21,8 +21,8 @@ utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
 
-# MOUSE_ID = "2"
-MOUSE_ID = "static26085-6-3"
+MOUSE_ID = "2"
+# MOUSE_ID = "static26085-6-3"
 
 
 def normalize(x: np.ndarray):
