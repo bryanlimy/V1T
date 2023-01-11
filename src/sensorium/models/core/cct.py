@@ -13,6 +13,18 @@ from sensorium.models.utils import DropPath
 from sensorium.models.core.vit import BehaviorMLP
 
 
+def sinusoidal_embedding(num_channels: int, dim: int):
+    pe = torch.FloatTensor(
+        [
+            [p / (10000 ** (2 * (i // 2) / dim)) for i in range(dim)]
+            for p in range(num_channels)
+        ]
+    )
+    pe[:, 0::2] = torch.sin(pe[:, 0::2])
+    pe[:, 1::2] = torch.cos(pe[:, 1::2])
+    return torch.unsqueeze(pe, dim=0)
+
+
 class Tokenizer(nn.Module):
     def __init__(
         self,
@@ -22,8 +34,11 @@ class Tokenizer(nn.Module):
         emb_dim: int,
         padding: int = 3,
         use_bias: bool = False,
+        pos_emb: t.Literal["learn", "sine", "none"] = "sine",
     ):
         super(Tokenizer, self).__init__()
+        assert pos_emb in ("sine", "learn", "none")
+
         c, h, w = image_shape
         self.image_shape = image_shape
 
@@ -37,14 +52,27 @@ class Tokenizer(nn.Module):
         )
         self.relu = nn.ReLU()
         self.max_pool2d = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        output_shape = self.output_shape
+        self.num_patches = output_shape[0]
+
+        if pos_emb == "none":
+            self.pos_embedding = None
+        elif pos_emb == "learn":
+            self.pos_embedding = nn.Parameter(torch.zeros(1, self.num_patches, emb_dim))
+            nn.init.trunc_normal_(self.pos_emb, std=0.2)
+        else:
+            self.register_buffer(
+                "pos_embedding", sinusoidal_embedding(self.num_patches, emb_dim)
+            )
+
         self.apply(self.init_weight)
 
     @property
     def output_shape(self):
         with torch.no_grad():
-            inputs = torch.zeros((1, *self.image_shape))
-            outputs = self.forward(inputs)
-            _, num_patches, emb_dim = outputs.shape
+            outputs = self.tokenize(torch.zeros((1, *self.image_shape)))
+        _, num_patches, emb_dim = outputs.shape
         return (num_patches, emb_dim)
 
     @staticmethod
@@ -52,11 +80,17 @@ class Tokenizer(nn.Module):
         if isinstance(m, nn.Conv2d):
             nn.init.kaiming_normal_(m.weight)
 
-    def forward(self, inputs: torch.Tensor):
+    def tokenize(self, inputs: torch.Tensor):
         outputs = self.conv2d(inputs)
         outputs = self.relu(outputs)
         outputs = self.max_pool2d(outputs)
         outputs = rearrange(outputs, "b c h w -> b (h w) c")
+        return outputs
+
+    def forward(self, inputs: torch.Tensor):
+        outputs = self.tokenize(inputs)
+        if self.pos_embedding is not None:
+            outputs += self.pos_embedding
         return outputs
 
 
@@ -114,7 +148,7 @@ class TransformerBlock(nn.Module):
         mlp_dim: int,
         dropout: float,
         drop_path: float,
-        mouse_ids: t.List[int] = None,
+        mouse_ids: t.List[str] = None,
     ):
         super(TransformerBlock, self).__init__()
         self.mha = Attention(
@@ -149,55 +183,30 @@ class TransformerBlock(nn.Module):
         return outputs
 
 
-def sinusoidal_embedding(num_channels: int, dim: int):
-    pe = torch.FloatTensor(
-        [
-            [p / (10000 ** (2 * (i // 2) / dim)) for i in range(dim)]
-            for p in range(num_channels)
-        ]
-    )
-    pe[:, 0::2] = torch.sin(pe[:, 0::2])
-    pe[:, 1::2] = torch.cos(pe[:, 1::2])
-    return torch.unsqueeze(pe, dim=0)
-
-
 class Transformer(nn.Module):
     def __init__(
         self,
         input_shape: t.Tuple[int, int],
         num_channels: int,
         emb_dim: int,
+        mlp_dim: int,
         num_blocks: int,
         num_heads: int,
         p_dropout: float,
         t_dropout: float,
         behavior_mode: int,
-        mouse_ids: t.List[int],
+        mouse_ids: t.List[str],
         drop_path: float = 0.0,
-        mlp_ratio: float = 3,
-        pos_emb: t.Literal["sine", "learn", "none"] = "sine",
     ):
         super(Transformer, self).__init__()
-        assert pos_emb in ("sine", "learn", "none")
 
         self.num_patches = input_shape[0]
         self.num_channels = num_channels
 
-        if pos_emb == "none":
-            self.pos_emb = None
-        elif pos_emb == "learn":
-            self.pos_emb = nn.Parameter(torch.zeros(1, self.num_patches, emb_dim))
-            nn.init.trunc_normal_(self.pos_emb, std=0.2)
-        else:
-            self.register_buffer(
-                "pos_emb", sinusoidal_embedding(self.num_patches, emb_dim)
-            )
-
         self.p_dropout = nn.Dropout(p=p_dropout)
 
-        drop_path_rates = np.linspace(0, drop_path, num_blocks).tolist()
+        drop_path_rates = np.linspace(0, drop_path, num_blocks)
 
-        mlp_dim = int(emb_dim * mlp_ratio)
         self.blocks = nn.ModuleList(
             [
                 TransformerBlock(
@@ -207,10 +216,10 @@ class Transformer(nn.Module):
                     num_heads=num_heads,
                     mlp_dim=mlp_dim,
                     dropout=t_dropout,
-                    drop_path=drop_path_rates[i],
+                    drop_path=drop_path,
                     mouse_ids=mouse_ids,
                 )
-                for i in range(len(drop_path_rates))
+                for drop_path in drop_path_rates
             ]
         )
 
@@ -228,17 +237,7 @@ class Transformer(nn.Module):
             nn.init.constant_(m.weight, 1.0)
 
     def forward(self, inputs: torch.Tensor, mouse_id: int, behaviors: torch.Tensor):
-        outputs = inputs
-        if self.pos_emb is None and inputs.size(1) < self.num_patches:
-            outputs = F.pad(
-                outputs,
-                (0, 0, 0, self.num_channels - outputs.size(1)),
-                mode="constant",
-                value=0,
-            )
-        if self.pos_emb is not None:
-            outputs += self.pos_emb
-        outputs = self.p_dropout(outputs)
+        outputs = self.p_dropout(inputs)
         for block in self.blocks:
             outputs = block(outputs, mouse_id=mouse_id, behaviors=behaviors)
         return outputs
@@ -264,6 +263,7 @@ class CCTCore(Core):
             patch_size=args.patch_size,
             stride=args.patch_stride,
             emb_dim=args.emb_dim,
+            pos_emb=args.pos_emb,
         )
         tokenizer_shape = self.tokenizer.output_shape
         num_patches = tokenizer_shape[0]
@@ -272,12 +272,12 @@ class CCTCore(Core):
             input_shape=tokenizer_shape,
             num_channels=c,
             emb_dim=args.emb_dim,
+            mlp_dim=args.mlp_dim,
             num_blocks=args.num_blocks,
             num_heads=args.num_heads,
             p_dropout=args.p_dropout,
             t_dropout=args.t_dropout,
             drop_path=args.drop_path,
-            mlp_ratio=args.mlp_ratio,
             behavior_mode=args.behavior_mode,
             mouse_ids=list(args.output_shapes.keys()),
         )
