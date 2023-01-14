@@ -40,6 +40,8 @@ def inference(
         results["predictions"].append(predictions.cpu().numpy())
         results["targets"].append(data["response"].numpy())
         results["pupil_dilations"].append(data["behavior"][:, 0].numpy())
+        if len(results["predictions"]) > 10:
+            break
     results = {k: np.vstack(v) for k, v in results.items()}
     results["pupil_dilations"] = np.squeeze(results["pupil_dilations"], axis=-1)
     return results
@@ -63,12 +65,17 @@ def correlation_by_dilation(results: t.Dict[str, np.ndarray]):
     return {"large": large, "small": small}
 
 
+def convert(mouse_id: str):
+    pairs = {"2": "A", "3": "B", "4": "C", "5": "D", "6": "E"}
+    return pairs[mouse_id] if mouse_id in pairs else mouse_id
+
+
 def plot_correlations(
     results: t.Dict[str, t.Dict[str, np.ndarray]], filename: str = None
 ):
     df = pd.DataFrame(
         data=[
-            [i, results[mouse_id][size][i], mouse_id, size]
+            [i, results[mouse_id][size][i], convert(mouse_id), size]
             for size in ["large", "small"]
             for mouse_id in results.keys()
             for i in range(len(results[mouse_id][size]))
@@ -76,7 +83,7 @@ def plot_correlations(
         columns=["neuron", "Correlation", "Mouse", "Pupil size"],
     )
     tick_fontsize, label_fontsize = 8, 10
-    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(6, 4), dpi=240)
+    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 4), dpi=240)
     sns.violinplot(
         data=df,
         x="Mouse",
@@ -101,9 +108,12 @@ def plot_correlations(
 
     sns.despine(ax=ax, offset={"left": 15, "bottom": 5}, trim=True)
     ax.set_yticklabels(ax.get_yticks().round(1), fontsize=tick_fontsize)
-    ax.set_xticklabels(ax.get_xticks(), fontsize=tick_fontsize)
+    ax.set_xticklabels(
+        [convert(mouse_id) for mouse_id in results.keys()], fontsize=tick_fontsize
+    )
     ax.set_ylabel(ax.get_ylabel(), fontsize=label_fontsize)
     ax.set_xlabel(ax.get_xlabel(), fontsize=label_fontsize)
+    ax.set_ylim(-1.5, 1.5)
 
     max_value = 1
     for i, mouse_id in enumerate(results.keys()):
@@ -159,10 +169,16 @@ def main(args):
         correlations = correlation_by_dilation(mouse_result)
         results[mouse_id] = correlations
 
+    import pickle
+
+    with open(os.path.join(args.output_dir, "temp.pkl"), "wb") as file:
+        pickle.dump(results, file)
+    exit()
+
     plot_correlations(
         results,
         filename=os.path.join(
-            args.output_dir, "plots", "pupil_dilation_correlation.jpg"
+            args.output_dir, "plots", "pupil_dilation_correlation.svg"
         ),
     )
 
