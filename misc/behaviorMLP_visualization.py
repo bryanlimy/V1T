@@ -42,7 +42,7 @@ class Recorder(nn.Module):
     def _find_modules(nn_module, type):
         return [module for module in nn_module.modules() if isinstance(module, type)]
 
-    def _register_hook(self, mouse_id: int):
+    def _register_hook(self, mouse_id: str):
         modules = self._find_modules(self.vit.transformer, BehaviorMLP)
         for module in modules:
             handle = module.model.register_forward_hook(self._hook)
@@ -68,7 +68,7 @@ class Recorder(nn.Module):
         images: torch.Tensor,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
     ):
         """Return attention output from ViT
         attns has shape (batch size, num blocks, num heads, num patches, num patches)
@@ -88,7 +88,10 @@ class Recorder(nn.Module):
 
 
 def plot_distribution_map(
-    results: np.ndarray, mouse_id: int, filename: str = None, colormap: str = "Set2"
+    results: np.ndarray,
+    mouse_id: str,
+    filename: str = None,
+    colormap: str = "Set2",
 ):
     df = pd.DataFrame()
     for i in range(len(results)):
@@ -97,7 +100,7 @@ def plot_distribution_map(
     tick_fontsize, label_fontsize = 8, 10
     figure, axes = joypy.joyplot(
         df,
-        figsize=(5, 6),
+        figsize=(4, 4),
         colormap=cm.get_cmap(colormap),
         alpha=0.8,
         overlap=1.25,
@@ -139,7 +142,7 @@ def main(args):
 
     _, val_ds, test_ds = data.get_training_ds(
         args,
-        data_dir=args.dataset,
+        data_dir=args.data,
         mouse_ids=args.mouse_ids,
         batch_size=args.batch_size,
         device=args.device,
@@ -151,46 +154,54 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    for mouse_id, mouse_ds in val_ds.items():
-        recorder = Recorder(model.core)
-        results = []
-        for batch in tqdm(val_ds[mouse_id], desc=f"Mouse {mouse_id}"):
-            with torch.no_grad():
-                pupil_center = batch["pupil_center"]
-                behavior = batch["behavior"]
-                image, _ = model.image_cropper(
-                    inputs=batch["image"],
-                    mouse_id=mouse_id,
-                    pupil_centers=pupil_center,
-                    behaviors=behavior,
-                )
-                activations = recorder(
-                    images=image,
-                    behaviors=behavior,
-                    pupil_centers=pupil_center,
-                    mouse_id=mouse_id,
-                )
-                recorder.clear()
-            results.append(activations.numpy())
-        results = np.array(results)
-        # compute the average activation for every block over all samples
-        results = np.mean(results, axis=0)
-        plot_distribution_map(
-            results=results,
-            mouse_id=mouse_id,
-            filename=os.path.join(
-                "plots",
-                "behaviorMLP",
-                f"mouse{mouse_id}_activations.png",
-            ),
-        )
-        recorder.eject()
-        del recorder
+    mouse_id = "2"
+    mouse_ds = test_ds[mouse_id]
+
+    recorder = Recorder(model.core)
+    results = []
+    for batch in tqdm(mouse_ds, desc=f"Mouse {mouse_id}"):
+        with torch.no_grad():
+            behavior = batch["behavior"]
+            pupil_center = batch["pupil_center"]
+            image, _ = model.image_cropper(
+                inputs=batch["image"],
+                mouse_id=mouse_id,
+                behaviors=behavior,
+                pupil_centers=pupil_center,
+            )
+            activations = recorder(
+                images=image,
+                behaviors=behavior,
+                pupil_centers=pupil_center,
+                mouse_id=mouse_id,
+            )
+            recorder.clear()
+        results.append(activations.numpy())
+    results = np.array(results)
+    # compute the average activation for every block over all samples
+    results = np.mean(results, axis=0)
+
+    import pickle
+
+    with open(os.path.join(args.output_dir, "behaviorMLP.pkl"), "wb") as file:
+        pickle.dump(results, file)
+    exit()
+
+    plot_distribution_map(
+        results=results,
+        mouse_id=mouse_id,
+        filename=os.path.join(
+            args.output_dir,
+            f"behaviorMLP_mouse{mouse_id}.svg",
+        ),
+    )
+    recorder.eject()
+    del recorder
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, default="../data/sensorium")
+    parser.add_argument("--data", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--device", type=str, default="cpu")
 

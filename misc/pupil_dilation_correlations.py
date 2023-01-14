@@ -73,7 +73,7 @@ def plot_correlations(
 ):
     df = pd.DataFrame(
         data=[
-            [i, results[mouse_id][size][i], convert(mouse_id), size]
+            [i, results[mouse_id][size][i], mouse_id, size]
             for size in ["large", "small"]
             for mouse_id in results.keys()
             for i in range(len(results[mouse_id][size]))
@@ -81,7 +81,7 @@ def plot_correlations(
         columns=["neuron", "Correlation", "Mouse", "Pupil size"],
     )
     tick_fontsize, label_fontsize = 8, 10
-    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 4), dpi=240)
+    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(4, 4), dpi=240)
     sns.violinplot(
         data=df,
         x="Mouse",
@@ -92,17 +92,6 @@ def plot_correlations(
         palette="Set2",
         ax=ax,
     )
-    sns.move_legend(
-        ax,
-        loc="lower center",
-        bbox_to_anchor=(0.5, -0.03),
-        ncols=2,
-        frameon=False,
-        handletextpad=0.5,
-        markerscale=0.5,
-        fontsize=tick_fontsize,
-        title_fontsize=tick_fontsize,
-    )
 
     sns.despine(ax=ax, offset={"left": 15, "bottom": 5}, trim=True)
     ax.set_yticklabels(ax.get_yticks().round(1), fontsize=tick_fontsize)
@@ -111,9 +100,22 @@ def plot_correlations(
     )
     ax.set_ylabel(ax.get_ylabel(), fontsize=label_fontsize)
     ax.set_xlabel(ax.get_xlabel(), fontsize=label_fontsize)
-    ax.set_ylim(-1.5, 1.5)
+    ax.set_xlim(-0.45, 4.45)
 
-    max_value = 1
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(
+        handles=[plt.plot([], marker="", ls="")[0]] + handles,
+        labels=["pupil size"] + labels,
+        loc="lower center",
+        bbox_to_anchor=[0.5, -0.04],
+        frameon=False,
+        ncols=3,
+        prop={"size": tick_fontsize},
+        handletextpad=0.4,
+        columnspacing=1.0,
+    )
+
+    max_value = 1.06
     for i, mouse_id in enumerate(results.keys()):
         small = np.mean(results[mouse_id]["small"])
         large = np.mean(results[mouse_id]["large"])
@@ -126,7 +128,7 @@ def plot_correlations(
             va="top",
             fontsize=tick_fontsize,
         )
-    ax.set_title("Prediction performance w.r.t pupil dilation", fontsize=label_fontsize)
+    # ax.set_title("Prediction performance w.r.t pupil dilation", fontsize=label_fontsize)
     plt.tight_layout()
     plt.show()
     if filename is not None:
@@ -157,21 +159,20 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    results = {}
-    for mouse_id, mouse_ds in test_ds.items():
-        if mouse_id == "1":
-            continue
-        mouse_result = inference(
-            model=model, ds=mouse_ds, mouse_id=mouse_id, device=args.device
-        )
-        correlations = correlation_by_dilation(mouse_result)
-        results[mouse_id] = correlations
+    # results = {}
+    # for mouse_id, mouse_ds in test_ds.items():
+    #     if mouse_id == "1":
+    #         continue
+    #     mouse_result = inference(
+    #         model=model, ds=mouse_ds, mouse_id=mouse_id, device=args.device
+    #     )
+    #     correlations = correlation_by_dilation(mouse_result)
+    #     results[mouse_id] = correlations
 
     import pickle
 
-    with open(os.path.join(args.output_dir, "temp.pkl"), "wb") as file:
-        pickle.dump(results, file)
-    exit()
+    with open(os.path.join(args.output_dir, "pupil_dilation.pkl"), "rb") as file:
+        results = pickle.load(file)
 
     plot_correlations(
         results,

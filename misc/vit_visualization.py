@@ -113,7 +113,7 @@ def plot_attention_map(
     results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
     filename: str = None,
     colormap: str = "turbo",
-    alpha: float = 0.8,
+    alpha: float = 0.5,
 ):
     cmap = cm.get_cmap(colormap)
     colors = cmap(np.arange(256))[:, :3]
@@ -172,6 +172,75 @@ def plot_attention_map(
         tick_fontsize=tick_fontsize,
     )
     tensorboard.set_ticks_params(axis=cbar_ax)
+    plt.show()
+    if filename is not None:
+        # tensorboard.save_figure(figure, filename=filename, dpi=120)
+        print(f"plot saved to {filename}.")
+
+
+def plot_attention_map_2(
+    results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+    filename: str = None,
+    colormap: str = "turbo",
+    alpha: float = 0.5,
+):
+    assert len(results) == 4
+    cmap = cm.get_cmap(colormap)
+    colors = cmap(np.arange(256))[:, :3]
+    label_fontsize, tick_fontsize = 10, 8
+    figure, axes = plt.subplots(
+        nrows=1,
+        ncols=4,
+        figsize=(8, 3),
+        gridspec_kw={"wspace": 0.05, "hspace": 0.05},
+        dpi=240,
+        facecolor=BACKGROUND_COLOR,
+    )
+    for i, (image, heatmap, behavior, pupil_center) in enumerate(results):
+        gray_image = image.shape[0] == 1
+        image = image[0] if gray_image else to_rgb(image)
+        heatmap = colors[np.uint8(255.0 * heatmap)] * 255.0
+        image = image[..., None] if gray_image else image
+        heatmap = alpha * heatmap + (1 - alpha) * image
+        # heatmap = heatmap * image
+        axes[i].imshow(heatmap.astype(np.uint8), cmap=colormap)
+        axes[i].set_xticks([])
+        axes[i].set_yticks([])
+        tensorboard.remove_spines(axis=axes[i])
+        description = (
+            f"[{behavior[0]:.01f}, "  # pupil dilation
+            f"{behavior[1]:.01f}, "  # dilation derivative
+            f"({pupil_center[0]:.01f}, {pupil_center[1]:.01f}), "  # pupil center
+            f"{behavior[2]:.01f}]"  # speed
+        )
+        axes[i].set_xlabel(description, labelpad=0, fontsize=tick_fontsize)
+
+    figure.suptitle(
+        "[pupil dilation , derivative, pupil center, speed]",
+        y=axes[0].get_position().y1 + 0.05,
+        fontsize=tick_fontsize,
+    )
+
+    # plot colorbar
+    pos1 = axes[3].get_position()
+    pos2 = axes[3].get_position()
+    width, height = 0.005, (pos1.y1 - pos1.y0) * 0.35
+    cbar_ax = figure.add_axes(
+        rect=[
+            pos1.x1 + 0.01,
+            ((pos1.y1 - pos2.y0) / 2 + pos2.y0) - (height / 2),
+            width,
+            height,
+        ]
+    )
+    figure.colorbar(cm.ScalarMappable(cmap=colormap), cax=cbar_ax, shrink=0.1)
+    tensorboard.set_yticks(
+        axis=cbar_ax,
+        ticks_loc=np.linspace(0, 1, 3),
+        tick_fontsize=tick_fontsize,
+    )
+    tensorboard.set_ticks_params(axis=cbar_ax)
+
     plt.show()
     if filename is not None:
         tensorboard.save_figure(figure, filename=filename, dpi=120)
@@ -241,7 +310,7 @@ def main(args):
     recorder = Recorder(model.core)
 
     results = []
-    for batch in val_ds[MOUSE_ID]:
+    for batch in test_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
             # pupil_center = torch.zeros_like(pupil_center)
@@ -267,10 +336,10 @@ def main(args):
         if len(results) == num_plots:
             break
 
-    plot_attention_map(
+    plot_attention_map_2(
         results=results,
         filename=os.path.join(
-            "plots", "attention_rollout", f"mouse{MOUSE_ID}_attention_rollouts.svg"
+            args.output_dir, "plots", f"attention_rollout_mouse{MOUSE_ID}.svg"
         ),
     )
 
