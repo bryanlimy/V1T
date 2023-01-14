@@ -40,8 +40,6 @@ def inference(
         results["predictions"].append(predictions.cpu().numpy())
         results["targets"].append(data["response"].numpy())
         results["pupil_dilations"].append(data["behavior"][:, 0].numpy())
-        if len(results["predictions"]) > 10:
-            break
     results = {k: np.vstack(v) for k, v in results.items()}
     results["pupil_dilations"] = np.squeeze(results["pupil_dilations"], axis=-1)
     return results
