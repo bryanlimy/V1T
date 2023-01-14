@@ -23,6 +23,11 @@ utils.set_random_seed(1234)
 BACKGROUND_COLOR = "#ffffff"
 
 
+def convert(mouse_id: str):
+    pairs = {"2": "A", "3": "B", "4": "C", "5": "D", "6": "E"}
+    return pairs[mouse_id] if mouse_id in pairs else mouse_id
+
+
 @torch.no_grad()
 def inference(
     model: Model, ds: DataLoader, mouse_id: str, device: torch.device = "cpu"
@@ -61,11 +66,6 @@ def correlation_by_dilation(results: t.Dict[str, np.ndarray]):
         f"small: {small.mean():.04f}"
     )
     return {"large": large, "small": small}
-
-
-def convert(mouse_id: str):
-    pairs = {"2": "A", "3": "B", "4": "C", "5": "D", "6": "E"}
-    return pairs[mouse_id] if mouse_id in pairs else mouse_id
 
 
 def plot_correlations(

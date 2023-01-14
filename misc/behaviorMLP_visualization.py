@@ -23,6 +23,11 @@ utils.set_random_seed(1234)
 BACKGROUND_COLOR = "#ffffff"
 
 
+def convert(mouse_id: str):
+    pairs = {"2": "A", "3": "B", "4": "C", "5": "D", "6": "E"}
+    return pairs[mouse_id] if mouse_id in pairs else mouse_id
+
+
 class Recorder(nn.Module):
     def __init__(self, vit: ViTCore, device: str = "cpu"):
         super().__init__()
@@ -70,9 +75,6 @@ class Recorder(nn.Module):
         pupil_centers: torch.Tensor,
         mouse_id: str,
     ):
-        """Return attention output from ViT
-        attns has shape (batch size, num blocks, num heads, num patches, num patches)
-        """
         assert not self.ejected, "recorder has been ejected, cannot be used anymore"
         self.clear()
         if not self.hook_registered:
@@ -103,19 +105,19 @@ def plot_distribution_map(
         figsize=(4, 4),
         colormap=cm.get_cmap(colormap),
         alpha=0.8,
-        overlap=1.25,
+        overlap=1.5,
         # kind="normalized_counts",
         bins=30,
         range_style="all",
-        x_range=[-1.5, 1.5],
+        x_range=[-1.25, 1.25],
         linewidth=1.5,
-        title=f"Mouse {mouse_id} BehaviorMLP activations",
+        title=f"Mouse {convert(mouse_id)} B-MLP activations",
     )
     pos = axes[0].get_position()
     axes[0].text(
-        x=-1.65,
-        y=pos.y1 - 0.5,
-        s="Layer",
+        x=-1.4,
+        y=pos.y1 + 0.5,
+        s="Block",
         fontsize=label_fontsize,
         ha="left",
         va="center",
@@ -126,7 +128,7 @@ def plot_distribution_map(
 
     plt.show()
     if filename is not None:
-        tensorboard.save_figure(figure, filename=filename, dpi=120)
+        # tensorboard.save_figure(figure, filename=filename, dpi=120)
         print(f"plot saved to {filename}.")
 
 
@@ -154,36 +156,39 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    mouse_id = "2"
-    mouse_ds = test_ds[mouse_id]
-
-    recorder = Recorder(model.core)
-    results = []
-    for batch in tqdm(mouse_ds, desc=f"Mouse {mouse_id}"):
-        with torch.no_grad():
-            behavior = batch["behavior"]
-            pupil_center = batch["pupil_center"]
-            image, _ = model.image_cropper(
-                inputs=batch["image"],
-                mouse_id=mouse_id,
-                behaviors=behavior,
-                pupil_centers=pupil_center,
-            )
-            activations = recorder(
-                images=image,
-                behaviors=behavior,
-                pupil_centers=pupil_center,
-                mouse_id=mouse_id,
-            )
-            recorder.clear()
-        results.append(activations.numpy())
-    results = np.array(results)
-    # compute the average activation for every block over all samples
-    results = np.mean(results, axis=0)
+    results = {}
+    for mouse_id, mouse_ds in test_ds.items():
+        recorder = Recorder(model.core)
+        result = []
+        for batch in tqdm(mouse_ds, desc=f"Mouse {mouse_id}"):
+            with torch.no_grad():
+                behavior = batch["behavior"]
+                pupil_center = batch["pupil_center"]
+                image, _ = model.image_cropper(
+                    inputs=batch["image"],
+                    mouse_id=mouse_id,
+                    behaviors=behavior,
+                    pupil_centers=pupil_center,
+                )
+                activations = recorder(
+                    images=image,
+                    behaviors=behavior,
+                    pupil_centers=pupil_center,
+                    mouse_id=mouse_id,
+                )
+                recorder.clear()
+            result.append(activations.numpy())
+        result = np.array(result)
+        # compute the average activation for every block over all samples
+        result = np.mean(result, axis=0)
+        results[mouse_id] = result
+        recorder.eject()
+        del recorder
 
     import pickle
 
     with open(os.path.join(args.output_dir, "behaviorMLP.pkl"), "wb") as file:
+        # results = pickle.load(file)
         pickle.dump(results, file)
     exit()
 
@@ -195,8 +200,6 @@ def main(args):
             f"behaviorMLP_mouse{mouse_id}.svg",
         ),
     )
-    recorder.eject()
-    del recorder
 
 
 if __name__ == "__main__":
