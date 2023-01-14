@@ -158,6 +158,8 @@ def main(args):
 
     results = {}
     for mouse_id, mouse_ds in test_ds.items():
+        if mouse_id == "1":
+            continue
         recorder = Recorder(model.core)
         result = []
         for batch in tqdm(mouse_ds, desc=f"Mouse {mouse_id}"):
