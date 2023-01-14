@@ -258,7 +258,7 @@ def load_mouse_data(ds_name: DS_NAMES, mouse_dir: str, load_timestamps: bool = F
 def load_mice_data(
     ds_name: DS_NAMES,
     mice_dir: str,
-    mouse_ids: t.List[int] = None,
+    mouse_ids: t.List[str] = None,
     load_timestamps: bool = False,
     verbose: int = 1,
 ):

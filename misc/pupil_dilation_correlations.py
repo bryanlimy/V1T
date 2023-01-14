@@ -25,7 +25,7 @@ BACKGROUND_COLOR = "#ffffff"
 
 @torch.no_grad()
 def inference(
-    model: Model, ds: DataLoader, mouse_id: int, device: torch.device = "cpu"
+    model: Model, ds: DataLoader, mouse_id: str, device: torch.device = "cpu"
 ):
     results = {"predictions": [], "targets": [], "pupil_dilations": []}
     model.to(device)
@@ -34,8 +34,8 @@ def inference(
         predictions, _, _ = model(
             inputs=data["image"].to(device),
             mouse_id=mouse_id,
-            pupil_centers=data["pupil_center"].to(device),
             behaviors=data["behavior"].to(device),
+            pupil_centers=data["pupil_center"].to(device),
         )
         results["predictions"].append(predictions.cpu().numpy())
         results["targets"].append(data["response"].numpy())
@@ -50,10 +50,10 @@ def correlation_by_dilation(results: t.Dict[str, np.ndarray]):
     dilation_sort = np.argsort(results["pupil_dilations"])
     predictions = results["predictions"][dilation_sort]
     targets = results["targets"][dilation_sort]
-    # compute the correlation of top half and bottom half of responses
-    mid = len(dilation_sort) // 2
-    small = correlation(y1=predictions[:mid], y2=targets[:mid], dim=0)
-    large = correlation(y1=predictions[mid:], y2=targets[mid:], dim=0)
+    # compute the correlation of top-third and bottom-third responses
+    third = len(dilation_sort) // 3
+    small = correlation(y1=predictions[:third], y2=targets[:third], dim=0)
+    large = correlation(y1=predictions[-third:], y2=targets[-third:], dim=0)
     overall = correlation(y1=predictions, y2=targets, dim=0)
     print(
         f"Overall {overall.mean():.04f}, "
@@ -135,9 +135,9 @@ def main(args):
     args.batch_size = 1
     args.device = torch.device(args.device)
 
-    _, val_ds, _ = data.get_training_ds(
+    _, val_ds, test_ds = data.get_training_ds(
         args,
-        data_dir=args.dataset,
+        data_dir=args.data,
         mouse_ids=args.mouse_ids,
         batch_size=args.batch_size,
         device=args.device,
@@ -150,7 +150,9 @@ def main(args):
     scheduler.restore(force=True)
 
     results = {}
-    for mouse_id, mouse_ds in val_ds.items():
+    for mouse_id, mouse_ds in test_ds.items():
+        if mouse_id == "1":
+            continue
         mouse_result = inference(
             model=model, ds=mouse_ds, mouse_id=mouse_id, device=args.device
         )
@@ -167,7 +169,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, default="../data/sensorium")
+    parser.add_argument("--data", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--device", type=str, default="cpu")
 

@@ -25,6 +25,14 @@ MOUSE_ID = "2"
 # MOUSE_ID = "static26085-6-3"
 
 
+def find_shape(num_patches: int):
+    dim1 = math.ceil(math.sqrt(num_patches))
+    while num_patches % dim1 != 0 and dim1 > 0:
+        dim1 -= 1
+    dim2 = num_patches // dim1
+    return dim1, dim2
+
+
 def normalize(x: np.ndarray):
     return (x - np.min(x)) / (np.max(x) - np.min(x))
 
@@ -166,16 +174,8 @@ def plot_attention_map(
     tensorboard.set_ticks_params(axis=cbar_ax)
     plt.show()
     if filename is not None:
-        # tensorboard.save_figure(figure, filename=filename, dpi=120)
+        tensorboard.save_figure(figure, filename=filename, dpi=120)
         print(f"plot saved to {filename}.")
-
-
-def find_shape(num_patches: int):
-    dim1 = math.ceil(math.sqrt(num_patches))
-    while num_patches % dim1 != 0 and dim1 > 0:
-        dim1 -= 1
-    dim2 = num_patches // dim1
-    return dim1, dim2
 
 
 def attention_rollout(image: np.ndarray, attention: np.ndarray):
@@ -237,7 +237,7 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    num_plots = 10
+    num_plots = 4
     recorder = Recorder(model.core)
 
     results = []
@@ -270,7 +270,7 @@ def main(args):
     plot_attention_map(
         results=results,
         filename=os.path.join(
-            "plots", "attention_rollout", f"mouse{MOUSE_ID}_attention_rollouts.png"
+            "plots", "attention_rollout", f"mouse{MOUSE_ID}_attention_rollouts.svg"
         ),
     )
 
