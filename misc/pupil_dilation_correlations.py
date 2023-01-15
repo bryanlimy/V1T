@@ -81,7 +81,7 @@ def plot_correlations(
         columns=["neuron", "Correlation", "Mouse", "Pupil size"],
     )
     tick_fontsize, label_fontsize = 8, 10
-    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(4, 4), dpi=240)
+    figure, ax = plt.subplots(nrows=1, ncols=1, figsize=(5, 3.5), dpi=240)
     sns.violinplot(
         data=df,
         x="Mouse",

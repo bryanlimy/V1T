@@ -179,52 +179,72 @@ def plot_attention_map(
 
 
 def plot_attention_map_2(
-    results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+    val_results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
+    test_results: t.List[t.Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]],
     filename: str = None,
     colormap: str = "turbo",
     alpha: float = 0.5,
 ):
-    assert len(results) == 4
+    assert len(val_results) == len(test_results) == 3
     cmap = cm.get_cmap(colormap)
     colors = cmap(np.arange(256))[:, :3]
     label_fontsize, tick_fontsize = 10, 8
     figure, axes = plt.subplots(
-        nrows=1,
-        ncols=4,
-        figsize=(8, 3),
-        gridspec_kw={"wspace": 0.05, "hspace": 0.05},
+        nrows=2,
+        ncols=3,
+        figsize=(8, 4),
+        gridspec_kw={"wspace": 0.05, "hspace": -0.25},
         dpi=240,
         facecolor=BACKGROUND_COLOR,
     )
-    for i, (image, heatmap, behavior, pupil_center) in enumerate(results):
+    for i, (image, heatmap, behavior, pupil_center) in enumerate(val_results):
         gray_image = image.shape[0] == 1
         image = image[0] if gray_image else to_rgb(image)
         heatmap = colors[np.uint8(255.0 * heatmap)] * 255.0
         image = image[..., None] if gray_image else image
         heatmap = alpha * heatmap + (1 - alpha) * image
         # heatmap = heatmap * image
-        axes[i].imshow(heatmap.astype(np.uint8), cmap=colormap)
-        axes[i].set_xticks([])
-        axes[i].set_yticks([])
-        tensorboard.remove_spines(axis=axes[i])
+        axes[0, i].imshow(heatmap.astype(np.uint8), cmap=colormap)
+        axes[0, i].set_xticks([])
+        axes[0, i].set_yticks([])
+        tensorboard.remove_spines(axis=axes[0, i])
         description = (
             f"[{behavior[0]:.01f}, "  # pupil dilation
             f"{behavior[1]:.01f}, "  # dilation derivative
             f"({pupil_center[0]:.01f}, {pupil_center[1]:.01f}), "  # pupil center
             f"{behavior[2]:.01f}]"  # speed
         )
-        axes[i].set_xlabel(description, labelpad=0, fontsize=tick_fontsize)
-
-    figure.suptitle(
-        "[pupil dilation , derivative, pupil center, speed]",
-        y=axes[0].get_position().y1 + 0.05,
-        fontsize=tick_fontsize,
-    )
+        axes[0, i].set_xlabel(description, labelpad=0, fontsize=tick_fontsize)
+    axes[0, 0].set_ylabel("Validation samples", labelpad=0.05, fontsize=tick_fontsize)
+    for i, (image, heatmap, behavior, pupil_center) in enumerate(test_results):
+        gray_image = image.shape[0] == 1
+        image = image[0] if gray_image else to_rgb(image)
+        heatmap = colors[np.uint8(255.0 * heatmap)] * 255.0
+        image = image[..., None] if gray_image else image
+        heatmap = alpha * heatmap + (1 - alpha) * image
+        # heatmap = heatmap * image
+        axes[1, i].imshow(heatmap.astype(np.uint8), cmap=colormap)
+        axes[1, i].set_xticks([])
+        axes[1, i].set_yticks([])
+        tensorboard.remove_spines(axis=axes[1, i])
+        description = (
+            f"[{behavior[0]:.01f}, "  # pupil dilation
+            f"{behavior[1]:.01f}, "  # dilation derivative
+            f"({pupil_center[0]:.01f}, {pupil_center[1]:.01f}), "  # pupil center
+            f"{behavior[2]:.01f}]"  # speed
+        )
+        axes[1, i].set_xlabel(description, labelpad=0, fontsize=tick_fontsize)
+    axes[-1, 0].set_ylabel("Test samples", labelpad=0.05, fontsize=tick_fontsize)
+    # figure.suptitle(
+    #     r"$\bf{A}$ Attention rollout visualization",
+    #     y=axes[0].get_position().y1 + 0.05,
+    #     fontsize=tick_fontsize,
+    # )
 
     # plot colorbar
-    pos1 = axes[3].get_position()
-    pos2 = axes[3].get_position()
-    width, height = 0.005, (pos1.y1 - pos1.y0) * 0.35
+    pos1 = axes[0, -1].get_position()
+    pos2 = axes[-1, -1].get_position()
+    width, height = 0.008, (pos1.y1 - pos1.y0) * 0.35
     cbar_ax = figure.add_axes(
         rect=[
             pos1.x1 + 0.01,
@@ -306,10 +326,10 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    num_plots = 4
+    num_plots = 3
     recorder = Recorder(model.core)
 
-    results = []
+    test_results = []
     for batch in test_ds[MOUSE_ID]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
@@ -332,12 +352,44 @@ def main(args):
             recorder.clear()
         image, attention = image.numpy()[0], attention.numpy()[0]
         heatmap = attention_rollout(image=image, attention=attention)
-        results.append((image, heatmap, behavior.numpy()[0], pupil_center.numpy()[0]))
-        if len(results) == num_plots:
+        test_results.append(
+            (image, heatmap, behavior.numpy()[0], pupil_center.numpy()[0])
+        )
+        if len(test_results) == num_plots:
+            break
+
+    val_results = []
+    for batch in val_ds[MOUSE_ID]:
+        with torch.no_grad():
+            pupil_center = batch["pupil_center"]
+            # pupil_center = torch.zeros_like(pupil_center)
+            behavior = batch["behavior"]
+            # behavior = torch.zeros_like(behavior)
+            image, _ = model.image_cropper(
+                inputs=batch["image"],
+                mouse_id=MOUSE_ID,
+                behaviors=behavior,
+                pupil_centers=pupil_center,
+            )
+            _, attention = recorder(
+                images=image,
+                behaviors=behavior,
+                pupil_centers=pupil_center,
+                mouse_id=MOUSE_ID,
+            )
+            image = val_ds[MOUSE_ID].dataset.i_transform_image(image)
+            recorder.clear()
+        image, attention = image.numpy()[0], attention.numpy()[0]
+        heatmap = attention_rollout(image=image, attention=attention)
+        val_results.append(
+            (image, heatmap, behavior.numpy()[0], pupil_center.numpy()[0])
+        )
+        if len(val_results) == num_plots:
             break
 
     plot_attention_map_2(
-        results=results,
+        val_results=val_results,
+        test_results=test_results,
         filename=os.path.join(
             args.output_dir, "plots", f"attention_rollout_mouse{MOUSE_ID}.svg"
         ),

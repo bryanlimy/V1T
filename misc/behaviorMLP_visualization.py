@@ -109,26 +109,25 @@ def plot_distribution_map(
         # kind="normalized_counts",
         bins=30,
         range_style="all",
-        x_range=[-1.25, 1.25],
+        x_range=[-1.1, 1.1],
         linewidth=1.5,
-        title=f"Mouse {convert(mouse_id)} B-MLP activations",
     )
     pos = axes[0].get_position()
     axes[0].text(
-        x=-1.4,
+        x=-1.25,
         y=pos.y1 + 0.5,
         s="Block",
         fontsize=label_fontsize,
         ha="left",
         va="center",
     )
-    axes[-1].set_xlabel("Average activation distribution", fontsize=label_fontsize)
+    axes[-1].set_xlabel("B-MLP activation distribution", fontsize=label_fontsize)
     tensorboard.set_ticks_params(axis=axes[-1])
     axes[-1].xaxis.set_tick_params(length=4, pad=3, width=1)
 
     plt.show()
     if filename is not None:
-        # tensorboard.save_figure(figure, filename=filename, dpi=120)
+        tensorboard.save_figure(figure, filename=filename, dpi=120)
         print(f"plot saved to {filename}.")
 
 
@@ -156,49 +155,50 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    results = {}
-    for mouse_id, mouse_ds in test_ds.items():
-        if mouse_id == "1":
-            continue
-        recorder = Recorder(model.core)
-        result = []
-        for batch in tqdm(mouse_ds, desc=f"Mouse {mouse_id}"):
-            with torch.no_grad():
-                behavior = batch["behavior"]
-                pupil_center = batch["pupil_center"]
-                image, _ = model.image_cropper(
-                    inputs=batch["image"],
-                    mouse_id=mouse_id,
-                    behaviors=behavior,
-                    pupil_centers=pupil_center,
-                )
-                activations = recorder(
-                    images=image,
-                    behaviors=behavior,
-                    pupil_centers=pupil_center,
-                    mouse_id=mouse_id,
-                )
-                recorder.clear()
-            result.append(activations.numpy())
-        result = np.array(result)
-        # compute the average activation for every block over all samples
-        result = np.mean(result, axis=0)
-        results[mouse_id] = result
-        recorder.eject()
-        del recorder
+    # results = {}
+    # for mouse_id, mouse_ds in test_ds.items():
+    #     if mouse_id == "1":
+    #         continue
+    #     recorder = Recorder(model.core)
+    #     result = []
+    #     for batch in tqdm(mouse_ds, desc=f"Mouse {mouse_id}"):
+    #         with torch.no_grad():
+    #             behavior = batch["behavior"]
+    #             pupil_center = batch["pupil_center"]
+    #             image, _ = model.image_cropper(
+    #                 inputs=batch["image"],
+    #                 mouse_id=mouse_id,
+    #                 behaviors=behavior,
+    #                 pupil_centers=pupil_center,
+    #             )
+    #             activations = recorder(
+    #                 images=image,
+    #                 behaviors=behavior,
+    #                 pupil_centers=pupil_center,
+    #                 mouse_id=mouse_id,
+    #             )
+    #             recorder.clear()
+    #         result.append(activations.numpy())
+    #     result = np.array(result)
+    #     # compute the average activation for every block over all samples
+    #     result = np.mean(result, axis=0)
+    #     results[mouse_id] = result
+    #     recorder.eject()
+    #     del recorder
 
     import pickle
 
-    with open(os.path.join(args.output_dir, "behaviorMLP.pkl"), "wb") as file:
-        # results = pickle.load(file)
-        pickle.dump(results, file)
-    exit()
+    with open(os.path.join(args.output_dir, "behaviorMLP.pkl"), "rb") as file:
+        results = pickle.load(file)
+        # pickle.dump(results, file)
 
+    mouse_id = "2"
     plot_distribution_map(
-        results=results,
+        results=results[mouse_id],
         mouse_id=mouse_id,
         filename=os.path.join(
             args.output_dir,
+            "plots",
             f"behaviorMLP_mouse{mouse_id}.svg",
         ),
     )
