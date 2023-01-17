@@ -265,7 +265,7 @@ def load_mice_data(
     """Load data and metadata for mouse_ids into dictionaries where key is the mouse_id"""
     mouse2path = get_mouse2path(ds_name)
     if mouse_ids is None:
-        mouse_ids = list(range(len(mouse2path)))
+        mouse_ids = list(mouse2path.keys())
     mice_data, mice_meta = {}, {}
     for mouse_id in tqdm(mouse_ids, desc="Loading", disable=verbose == 0):
         mice_data[mouse_id], mice_meta[mouse_id] = load_mouse_data(
