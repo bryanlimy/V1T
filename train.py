@@ -544,6 +544,9 @@ if __name__ == "__main__":
         parser.add_argument("--dropout", type=float, default=0.0)
         parser.add_argument("--core_reg_input", type=float, default=6.3831)
         parser.add_argument("--core_reg_hidden", type=float, default=0.0)
+        parser.add_argument(
+            "--linear", action="store_true", help="remove non-linearity in core"
+        )
         parser.add_argument("--lr", default=0.009, type=float)
     elif temp_args.core == "vit":
         parser.add_argument("--patch_size", type=int, default=8)
