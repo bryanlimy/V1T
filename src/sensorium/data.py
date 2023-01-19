@@ -359,10 +359,18 @@ class MiceDataset(Dataset):
         stats = self.pupil_stats
         return (pupil_center - stats["mean"]) / stats["std"]
 
+    def i_transform_pupil_center(self, pupil_center: np.ndarray):
+        stats = self.pupil_stats
+        return (pupil_center * stats["std"]) + stats["mean"]
+
     def transform_behavior(self, behavior: np.ndarray):
         """standardize behaviour"""
         stats = self.behavior_stats
         return behavior / stats["std"]
+
+    def i_transform_behavior(self, behavior: np.ndarray):
+        stats = self.behavior_stats
+        return behavior * stats["std"]
 
     def compute_response_precision(self):
         """
