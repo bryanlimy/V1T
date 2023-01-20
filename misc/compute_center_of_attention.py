@@ -9,10 +9,10 @@ from torch import nn
 from tqdm import tqdm
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
 from skimage.transform import resize
 from torch.utils.data import DataLoader
 
-# from scipy.ndimage.measurements import center_of_mass
 from scipy.ndimage import center_of_mass
 
 from sensorium import data
@@ -78,16 +78,9 @@ def computer_centers(heatmaps: np.ndarray):
     for i, heatmap in enumerate(heatmaps):
         y, x = center_of_mass(heatmap)
         centers[i, 0], centers[i, 1] = x, y
-    # mid_point = np.array([64 / 2, 36 / 2])
-    # centers = centers - mid_point
+    mid_point = np.array([64 / 2, 36 / 2])
+    centers = centers - mid_point
     return centers
-
-
-def mean_correlation(a: np.ndarray, b: np.ndarray):
-    corr = np.corrcoef(a, b)
-    triu = np.triu_indices_from(corr, 1)
-    mean_corr = np.mean(np.abs(corr[triu]))
-    return mean_corr
 
 
 def main(args):
@@ -132,31 +125,17 @@ def main(args):
         # compute correlation center of mass and pupil center
         mass_centers = computer_centers(mouse_dict["heatmaps"])
         pupil_centers = mouse_dict["pupil_centers"][:, 0, :]
-        corr_x = mean_correlation(mass_centers[:, 0], pupil_centers[:, 0])
-        corr_y = mean_correlation(mass_centers[:, 1], pupil_centers[:, 1])
-
-        # compute correlation for trials with top-third pupil size
-        behavior = mouse_dict["behaviors"][:, 0, 0]
-        top_third = np.argsort(behavior)[: (len(behavior) // 3)]
-        mass_centers = computer_centers(mouse_dict["heatmaps"][top_third])
-        pupil_centers = mouse_dict["pupil_centers"][top_third, 0, :]
-        x_m, y_m = mass_centers[..., 0], mass_centers[..., 1]
-        x_p, y_p = pupil_centers[..., 0], pupil_centers[..., 1]
-        corr_x_third = mean_correlation(mass_centers[:, 0], pupil_centers[:, 0])
-        corr_y_third = mean_correlation(mass_centers[:, 1], pupil_centers[:, 1])
-
-        attention_spread = np.std(mouse_dict["heatmaps"], axis=(1, 2))
-        dilation = mouse_dict["behaviors"][:, 0, 0]
-        corr_dilation = mean_correlation(attention_spread, dilation)
+        corr_x, p_x = pearsonr(mass_centers[:, 0], pupil_centers[:, 0])
+        corr_y, p_y = pearsonr(mass_centers[:, 1], pupil_centers[:, 1])
 
         print(
             f"Mouse {mouse_id}\n"
-            f"\tCoM and pupil centers correlation: {corr_x:.03f}, {corr_y:.03f}\n"
-            f"\tCoM and pupil centers (top-third) correlation: {corr_x_third:.03f}, {corr_y_third:.03f}\n"
-            f"\tSpread and dilation correlation: {corr_dilation:.03f}\n"
+            f"\tCorr(center of mass,  pupil center)\n"
+            f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e})\n"
+            f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e})\n"
         )
 
-    print("done")
+    print("Done")
 
 
 if __name__ == "__main__":
