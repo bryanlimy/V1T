@@ -143,7 +143,7 @@ def main(args):
 
     _, val_ds, test_ds = data.get_training_ds(
         args,
-        data_dir=args.data,
+        data_dir=args.dataset,
         mouse_ids=args.mouse_ids,
         batch_size=args.batch_size,
         device=args.device,
@@ -180,7 +180,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="../data/sensorium")
+    parser.add_argument("--dataset", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--device", type=str, default="cpu")
 

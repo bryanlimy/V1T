@@ -1,24 +1,19 @@
 import os
-import math
 import torch
 import pickle
 import argparse
 import numpy as np
-import typing as t
-from torch import nn
 from tqdm import tqdm
-import matplotlib.cm as cm
-import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
-from skimage.transform import resize
 from torch.utils.data import DataLoader
-
 from scipy.ndimage import center_of_mass
+from sklearn.metrics import mutual_info_score
 
 from sensorium import data
+from sensorium.utils import utils
 from sensorium.models.model import Model
 from sensorium.utils.scheduler import Scheduler
-from sensorium.utils import utils, tensorboard
+
 
 from vit_visualization import Recorder, attention_rollout
 
@@ -83,10 +78,6 @@ def computer_centers(heatmaps: np.ndarray):
     return centers
 
 
-from sklearn.feature_selection import mutual_info_regression
-from sklearn.metrics import mutual_info_score, normalized_mutual_info_score
-
-
 def mutual_information(x: np.ndarray, y: np.ndarray):
     c_xy = np.histogram2d(x, y, len(x))[0]
     mi = mutual_info_score(None, None, contingency=c_xy)
@@ -96,8 +87,6 @@ def mutual_information(x: np.ndarray, y: np.ndarray):
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
-    tensorboard.set_font()
-
     utils.load_args(args)
     args.batch_size = 1
     args.device = torch.device(args.device)
@@ -138,13 +127,11 @@ def main(args):
         corr_x, p_x = pearsonr(mass_centers[:, 0], pupil_centers[:, 0])
         corr_y, p_y = pearsonr(mass_centers[:, 1], pupil_centers[:, 1])
 
-        mi_x = mutual_information(mass_centers[:, 0], pupil_centers[:, 0])
-        mi_y = mutual_information(mass_centers[:, 1], pupil_centers[:, 1])
         print(
             f"Mouse {mouse_id}\n"
             f"\tCorr(center of mass,  pupil center)\n"
-            f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e}), MI: {mi_x:.04f}\n"
-            f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e}), MI: {mi_y:.04f}\n"
+            f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e})\n"
+            f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e})\n"
         )
 
     print("Done")

@@ -1,26 +1,21 @@
 import os
-import math
 import torch
 import argparse
 import numpy as np
-import typing as t
-from torch import nn
+import pandas as pd
 import seaborn as sns
 from tqdm import tqdm
-import matplotlib.cm as cm
 from einops import rearrange
 import matplotlib.pyplot as plt
-from skimage.transform import resize
+from sklearn.decomposition import PCA
 from torch.utils.data import DataLoader
 
 
 from sensorium import data
 from sensorium.models.model import Model
-from sensorium.utils.scheduler import Scheduler
 from sensorium.utils import utils, tensorboard
+from sensorium.utils.scheduler import Scheduler
 
-
-from vit_visualization import Recorder, attention_rollout
 
 utils.set_random_seed(1234)
 
@@ -57,10 +52,6 @@ def inference(
     latents = torch.concat(latents, dim=0)
     latents = rearrange(latents, "b n h d -> b n (h d)")
     return latents.cpu().numpy()
-
-
-from sklearn.decomposition import PCA
-import pandas as pd
 
 
 def main(args):
