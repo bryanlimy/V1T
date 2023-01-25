@@ -55,6 +55,28 @@ FRANKE2022 = {
 }
 
 
+def convert_id(mouse_id: str):
+    """convert mouse ID to the ID used in paper"""
+    pairs = {
+        "2": "A",
+        "3": "B",
+        "4": "C",
+        "5": "D",
+        "6": "E",
+        "static25311-10-26": "F",
+        "static25340-3-19": "G",
+        "static25704-2-12": "H",
+        "static25830-10-4": "I",
+        "static26085-6-3": "J",
+        "static26142-2-11": "K",
+        "static26426-18-13": "L",
+        "static26470-4-5": "M",
+        "static26644-6-2": "N",
+        "static26872-21-6": "O",
+    }
+    return pairs[mouse_id] if mouse_id in pairs else mouse_id
+
+
 def get_mouse2path(ds_name: DS_NAMES):
     assert ds_name in ("sensorium", "franke2022")
     return SENSORIUM if ds_name == "sensorium" else FRANKE2022

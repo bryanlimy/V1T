@@ -13,9 +13,12 @@ The codebase repository should have the following structure. Check [.gitignore](
 ```
 sensorium2022/
     data/
-        static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-        static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-        ...
+        sensorium/
+            static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+            static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+            ...
+        franke2022/
+        imagenet/
         README.md
     misc/
     src/
@@ -28,10 +31,11 @@ sensorium2022/
     requirements.txt
     setup.py
     setup.sh
+    ...
 ```
-- `data` stores the zip files from [gin.g-node.org/cajal/Sensorium2022](https://gin.g-node.org/cajal/Sensorium2022), check [data/README.md](data/README.md) more information.
-- `misc` contains scripts and notebooks that is not relevant to the main Python package.
-- `src/sensorium` contains the code for the main Python package.
+- [data](data/) store the datasets, please check [data/README.md](data/README.md) for more information.
+- [misc](misc/) contains scripts and notebooks to generate various plots and figures used in the paper.
+- [src/sensorium](src/sensorium/) contains the code for the main Python package.
 
 ## Installation
 - Create a new [conda](https://docs.conda.io/en/latest/miniconda.html) environment with Python 3.8.
@@ -46,6 +50,16 @@ sensorium2022/
   ```bash
   sh setup.sh
   ```
+
+## Demo
+- A demo to load the best model and run the Sensorium test set is available in [demo.ipynb](demo.ipynb) 
+
+## Run model
+- An example command to train a V1T core and Gaussian readout on the Sensorium dataset
+  ```bash
+  python train.py --data data/sensorium --output_dir runs/v1t_model --core vit --readout gaussian2d --ds_scale --behavior_mode 3 --epochs 400 --batch_size 16
+  ```
+- use the `--help` flag to see all available options
 
 ## Pull Requests (PRs)
 - Always create a new branch to work on a/any features.

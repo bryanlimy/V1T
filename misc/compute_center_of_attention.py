@@ -83,6 +83,16 @@ def computer_centers(heatmaps: np.ndarray):
     return centers
 
 
+from sklearn.feature_selection import mutual_info_regression
+from sklearn.metrics import mutual_info_score, normalized_mutual_info_score
+
+
+def mutual_information(x: np.ndarray, y: np.ndarray):
+    c_xy = np.histogram2d(x, y, len(x))[0]
+    mi = mutual_info_score(None, None, contingency=c_xy)
+    return mi
+
+
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
@@ -128,11 +138,13 @@ def main(args):
         corr_x, p_x = pearsonr(mass_centers[:, 0], pupil_centers[:, 0])
         corr_y, p_y = pearsonr(mass_centers[:, 1], pupil_centers[:, 1])
 
+        mi_x = mutual_information(mass_centers[:, 0], pupil_centers[:, 0])
+        mi_y = mutual_information(mass_centers[:, 1], pupil_centers[:, 1])
         print(
             f"Mouse {mouse_id}\n"
             f"\tCorr(center of mass,  pupil center)\n"
-            f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e})\n"
-            f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e})\n"
+            f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e}), MI: {mi_x:.04f}\n"
+            f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e}), MI: {mi_y:.04f}\n"
         )
 
     print("Done")

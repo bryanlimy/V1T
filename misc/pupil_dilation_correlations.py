@@ -23,11 +23,6 @@ utils.set_random_seed(1234)
 BACKGROUND_COLOR = "#ffffff"
 
 
-def convert(mouse_id: str):
-    pairs = {"2": "A", "3": "B", "4": "C", "5": "D", "6": "E"}
-    return pairs[mouse_id] if mouse_id in pairs else mouse_id
-
-
 @torch.no_grad()
 def inference(
     model: Model, ds: DataLoader, mouse_id: str, device: torch.device = "cpu"
@@ -96,7 +91,8 @@ def plot_correlations(
     sns.despine(ax=ax, offset={"left": 15, "bottom": 5}, trim=True)
     ax.set_yticklabels(ax.get_yticks().round(1), fontsize=tick_fontsize)
     ax.set_xticklabels(
-        [convert(mouse_id) for mouse_id in results.keys()], fontsize=tick_fontsize
+        [data.convert_id(mouse_id) for mouse_id in results.keys()],
+        fontsize=tick_fontsize,
     )
     ax.set_ylabel(ax.get_ylabel(), fontsize=label_fontsize)
     ax.set_xlabel(ax.get_xlabel(), fontsize=label_fontsize)

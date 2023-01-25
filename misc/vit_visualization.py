@@ -21,9 +21,6 @@ utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
 
-MOUSE_ID = "2"
-# MOUSE_ID = "static26085-6-3"
-
 
 def find_shape(num_patches: int):
     dim1 = math.ceil(math.sqrt(num_patches))
@@ -329,8 +326,11 @@ def main(args):
     num_plots = 3
     recorder = Recorder(model.core)
 
+    mouse_id = "6"
+    # mouse_id = "static26085-6-3"
+
     test_results = []
-    for batch in test_ds[MOUSE_ID]:
+    for batch in test_ds[mouse_id]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
             # pupil_center = torch.zeros_like(pupil_center)
@@ -338,7 +338,7 @@ def main(args):
             # behavior = torch.zeros_like(behavior)
             image, _ = model.image_cropper(
                 inputs=batch["image"],
-                mouse_id=MOUSE_ID,
+                mouse_id=mouse_id,
                 behaviors=behavior,
                 pupil_centers=pupil_center,
             )
@@ -346,9 +346,9 @@ def main(args):
                 images=image,
                 behaviors=behavior,
                 pupil_centers=pupil_center,
-                mouse_id=MOUSE_ID,
+                mouse_id=mouse_id,
             )
-            image = val_ds[MOUSE_ID].dataset.i_transform_image(image)
+            image = val_ds[mouse_id].dataset.i_transform_image(image)
             recorder.clear()
         image, attention = image.numpy()[0], attention.numpy()[0]
         heatmap = attention_rollout(image=image, attention=attention)
@@ -359,7 +359,7 @@ def main(args):
             break
 
     val_results = []
-    for batch in val_ds[MOUSE_ID]:
+    for batch in val_ds[mouse_id]:
         with torch.no_grad():
             pupil_center = batch["pupil_center"]
             # pupil_center = torch.zeros_like(pupil_center)
@@ -367,7 +367,7 @@ def main(args):
             # behavior = torch.zeros_like(behavior)
             image, _ = model.image_cropper(
                 inputs=batch["image"],
-                mouse_id=MOUSE_ID,
+                mouse_id=mouse_id,
                 behaviors=behavior,
                 pupil_centers=pupil_center,
             )
@@ -375,9 +375,9 @@ def main(args):
                 images=image,
                 behaviors=behavior,
                 pupil_centers=pupil_center,
-                mouse_id=MOUSE_ID,
+                mouse_id=mouse_id,
             )
-            image = val_ds[MOUSE_ID].dataset.i_transform_image(image)
+            image = val_ds[mouse_id].dataset.i_transform_image(image)
             recorder.clear()
         image, attention = image.numpy()[0], attention.numpy()[0]
         heatmap = attention_rollout(image=image, attention=attention)
@@ -391,7 +391,7 @@ def main(args):
         val_results=val_results,
         test_results=test_results,
         filename=os.path.join(
-            args.output_dir, "plots", f"attention_rollout_mouse{MOUSE_ID}.svg"
+            args.output_dir, "plots", f"attention_rollout_mouse{mouse_id}.svg"
         ),
     )
 

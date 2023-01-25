@@ -23,11 +23,6 @@ utils.set_random_seed(1234)
 BACKGROUND_COLOR = "#ffffff"
 
 
-def convert(mouse_id: str):
-    pairs = {"2": "A", "3": "B", "4": "C", "5": "D", "6": "E"}
-    return pairs[mouse_id] if mouse_id in pairs else mouse_id
-
-
 class Recorder(nn.Module):
     def __init__(self, vit: ViTCore, device: str = "cpu"):
         super().__init__()
@@ -99,15 +94,17 @@ def plot_distribution_map(
     for i in range(len(results)):
         df[i + 1] = results[i]
 
-    tick_fontsize, label_fontsize = 8, 10
+    tick_fontsize, label_fontsize = 12, 14
     figure, axes = joypy.joyplot(
         df,
-        figsize=(4, 4),
+        figsize=(3.5, 4),
         colormap=cm.get_cmap(colormap),
+        xlabelsize=tick_fontsize,
+        ylabelsize=tick_fontsize,
         alpha=0.8,
-        overlap=1.5,
+        overlap=1.8,
         # kind="normalized_counts",
-        bins=30,
+        bins=10,
         range_style="all",
         x_range=[-1.1, 1.1],
         linewidth=1.5,
@@ -121,9 +118,27 @@ def plot_distribution_map(
         ha="left",
         va="center",
     )
-    axes[-1].set_xlabel("B-MLP activation distribution", fontsize=label_fontsize)
+    axes[-1].set_xlabel("activation distribution", fontsize=label_fontsize)
     tensorboard.set_ticks_params(axis=axes[-1])
     axes[-1].xaxis.set_tick_params(length=4, pad=3, width=1)
+
+    # axes[0].text(
+    #     x=-1.3,
+    #     y=3,
+    #     s="(a)",
+    #     fontsize=label_fontsize,
+    #     ha="left",
+    #     va="center",
+    # )
+    #
+    # axes[0].text(
+    #     x=-1.3,
+    #     y=4,
+    #     s="(b)",
+    #     fontsize=label_fontsize,
+    #     ha="left",
+    #     va="center",
+    # )
 
     plt.show()
     if filename is not None:
