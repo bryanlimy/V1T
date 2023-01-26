@@ -26,10 +26,19 @@ class Core(nn.Module):
             assert self.behavior_mode != 2
 
     def initialize(self):
-        raise NotImplementedError("Initialize function has not been implemented")
+        raise NotImplementedError("initialize function has not been implemented")
 
     def regularizer(self):
-        raise NotImplementedError("Regularizer function has not been implemented")
+        raise NotImplementedError("regularizer function has not been implemented")
+
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        mouse_id: str,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+    ):
+        raise NotImplementedError("forward function has not been implemented")
 
 
 def get_core(args):

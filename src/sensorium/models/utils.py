@@ -86,6 +86,18 @@ def transpose_conv2d_shape(
     return (num_filters, floor(new_h), floor(new_w))
 
 
+class ELU1(nn.Module):
+    """ELU + 1 activation to output standardized responses"""
+
+    def __init__(self):
+        super(ELU1, self).__init__()
+        self.elu = nn.ELU()
+        self.register_buffer("one", torch.tensor(1.0))
+
+    def forward(self, inputs: torch.Tensor):
+        return self.elu(inputs) + self.one
+
+
 class DropPath(nn.Module):
     """
     Stochastic depth for regularization https://arxiv.org/abs/1603.09382

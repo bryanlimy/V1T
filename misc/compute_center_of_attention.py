@@ -1,20 +1,18 @@
 import os
-import math
 import torch
+import pickle
 import argparse
 import numpy as np
-import typing as t
-from torch import nn
 from tqdm import tqdm
-import matplotlib.cm as cm
-import matplotlib.pyplot as plt
-from skimage.transform import resize
+from scipy.stats import pearsonr
 from torch.utils.data import DataLoader
+from scipy.ndimage import center_of_mass
+from sklearn.metrics import mutual_info_score
 
 from sensorium import data
+from sensorium.utils import utils
 from sensorium.models.model import Model
 from sensorium.utils.scheduler import Scheduler
-from sensorium.utils import utils, tensorboard
 
 
 from vit_visualization import Recorder, attention_rollout
@@ -26,7 +24,7 @@ BACKGROUND_COLOR = "#ffffff"
 
 @torch.no_grad()
 def extract_attention_maps(
-    mouse_id: int,
+    mouse_id: str,
     ds: DataLoader,
     model: Model,
     hide_pupil_x: bool = False,
@@ -34,7 +32,9 @@ def extract_attention_maps(
 ):
     recorder = Recorder(vit=model.core)
     i_transform_image = ds.dataset.i_transform_image
-    results = {"images": [], "heatmaps": []}
+    i_transform_pupil_center = ds.dataset.i_transform_pupil_center
+    i_transform_behavior = ds.dataset.i_transform_behavior
+    results = {"images": [], "heatmaps": [], "behaviors": [], "pupil_centers": []}
     for batch in tqdm(ds, desc=f"Mouse {mouse_id}"):
         pupil_center = batch["pupil_center"]
         if hide_pupil_x:
@@ -59,37 +59,34 @@ def extract_attention_maps(
         heatmap = attention_rollout(image=image, attention=attention)
         results["images"].append(image)
         results["heatmaps"].append(heatmap)
+        results["behaviors"].append(i_transform_behavior(behavior))
+        results["pupil_centers"].append(i_transform_pupil_center(pupil_center))
         recorder.clear()
-        if len(results["images"]) == 10:
-            break
     recorder.eject()
     del recorder
     results = {k: np.stack(v, axis=0) for k, v in results.items()}
     return results
 
 
-import pickle
-
-from scipy.ndimage.measurements import center_of_mass
-
-
-def compute_centers(heatmaps: np.ndarray, tag: str):
-    centers = np.zeros((len(heatmaps), 2))
+def computer_centers(heatmaps: np.ndarray):
+    centers = np.zeros((len(heatmaps), 2), dtype=np.float32)
     for i, heatmap in enumerate(heatmaps):
         y, x = center_of_mass(heatmap)
-        centers[i][0], centers[i][1] = x, y
-    print(
-        f"{tag}\n"
-        f"\tx: {np.mean(centers[:, 0]):.02f} \pm {np.std(centers[:, 0]):.02f}\n"
-        f"\ty: {np.mean(centers[:, 1]):.02f} \pm {np.std(centers[:, 1]):.02f}"
-    )
+        centers[i, 0], centers[i, 1] = x, y
+    mid_point = np.array([64 / 2, 36 / 2])
+    centers = centers - mid_point
+    return centers
+
+
+def mutual_information(x: np.ndarray, y: np.ndarray):
+    c_xy = np.histogram2d(x, y, len(x))[0]
+    mi = mutual_info_score(None, None, contingency=c_xy)
+    return mi
 
 
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
-    tensorboard.set_font()
-
     utils.load_args(args)
     args.batch_size = 1
     args.device = torch.device(args.device)
@@ -110,54 +107,39 @@ def main(args):
 
     # results = {}
     # for mouse_id, mouse_ds in test_ds.items():
-    #     results[mouse_id] = {}
-    #     results[mouse_id]["hide_x"] = extract_attention_maps(
-    #         mouse_id=mouse_id,
-    #         ds=mouse_ds,
-    #         model=model,
-    #         hide_pupil_x=True,
-    #         hide_pupil_y=False,
+    #     if mouse_id == "1":
+    #         continue
+    #     results[mouse_id] = extract_attention_maps(
+    #         mouse_id=mouse_id, ds=mouse_ds, model=model
     #     )
-    #     results[mouse_id]["hide_y"] = extract_attention_maps(
-    #         mouse_id=mouse_id,
-    #         ds=mouse_ds,
-    #         model=model,
-    #         hide_pupil_x=False,
-    #         hide_pupil_y=True,
-    #     )
-    #     results[mouse_id]["hide_none"] = extract_attention_maps(
-    #         mouse_id=mouse_id,
-    #         ds=mouse_ds,
-    #         model=model,
-    #         hide_pupil_x=False,
-    #         hide_pupil_y=False,
-    #     )
-    #     results[mouse_id]["hide_both"] = extract_attention_maps(
-    #         mouse_id=mouse_id,
-    #         ds=mouse_ds,
-    #         model=model,
-    #         hide_pupil_x=True,
-    #         hide_pupil_y=True,
-    #     )
-    #     break
+    #
+    # with open("center_mass.pkl", "wb") as file:
+    #     pickle.dump(results, file)
+    # exit()
 
-    with open("temp.pkl", "rb") as file:
+    with open("center_mass.pkl", "rb") as file:
         results = pickle.load(file)
 
-    for i in range(0, 100, 10):
-        print(f"\nFrame {i}")
-        for k in ["hide_none", "hide_x", "hide_y", "hide_both"]:
-            compute_centers(heatmaps=results[1][k]["heatmaps"][i : i + 10], tag=f"{k}")
+    for mouse_id, mouse_dict in results.items():
+        # compute correlation center of mass and pupil center
+        mass_centers = computer_centers(mouse_dict["heatmaps"])
+        pupil_centers = mouse_dict["pupil_centers"][:, 0, :]
+        corr_x, p_x = pearsonr(mass_centers[:, 0], pupil_centers[:, 0])
+        corr_y, p_y = pearsonr(mass_centers[:, 1], pupil_centers[:, 1])
 
-    # plot_attention_map(
-    #     results=results,
-    #     # filename=os.path.join(args.output_dir, "plots", "attention_rollouts.pdf"),
-    # )
+        print(
+            f"Mouse {mouse_id}\n"
+            f"\tCorr(center of mass,  pupil center)\n"
+            f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e})\n"
+            f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e})\n"
+        )
+
+    print("Done")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, default="../data/sensorium")
+    parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--device", type=str, default="cpu")
 

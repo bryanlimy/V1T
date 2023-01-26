@@ -4,19 +4,17 @@ import wandb
 import argparse
 import numpy as np
 import typing as t
-from torch import nn
 from tqdm import tqdm
 from time import time
 from shutil import rmtree
 from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 
 from sensorium import losses, data
-from sensorium.models import get_model
 from sensorium.utils.logger import Logger
+from sensorium.models import get_model, Model
 from sensorium.utils import utils, tensorboard
 from sensorium.utils.scheduler import Scheduler
-
-from torch.cuda.amp import autocast, GradScaler
 
 
 @torch.no_grad()
@@ -40,9 +38,9 @@ def gather(result: t.Dict[str, t.List[torch.Tensor]]):
 
 
 def train_step(
-    mouse_id: int,
+    mouse_id: str,
     batch: t.Dict[str, torch.Tensor],
-    model: nn.Module,
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
     scaler: GradScaler,
@@ -50,9 +48,10 @@ def train_step(
     micro_batch_size: int,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
-    result = {}
     model.to(device)
-    for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
+    result, batch_loss = {}, 0.0
+    batch_size = batch["image"].size(0)
+    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
             outputs, _, _ = model(
@@ -61,31 +60,40 @@ def train_step(
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
-            loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-            reg_loss = model.regularizer(mouse_id=mouse_id)
-            total_loss = loss + reg_loss
-        # calculate and accumulate gradients
-        scaler.scale(total_loss).backward()
-        utils.update_dict(
-            result,
-            {
-                "loss/loss": loss.detach(),
-                "loss/reg_loss": reg_loss.detach(),
-                "loss/total_loss": total_loss.detach(),
-                **compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
-            },
-        )
+            loss = criterion(
+                y_true=responses,
+                y_pred=outputs,
+                mouse_id=mouse_id,
+                batch_size=batch_size,
+            )
+            batch_loss += loss
+            utils.update_dict(
+                result,
+                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+            )
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = batch_loss + reg_loss
+    # calculate and accumulate gradients
+    scaler.scale(total_loss).backward()
     if update:
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
+    utils.update_dict(
+        result,
+        {
+            "loss/loss": batch_loss.detach(),
+            "loss/reg_loss": reg_loss.detach(),
+            "loss/total_loss": total_loss.detach(),
+        },
+    )
     return gather(result)
 
 
 def train(
     args,
-    ds: t.Dict[int, DataLoader],
-    model: nn.Module,
+    ds: t.Dict[str, DataLoader],
+    model: Model,
     optimizer: torch.optim,
     criterion: losses.Loss,
     scaler: GradScaler,
@@ -98,7 +106,6 @@ def train(
     # accumulate gradients over all mouse for one batch
     update_frequency = len(mouse_ids)
     model.train(True)
-    model.requires_grad_(True)
     optimizer.zero_grad()
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
@@ -115,22 +122,23 @@ def train(
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
-    return utils.log_metrics(results=results, epoch=epoch, mode=0, summary=summary)
+    return utils.log_metrics(results, epoch=epoch, summary=summary, mode=0)
 
 
 @torch.no_grad()
 def validation_step(
-    mouse_id: int,
+    mouse_id: str,
     batch: t.Dict[str, torch.Tensor],
-    model: nn.Module,
+    model: Model,
     criterion: losses.Loss,
     scaler: GradScaler,
     micro_batch_size: int,
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
-    result = {}
     model.to(device)
-    for micro_batch in data.micro_batching(batch, micro_batch_size=micro_batch_size):
+    result, batch_loss = {}, 0.0
+    batch_size = batch["image"].size(0)
+    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
             outputs, _, _ = model(
@@ -139,25 +147,38 @@ def validation_step(
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
-            loss = criterion(y_true=responses, y_pred=outputs, mouse_id=mouse_id)
-        utils.update_dict(
-            result,
-            {
-                "loss/loss": loss.detach(),
-                **compute_metrics(y_true=responses, y_pred=outputs),
-            },
-        )
+            loss = criterion(
+                y_true=responses,
+                y_pred=outputs,
+                mouse_id=mouse_id,
+                batch_size=batch_size,
+            )
+            batch_loss += loss
+            utils.update_dict(
+                result,
+                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
+            )
+    reg_loss = model.regularizer(mouse_id=mouse_id)
+    total_loss = batch_loss + reg_loss
+    utils.update_dict(
+        result,
+        {
+            "loss/loss": batch_loss.detach(),
+            "loss/reg_loss": reg_loss.detach(),
+            "loss/total_loss": total_loss.detach(),
+        },
+    )
     return gather(result)
 
 
 def validate(
     args,
-    ds: t.Dict[int, DataLoader],
-    model: nn.Module,
+    ds: t.Dict[str, DataLoader],
+    model: Model,
     criterion: losses.Loss,
     scaler: GradScaler,
     epoch: int,
-    summary: tensorboard.Summary,
+    summary: tensorboard.Summary = None,
 ) -> t.Dict[t.Union[str, int], t.Union[torch.Tensor, t.Dict[str, torch.Tensor]]]:
     model.train(False)
     results = {}
@@ -177,7 +198,7 @@ def validate(
                 utils.update_dict(mouse_result, result)
                 pbar.update(1)
             results[mouse_id] = mouse_result
-    return utils.log_metrics(results=results, epoch=epoch, mode=1, summary=summary)
+    return utils.log_metrics(results, epoch=epoch, summary=summary, mode=1)
 
 
 def main(args, wandb_sweep: bool = False):
@@ -190,11 +211,12 @@ def main(args, wandb_sweep: bool = False):
     utils.get_device(args)
     utils.set_random_seed(args.seed)
 
-    if not args.mouse_ids:
-        args.mouse_ids = list(range(1 if args.behavior_mode else 0, 7))
+    data.get_mouse_ids(args)
 
-    # find micro batch size
-    assert args.batch_size > 0 and args.batch_size % 8 == 0
+    if args.grad_checkpointing is None:
+        args.grad_checkpointing = "cuda" in args.device.type
+    if args.grad_checkpointing and args.verbose:
+        print(f"Enable gradient checkpointing for ViT.")
     utils.compute_micro_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
@@ -326,12 +348,7 @@ def main(args, wandb_sweep: bool = False):
     if args.use_wandb:
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
     utils.plot_samples(
-        model,
-        ds=test_ds,
-        summary=summary,
-        epoch=epoch,
-        mode=2,
-        device=args.device,
+        args, model=model, ds=test_ds, summary=summary, epoch=epoch, mode=2
     )
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
@@ -345,7 +362,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         type=str,
-        default="data/sensorium",
+        required=True,
         help="path to directory where the dataset is stored.",
     )
     parser.add_argument("--output_dir", type=str, required=True)
@@ -399,6 +416,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument(
+        "--micro_batch_size",
+        default=0,
+        type=int,
+        help="micro batch size to train the model. if the model is being "
+        "trained on CUDA device and micro batch size 0 is provided, then "
+        "automatically increase micro batch size until OOM.",
+    )
+    parser.add_argument(
         "--device",
         type=str,
         choices=["cpu", "cuda", "mps"],
@@ -409,6 +434,14 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument(
         "--amp", action="store_true", help="automatic mixed precision training"
+    )
+    parser.add_argument(
+        "--grad_checkpointing",
+        type=int,
+        default=None,
+        choices=[0, 1],
+        help="Enable gradient checkpointing if 1. If None is provided, then "
+        "enable by default if CUDA is detected.",
     )
 
     # optimizer settings
@@ -511,6 +544,9 @@ if __name__ == "__main__":
         parser.add_argument("--dropout", type=float, default=0.0)
         parser.add_argument("--core_reg_input", type=float, default=6.3831)
         parser.add_argument("--core_reg_hidden", type=float, default=0.0)
+        parser.add_argument(
+            "--linear", action="store_true", help="remove non-linearity in core"
+        )
         parser.add_argument("--lr", default=0.009, type=float)
     elif temp_args.core == "vit":
         parser.add_argument("--patch_size", type=int, default=8)
@@ -564,7 +600,7 @@ if __name__ == "__main__":
         parser.add_argument("--num_blocks", type=int, default=4)
         parser.add_argument("--num_heads", type=int, default=4)
         parser.add_argument("--emb_dim", type=int, default=160)
-        parser.add_argument("--mlp_ratio", type=float, default=3)
+        parser.add_argument("--mlp_dim", type=float, default=488)
         parser.add_argument(
             "--pos_emb", type=str, default="sine", choices=["sine", "learn", "none"]
         )
@@ -577,8 +613,8 @@ if __name__ == "__main__":
         parser.add_argument(
             "--drop_path", type=float, default=0.0, help="stochastic depth dropout rate"
         )
-        parser.add_argument("--core_reg_scale", type=float, default=0)
-        parser.add_argument("--lr", default=0.001, type=float)
+        parser.add_argument("--core_reg_scale", type=float, default=0.5379)
+        parser.add_argument("--lr", default=0.001647, type=float)
     elif temp_args.core == "stn":
         parser.add_argument("--num_layers", type=int, default=7)
         parser.add_argument("--num_filters", type=int, default=63)

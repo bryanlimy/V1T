@@ -1,3 +1,8 @@
+"""
+Stacked2d core from https://github.com/sinzlab/neuralpredictors/blob/main/neuralpredictors/layers/cores/conv2d.py
+"""
+
+
 from .core import Core, register
 
 import torch
@@ -339,7 +344,6 @@ class Stacked2dCore(Core, nn.Module):
         use_avg_reg: bool = False,
         depth_separable: bool = True,
         attention_conv: bool = False,
-        linear: bool = False,
         nonlinearity_config=None,
         name: str = "Stacked2DCore",
     ):
@@ -394,7 +398,8 @@ class Stacked2dCore(Core, nn.Module):
             self.stack = (
                 [*range(self.num_layers)[stack:]] if isinstance(stack, int) else stack
             )
-        self.linear = linear
+        # use linear core
+        self.linear = args.linear if hasattr(args, "linear") else False
 
         if depth_separable:
             self.conv_layer_name = "ds_conv"
@@ -579,7 +584,7 @@ class Stacked2dCore(Core, nn.Module):
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):

@@ -7,6 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
+from torch.utils.checkpoint import checkpoint
 
 from sensorium.models.utils import DropPath
 
@@ -147,7 +148,7 @@ class BehaviorMLP(nn.Module):
         behavior_mode: int,
         out_dim: int,
         dropout: float = 0.0,
-        mouse_ids: t.List[int] = None,
+        mouse_ids: t.List[str] = None,
         use_bias: bool = True,
     ):
         """
@@ -165,7 +166,7 @@ class BehaviorMLP(nn.Module):
         if behavior_mode == 4:
             self.model = nn.ModuleDict(
                 {
-                    str(mouse_id): self.build_model(
+                    mouse_id: self.build_model(
                         in_dim=in_dim,
                         out_dim=out_dim,
                         dropout=dropout,
@@ -194,9 +195,9 @@ class BehaviorMLP(nn.Module):
             nn.Tanh(),
         )
 
-    def forward(self, inputs: torch.Tensor, mouse_id: int):
+    def forward(self, inputs: torch.Tensor, mouse_id: str):
         if self.behavior_mode == 4:
-            outputs = self.model[str(mouse_id)](inputs)
+            outputs = self.model[mouse_id](inputs)
         else:
             outputs = self.model(inputs)
         return outputs
@@ -283,13 +284,15 @@ class Transformer(nn.Module):
         mlp_dim: int,
         dropout: float,
         behavior_mode: int,
-        mouse_ids: t.List[int],
+        mouse_ids: t.List[str],
         use_lsa: bool = False,
         drop_path: float = 0.0,
         use_bias: bool = True,
+        grad_checkpointing: bool = False,
     ):
         super().__init__()
         self.blocks = nn.ModuleList([])
+        self.grad_checkpointing = grad_checkpointing
         for i in range(num_blocks):
             block = nn.ModuleDict(
                 {
@@ -309,7 +312,7 @@ class Transformer(nn.Module):
                     ),
                 }
             )
-            if behavior_mode in (1, 2, 3, 4):
+            if behavior_mode in (2, 3, 4):
                 block["b-mlp"] = BehaviorMLP(
                     behavior_mode=behavior_mode,
                     out_dim=emb_dim,
@@ -332,10 +335,19 @@ class Transformer(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
+    def checkpointing(self, fn: t.Callable, inputs: torch.Tensor):
+        if self.grad_checkpointing:
+            outputs = checkpoint(
+                fn, inputs, preserve_rng_state=True, use_reentrant=False
+            )
+        else:
+            outputs = fn(inputs)
+        return self.drop_path(outputs) + inputs
+
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         behaviors: torch.Tensor,
     ):
         outputs = inputs
@@ -344,7 +356,7 @@ class Transformer(nn.Module):
                 b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            outputs = self.drop_path(block["mha"](outputs)) + outputs
+            outputs = self.checkpointing(block["mha"], outputs)
             outputs = self.drop_path(block["mlp"](outputs)) + outputs
         return outputs
 
@@ -375,6 +387,10 @@ class ViTCore(Core):
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
         )
+        if not hasattr(args, "grad_checkpointing"):
+            args.grad_checkpointing = False
+        if not hasattr(args, "disable_bias"):
+            args.disable_bias = False
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,
@@ -387,6 +403,7 @@ class ViTCore(Core):
             use_lsa=args.use_lsa,
             drop_path=args.drop_path,
             use_bias=not args.disable_bias,
+            grad_checkpointing=args.grad_checkpointing,
         )
         # calculate latent height and width based on num_patches
         h, w = self.find_shape(self.patch_embedding.num_patches - 1)
@@ -408,7 +425,7 @@ class ViTCore(Core):
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
     ):

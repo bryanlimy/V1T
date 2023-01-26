@@ -7,28 +7,34 @@ from torch import nn
 import torch.distributed
 from torch.utils.data import DataLoader
 
+
 from sensorium.utils import tensorboard
+from sensorium.models.utils import ELU1
 from sensorium.models.core import get_core
 from sensorium.models.readout import Readouts
-from sensorium.models.image_cropper import ImageCropper
 from sensorium.models.core_shifter import CoreShifters
+from sensorium.models.image_cropper import ImageCropper
 
 
 def get_model_info(
     model: nn.Module,
     input_data: t.Union[torch.Tensor, t.Sequence[t.Any], t.Mapping[str, t.Any]],
+    mouse_id: str = None,
     filename: str = None,
     summary: tensorboard.Summary = None,
     device: torch.device = "cpu",
     tag: str = "model/trainable_parameters",
 ):
-    model_info = torchinfo.summary(
-        model,
-        input_data=input_data,
-        depth=5,
-        device=device,
-        verbose=0,
-    )
+    args = {
+        "model": model,
+        "input_data": input_data,
+        "depth": 5,
+        "device": device,
+        "verbose": 0,
+    }
+    if mouse_id is not None:
+        args["mouse_id"] = mouse_id
+    model_info = torchinfo.summary(**args)
     if filename is not None:
         with open(filename, "w") as file:
             file.write(str(model_info))
@@ -47,7 +53,7 @@ class Model(nn.Module):
         4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
 
-    def __init__(self, args, ds: t.Dict[int, DataLoader], name: str = "Model"):
+    def __init__(self, args, ds: t.Dict[str, DataLoader], name: str = "Model"):
         super(Model, self).__init__()
         assert isinstance(
             args.output_shapes, dict
@@ -92,7 +98,7 @@ class Model(nn.Module):
             ),
         )
 
-        self.elu = nn.ELU()
+        self.elu1 = ELU1()
 
     def get_parameters(self, core_lr: float):
         # separate learning rate for core module from the rest
@@ -131,7 +137,7 @@ class Model(nn.Module):
     def forward(
         self,
         inputs: torch.Tensor,
-        mouse_id: torch.Union[int, torch.Tensor],
+        mouse_id: str,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
         activate: bool = True,
@@ -153,7 +159,7 @@ class Model(nn.Module):
             shifts = self.core_shifter(pupil_centers, mouse_id=mouse_id)
         outputs = self.readouts(outputs, mouse_id=mouse_id, shifts=shifts)
         if activate:
-            outputs = self.elu(outputs) + 1
+            outputs = self.elu1(outputs)
         return outputs, images, image_grids
 
 
@@ -171,18 +177,21 @@ class DataParallel(nn.DataParallel):
         return self.module.regularizer(mouse_id)
 
 
-def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = None):
+def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = None):
     model = Model(args, ds=ds)
 
-    mouse_id = list(args.output_shapes.keys())[0]
+    # get model info
+    mouse_id = args.mouse_ids[0]
+    batch_size = args.micro_batch_size
+    random_input = lambda size: torch.rand(*size)
     model_info = get_model_info(
         model=model,
-        input_data=[
-            torch.randn(args.batch_size, *model.input_shape),  # images
-            mouse_id,  # mouse ID
-            torch.randn(args.batch_size, 3),  # behaviors
-            torch.randn(args.batch_size, 2),  # pupil centers
-        ],
+        input_data={
+            "inputs": random_input((batch_size, *model.input_shape)),
+            "behaviors": random_input((batch_size, 3)),
+            "pupil_centers": random_input((batch_size, 2)),
+        },
+        mouse_id=mouse_id,
         filename=os.path.join(args.output_dir, "model.txt"),
         summary=summary,
     )
@@ -191,22 +200,23 @@ def get_model(args, ds: t.Dict[int, DataLoader], summary: tensorboard.Summary = 
     if args.use_wandb:
         wandb.log({"trainable_params": model_info.trainable_params}, step=0)
 
+    # get core info
     get_model_info(
         model=model.core,
-        input_data=[
-            torch.randn(args.batch_size, *model.core.input_shape),
-            mouse_id,  # mouse_id
-            torch.randn(args.batch_size, 3),  # behaviors
-            torch.randn(args.batch_size, 2),  # pupil centers
-        ],
+        input_data={
+            "inputs": random_input((batch_size, *model.core.input_shape)),
+            "behaviors": random_input((batch_size, 3)),
+            "pupil_centers": random_input((batch_size, 2)),
+        },
+        mouse_id=mouse_id,
         filename=os.path.join(args.output_dir, "model_core.txt"),
         summary=summary,
         tag="model/trainable_parameters/core",
     )
-
+    # get readout summary
     get_model_info(
-        model=model.readouts[str(mouse_id)],
-        input_data=[torch.randn(args.batch_size, *model.core.output_shape)],
+        model=model.readouts[mouse_id],
+        input_data={"inputs": random_input((batch_size, *model.core.output_shape))},
         filename=os.path.join(args.output_dir, "model_readout.txt"),
         summary=summary,
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",

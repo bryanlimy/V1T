@@ -1,4 +1,6 @@
 import os
+import time
+import torch
 import wandb
 import argparse
 from functools import partial
@@ -29,6 +31,7 @@ class Args:
         self.format = "svg"
         self.clear_output_dir = False
         self.amp = False
+        self.grad_checkpointing = None
         self.verbose = verbose
         self.use_wandb = True
         for key, value in config.items():
@@ -64,13 +67,18 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2])
     params = parser.parse_args()
 
-    wandb.agent(
-        sweep_id=f"bryanlimy/sensorium/{params.sweep_id}",
-        function=partial(
-            main,
-            wandb_group=params.wandb_group,
-            dataset=params.dataset,
-            num_workers=params.num_workers,
-        ),
-        count=params.num_trials,
-    )
+    for i in range(params.num_trials):
+        wandb.agent(
+            sweep_id=f"bryanlimy/sensorium/{params.sweep_id}",
+            function=partial(
+                main,
+                wandb_group=params.wandb_group,
+                dataset=params.dataset,
+                num_workers=params.num_workers,
+            ),
+            count=1,
+        )
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if i < params.num_trials - 1:
+            time.sleep(5)

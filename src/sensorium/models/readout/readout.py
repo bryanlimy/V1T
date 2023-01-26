@@ -57,8 +57,8 @@ class Readouts(nn.ModuleDict):
         args,
         model: str,
         input_shape: t.Tuple[int],
-        output_shapes: t.Dict[int, tuple],
-        ds: t.Dict[int, DataLoader],
+        output_shapes: t.Dict[str, tuple],
+        ds: t.Dict[str, DataLoader],
     ):
         super(Readouts, self).__init__()
         if model not in _READOUTS.keys():
@@ -68,7 +68,7 @@ class Readouts(nn.ModuleDict):
         readout_model = _READOUTS[model]
         for mouse_id, output_shape in self.output_shapes.items():
             self.add_module(
-                name=str(mouse_id),
+                name=mouse_id,
                 module=readout_model(
                     args,
                     input_shape=input_shape,
@@ -81,10 +81,5 @@ class Readouts(nn.ModuleDict):
     def regularizer(self, mouse_id: int, reduction: str = "sum"):
         return self[str(mouse_id)].regularizer(reduction=reduction)
 
-    def forward(
-        self,
-        inputs: torch.Tensor,
-        mouse_id: torch.Union[int, torch.Tensor],
-        shifts: torch.Tensor = None,
-    ):
-        return self[str(mouse_id)](inputs, shifts=shifts)
+    def forward(self, inputs: torch.Tensor, mouse_id: str, shifts: torch.Tensor = None):
+        return self[mouse_id](inputs, shifts=shifts)

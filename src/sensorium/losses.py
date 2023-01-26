@@ -129,9 +129,12 @@ class MSSE(Loss):
         y_pred: torch.Tensor,
         mouse_id: int,
         reduction: REDUCTION = "sum",
+        batch_size: int = None,
     ):
+        if batch_size is None:
+            batch_size = y_true.size(0)
         loss = msse(y_true=y_true, y_pred=y_pred, reduction=reduction)
-        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=batch_size)
         return loss
 
 
@@ -147,8 +150,15 @@ class PoissonLoss(Loss):
         super(PoissonLoss, self).__init__(args, ds=ds, reduction=reduction)
         self.register_buffer("eps", torch.tensor(eps))
 
-    def forward(self, y_true: torch.Tensor, y_pred: torch.Tensor, mouse_id: int):
-        batch_size = y_true.size(0)
+    def forward(
+        self,
+        y_true: torch.Tensor,
+        y_pred: torch.Tensor,
+        mouse_id: int,
+        batch_size: int = None,
+    ):
+        if batch_size is None:
+            batch_size = y_true.size(0)
         # add eps to targets and predictions to avoid numeric instability
         y_true, y_pred = y_true + self.eps, y_pred + self.eps
         loss = torch.sum(y_pred - y_true * torch.log(y_pred))
@@ -169,11 +179,14 @@ class Correlation(Loss):
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
         mouse_id: int,
+        batch_size: int = None,
     ):
+        if batch_size is None:
+            batch_size = y_true.size(0)
         num_neurons = y_true.size(1)
         corr = correlation(y1=y_true, y2=y_pred, dim=0, eps=self.eps)
         loss = num_neurons - torch.sum(corr)
-        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=y_true.size(0))
+        loss = self.scale_ds(loss, mouse_id=mouse_id, batch_size=batch_size)
         return loss
 
 

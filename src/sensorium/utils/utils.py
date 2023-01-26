@@ -57,9 +57,7 @@ def inference(
     model.to(device)
     model.train(False)
     for batch in ds:
-        for micro_batch in data.micro_batching(
-            batch, micro_batch_size=micro_batch_size
-        ):
+        for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
             predictions, _, _ = model(
                 inputs=micro_batch["image"].to(device),
                 mouse_id=mouse_id,
@@ -110,7 +108,11 @@ def evaluate(
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose < 2
     ):
-        if mouse_id in (0, 1) and mouse_ds.dataset.tier == "test":
+        if (
+            mouse_ds.dataset.ds_name == "sensorium"
+            and mouse_id in ("0", "1")
+            and mouse_ds.dataset.tier == "test"
+        ):
             continue
         outputs[mouse_id] = inference(
             ds=mouse_ds,
@@ -154,7 +156,7 @@ def evaluate(
                 )
 
     if args.verbose and print_result:
-        _print = lambda d: [f"M{k}: {v:.04f}\t" for k, v in d.items()]
+        _print = lambda d: [f"{k}: {v:.04f}\t" for k, v in d.items()]
         statement = ""
         for metric in metrics:
             if results[metric]:
@@ -212,7 +214,7 @@ def plot_samples(
         i_transform_image = mouse_ds.dataset.i_transform_image
         for batch in mouse_ds:
             for micro_batch in data.micro_batching(
-                batch, micro_batch_size=args.micro_batch_size
+                batch, batch_size=args.micro_batch_size
             ):
                 images = micro_batch["image"]
                 predictions, crop_images, image_grids = model(
@@ -280,6 +282,14 @@ def load_args(args):
     for key, value in content.items():
         if not hasattr(args, key):
             setattr(args, key, value)
+    # convert mouse_ids and output_shapes to str
+    if hasattr(args, "mouse_ids") and type(args.mouse_ids[0]) == int:
+        args.mouse_ids = [str(mouse_id) for mouse_id in args.mouse_ids]
+    if (
+        hasattr(args, "output_shapes")
+        and type(list(args.output_shapes.keys())[0]) == int
+    ):
+        args.output_shapes = {str(k): v for k, v in args.output_shapes.items()}
 
 
 def get_device(args):
@@ -308,8 +318,8 @@ def metrics2df(results: t.Dict[int, torch.Tensor]):
 def log_metrics(
     results: t.Dict[t.Union[int, str], t.Dict[str, t.Any]],
     epoch: int,
-    mode: int,
-    summary: tensorboard.Summary,
+    summary: tensorboard.Summary = None,
+    mode: int = 0,
 ):
     """Compute the mean of the metrics in results and log to Summary
 
@@ -331,17 +341,19 @@ def log_metrics(
                     results[mouse_id][metric] = torch.mean(torch.stack(value)).item()
                 else:
                     results[mouse_id][metric] = np.mean(value)
-            summary.scalar(
-                f"{metric}/mouse{mouse_id}",
-                value=results[mouse_id][metric],
-                step=epoch,
-                mode=mode,
-            )
+            if summary is not None:
+                summary.scalar(
+                    f"{metric}/mouse{mouse_id}",
+                    value=results[mouse_id][metric],
+                    step=epoch,
+                    mode=mode,
+                )
     overall_result = {}
     for metric in metrics:
         value = np.mean([results[mouse_id][metric] for mouse_id in mouse_ids])
         overall_result[metric[metric.find("/") + 1 :]] = value
-        summary.scalar(metric, value=value, step=epoch, mode=mode)
+        if summary is not None:
+            summary.scalar(metric, value=value, step=epoch, mode=mode)
     return overall_result
 
 
@@ -367,18 +379,23 @@ def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
         print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
-def compute_micro_batch_size(args, num_iterations: int = 5):
+def compute_micro_batch_size(
+    args, batch_iterations: int = 5, micro_iterations: int = 5
+):
     """
     Calculate the maximum micro batch size that can fill the GPU memory if
     CUDA device is set.
     """
+    if hasattr(args, "micro_batch_size") and args.micro_batch_size:
+        assert args.micro_batch_size <= args.batch_size
+        return
+
     device = args.device
     if "cuda" not in device.type:
         args.micro_batch_size = args.batch_size
         return
 
     mouse_ids = args.mouse_ids
-
     # create dummy dataloaders, model, optimizer and criterion
     train_ds, _, _ = data.get_training_ds(
         args,
@@ -396,36 +413,40 @@ def compute_micro_batch_size(args, num_iterations: int = 5):
     image_shape = args.input_shape
     random_input = lambda size: torch.rand(*size, device=device)
 
-    micro_batch_size = 1
+    batch_size, micro_batch_size = args.batch_size, 1
     while True:
-        if micro_batch_size >= args.batch_size:
-            micro_batch_size = args.batch_size
+        if micro_batch_size >= batch_size:
+            micro_batch_size = batch_size
             break
         try:
             # dummy training loop to mimic training and gradient accumulation
-            for _ in range(num_iterations):
+            for _ in range(batch_iterations):
                 for mouse_id in mouse_ids:
-                    outputs, _, _ = model(
-                        inputs=random_input((micro_batch_size, *image_shape)),
-                        mouse_id=mouse_id,
-                        behaviors=random_input((micro_batch_size, 3)),
-                        pupil_centers=random_input((micro_batch_size, 2)),
-                    )
-                    loss = criterion(
-                        y_true=random_input((micro_batch_size, *outputs.shape)),
-                        y_pred=outputs,
-                        mouse_id=mouse_id,
-                    )
+                    batch_loss = 0.0
+                    for _ in range(micro_iterations):
+                        outputs, _, _ = model(
+                            inputs=random_input((micro_batch_size, *image_shape)),
+                            mouse_id=mouse_id,
+                            behaviors=random_input((micro_batch_size, 3)),
+                            pupil_centers=random_input((micro_batch_size, 2)),
+                        )
+                        loss = criterion(
+                            y_true=random_input((micro_batch_size, *outputs.shape)),
+                            y_pred=outputs,
+                            mouse_id=mouse_id,
+                            batch_size=batch_size,
+                        )
+                        batch_loss += loss
                     reg_loss = model.regularizer(mouse_id=mouse_id)
-                    total_loss = loss + reg_loss
+                    total_loss = batch_loss + reg_loss
                     total_loss.backward()
                 optimizer.step()
                 optimizer.zero_grad()
-            micro_batch_size += 1 if micro_batch_size == 1 else 2
+            micro_batch_size += 7 if micro_batch_size == 1 else 8
         except RuntimeError:
             if args.verbose:
                 print(f"OOM at micro batch size {micro_batch_size}")
-            micro_batch_size -= 1 if micro_batch_size == 2 else 2
+            micro_batch_size -= 7 if micro_batch_size == 8 else 8
             break
     del train_ds, model, optimizer, criterion
     torch.cuda.empty_cache()

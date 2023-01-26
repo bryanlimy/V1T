@@ -8,9 +8,22 @@ from torch import nn
 import torch.nn.functional as F
 from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
+from torch.utils.checkpoint import checkpoint
 
 from sensorium.models.utils import DropPath
 from sensorium.models.core.vit import BehaviorMLP
+
+
+def sinusoidal_embedding(num_channels: int, dim: int):
+    pe = torch.FloatTensor(
+        [
+            [p / (10000 ** (2 * (i // 2) / dim)) for i in range(dim)]
+            for p in range(num_channels)
+        ]
+    )
+    pe[:, 0::2] = torch.sin(pe[:, 0::2])
+    pe[:, 1::2] = torch.cos(pe[:, 1::2])
+    return torch.unsqueeze(pe, dim=0)
 
 
 class Tokenizer(nn.Module):
@@ -21,9 +34,13 @@ class Tokenizer(nn.Module):
         stride: int,
         emb_dim: int,
         padding: int = 3,
+        dropout: float = 0.0,
         use_bias: bool = False,
+        pos_emb: t.Literal["learn", "sine", "none"] = "sine",
     ):
         super(Tokenizer, self).__init__()
+        assert pos_emb in ("sine", "learn", "none")
+
         c, h, w = image_shape
         self.image_shape = image_shape
 
@@ -37,14 +54,28 @@ class Tokenizer(nn.Module):
         )
         self.relu = nn.ReLU()
         self.max_pool2d = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
+        output_shape = self.output_shape
+        self.num_patches = output_shape[0]
+
+        if pos_emb == "none":
+            self.pos_embedding = None
+        elif pos_emb == "learn":
+            self.pos_embedding = nn.Parameter(torch.zeros(1, self.num_patches, emb_dim))
+            nn.init.trunc_normal_(self.pos_emb, std=0.2)
+        else:
+            self.register_buffer(
+                "pos_embedding", sinusoidal_embedding(self.num_patches, emb_dim)
+            )
+        self.dropout = nn.Dropout(p=dropout)
+
         self.apply(self.init_weight)
 
     @property
     def output_shape(self):
         with torch.no_grad():
-            inputs = torch.zeros((1, *self.image_shape))
-            outputs = self.forward(inputs)
-            _, num_patches, emb_dim = outputs.shape
+            outputs = self.tokenize(torch.zeros((1, *self.image_shape)))
+        _, num_patches, emb_dim = outputs.shape
         return (num_patches, emb_dim)
 
     @staticmethod
@@ -52,22 +83,23 @@ class Tokenizer(nn.Module):
         if isinstance(m, nn.Conv2d):
             nn.init.kaiming_normal_(m.weight)
 
-    def forward(self, inputs: torch.Tensor):
+    def tokenize(self, inputs: torch.Tensor):
         outputs = self.conv2d(inputs)
         outputs = self.relu(outputs)
         outputs = self.max_pool2d(outputs)
         outputs = rearrange(outputs, "b c h w -> b (h w) c")
         return outputs
 
+    def forward(self, inputs: torch.Tensor):
+        outputs = self.tokenize(inputs)
+        if self.pos_embedding is not None:
+            outputs += self.pos_embedding
+        outputs = self.dropout(outputs)
+        return outputs
+
 
 class Attention(nn.Module):
-    def __init__(
-        self,
-        num_patches: int,
-        emb_dim: int,
-        num_heads: int = 8,
-        dropout: float = 0.0,
-    ):
+    def __init__(self, emb_dim: int, num_heads: int = 8, dropout: float = 0.0):
         super().__init__()
         self.num_heads = num_heads
         inner_dim = emb_dim // num_heads
@@ -108,21 +140,18 @@ class TransformerBlock(nn.Module):
     def __init__(
         self,
         behavior_mode: int,
-        num_patches: int,
         emb_dim: int,
         num_heads: int,
         mlp_dim: int,
         dropout: float,
         drop_path: float,
-        mouse_ids: t.List[int] = None,
+        mouse_ids: t.List[str] = None,
+        grad_checkpointing: bool = False,
     ):
         super(TransformerBlock, self).__init__()
-        self.mha = Attention(
-            num_patches=num_patches,
-            emb_dim=emb_dim,
-            num_heads=num_heads,
-            dropout=dropout,
-        )
+        self.grad_checkpointing = grad_checkpointing
+
+        self.mha = Attention(emb_dim=emb_dim, num_heads=num_heads, dropout=dropout)
         self.mlp = nn.Sequential(
             nn.LayerNorm(normalized_shape=emb_dim),
             nn.Linear(in_features=emb_dim, out_features=mlp_dim),
@@ -138,27 +167,24 @@ class TransformerBlock(nn.Module):
                 behavior_mode=behavior_mode, out_dim=emb_dim, mouse_ids=mouse_ids
             )
 
+    def checkpointing(self, fn: t.Callable, inputs: torch.Tensor):
+        if self.grad_checkpointing:
+            outputs = checkpoint(
+                fn, inputs, preserve_rng_state=True, use_reentrant=False
+            )
+        else:
+            outputs = fn(inputs)
+        return self.drop_path(outputs) + inputs
+
     def forward(self, inputs: torch.Tensor, mouse_id: int, behaviors: torch.Tensor):
         outputs = inputs
         if self.b_mlp is not None:
             b_latent = self.b_mlp(behaviors, mouse_id=mouse_id)
             b_latent = repeat(b_latent, "b d -> b 1 d")
             outputs = outputs + b_latent
-        outputs = self.drop_path(self.mha(outputs)) + outputs
+        outputs = self.checkpointing(self.mha, outputs)
         outputs = self.drop_path(self.mlp(outputs)) + outputs
         return outputs
-
-
-def sinusoidal_embedding(num_channels: int, dim: int):
-    pe = torch.FloatTensor(
-        [
-            [p / (10000 ** (2 * (i // 2) / dim)) for i in range(dim)]
-            for p in range(num_channels)
-        ]
-    )
-    pe[:, 0::2] = torch.sin(pe[:, 0::2])
-    pe[:, 1::2] = torch.cos(pe[:, 1::2])
-    return torch.unsqueeze(pe, dim=0)
 
 
 class Transformer(nn.Module):
@@ -167,50 +193,34 @@ class Transformer(nn.Module):
         input_shape: t.Tuple[int, int],
         num_channels: int,
         emb_dim: int,
+        mlp_dim: int,
         num_blocks: int,
         num_heads: int,
-        p_dropout: float,
-        t_dropout: float,
+        dropout: float,
         behavior_mode: int,
-        mouse_ids: t.List[int],
+        mouse_ids: t.List[str],
         drop_path: float = 0.0,
-        mlp_ratio: float = 3,
-        pos_emb: t.Literal["sine", "learn", "none"] = "sine",
+        grad_checkpointing: bool = False,
     ):
         super(Transformer, self).__init__()
-        assert pos_emb in ("sine", "learn", "none")
-
         self.num_patches = input_shape[0]
         self.num_channels = num_channels
 
-        if pos_emb == "none":
-            self.pos_emb = None
-        elif pos_emb == "learn":
-            self.pos_emb = nn.Parameter(torch.zeros(1, self.num_patches, emb_dim))
-            nn.init.trunc_normal_(self.pos_emb, std=0.2)
-        else:
-            self.register_buffer(
-                "pos_emb", sinusoidal_embedding(self.num_patches, emb_dim)
-            )
+        drop_path_rates = np.linspace(0, drop_path, num_blocks)
 
-        self.p_dropout = nn.Dropout(p=p_dropout)
-
-        drop_path_rates = np.linspace(0, drop_path, num_blocks).tolist()
-
-        mlp_dim = int(emb_dim * mlp_ratio)
         self.blocks = nn.ModuleList(
             [
                 TransformerBlock(
                     behavior_mode=behavior_mode,
-                    num_patches=self.num_patches,
                     emb_dim=emb_dim,
                     num_heads=num_heads,
                     mlp_dim=mlp_dim,
-                    dropout=t_dropout,
-                    drop_path=drop_path_rates[i],
+                    dropout=dropout,
+                    drop_path=drop_path,
                     mouse_ids=mouse_ids,
+                    grad_checkpointing=grad_checkpointing,
                 )
-                for i in range(len(drop_path_rates))
+                for drop_path in drop_path_rates
             ]
         )
 
@@ -229,16 +239,6 @@ class Transformer(nn.Module):
 
     def forward(self, inputs: torch.Tensor, mouse_id: int, behaviors: torch.Tensor):
         outputs = inputs
-        if self.pos_emb is None and inputs.size(1) < self.num_patches:
-            outputs = F.pad(
-                outputs,
-                (0, 0, 0, self.num_channels - outputs.size(1)),
-                mode="constant",
-                value=0,
-            )
-        if self.pos_emb is not None:
-            outputs += self.pos_emb
-        outputs = self.p_dropout(outputs)
         for block in self.blocks:
             outputs = block(outputs, mouse_id=mouse_id, behaviors=behaviors)
         return outputs
@@ -264,22 +264,26 @@ class CCTCore(Core):
             patch_size=args.patch_size,
             stride=args.patch_stride,
             emb_dim=args.emb_dim,
+            dropout=args.p_dropout,
+            pos_emb=args.pos_emb,
         )
         tokenizer_shape = self.tokenizer.output_shape
         num_patches = tokenizer_shape[0]
 
+        if not hasattr(args, "grad_checkpointing"):
+            args.grad_checkpointing = False
         self.transformer = Transformer(
             input_shape=tokenizer_shape,
             num_channels=c,
             emb_dim=args.emb_dim,
+            mlp_dim=args.mlp_dim,
             num_blocks=args.num_blocks,
             num_heads=args.num_heads,
-            p_dropout=args.p_dropout,
-            t_dropout=args.t_dropout,
+            dropout=args.t_dropout,
             drop_path=args.drop_path,
-            mlp_ratio=args.mlp_ratio,
             behavior_mode=args.behavior_mode,
             mouse_ids=list(args.output_shapes.keys()),
+            grad_checkpointing=args.grad_checkpointing,
         )
 
         h, w = self.find_shape(num_patches)

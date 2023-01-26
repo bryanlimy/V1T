@@ -42,7 +42,7 @@ class Recorder(nn.Module):
     def _find_modules(nn_module, type):
         return [module for module in nn_module.modules() if isinstance(module, type)]
 
-    def _register_hook(self, mouse_id: int):
+    def _register_hook(self, mouse_id: str):
         modules = self._find_modules(self.vit.transformer, BehaviorMLP)
         for module in modules:
             handle = module.model.register_forward_hook(self._hook)
@@ -68,11 +68,8 @@ class Recorder(nn.Module):
         images: torch.Tensor,
         behaviors: torch.Tensor,
         pupil_centers: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
     ):
-        """Return attention output from ViT
-        attns has shape (batch size, num blocks, num heads, num patches, num patches)
-        """
         assert not self.ejected, "recorder has been ejected, cannot be used anymore"
         self.clear()
         if not self.hook_registered:
@@ -88,38 +85,60 @@ class Recorder(nn.Module):
 
 
 def plot_distribution_map(
-    results: np.ndarray, mouse_id: int, filename: str = None, colormap: str = "Set2"
+    results: np.ndarray,
+    mouse_id: str,
+    filename: str = None,
+    colormap: str = "Set2",
 ):
     df = pd.DataFrame()
     for i in range(len(results)):
         df[i + 1] = results[i]
 
-    tick_fontsize, label_fontsize = 8, 10
+    tick_fontsize, label_fontsize = 12, 14
     figure, axes = joypy.joyplot(
         df,
-        figsize=(5, 6),
+        figsize=(3.5, 4),
         colormap=cm.get_cmap(colormap),
+        xlabelsize=tick_fontsize,
+        ylabelsize=tick_fontsize,
         alpha=0.8,
-        overlap=1.25,
+        overlap=1.8,
         # kind="normalized_counts",
-        bins=30,
+        bins=10,
         range_style="all",
-        x_range=[-1.5, 1.5],
+        x_range=[-1.1, 1.1],
         linewidth=1.5,
-        title=f"Mouse {mouse_id} BehaviorMLP activations",
     )
     pos = axes[0].get_position()
     axes[0].text(
-        x=-1.65,
-        y=pos.y1 - 0.5,
-        s="Layer",
+        x=-1.25,
+        y=pos.y1 + 0.5,
+        s="Block",
         fontsize=label_fontsize,
         ha="left",
         va="center",
     )
-    axes[-1].set_xlabel("Average activation distribution", fontsize=label_fontsize)
+    axes[-1].set_xlabel("activation distribution", fontsize=label_fontsize)
     tensorboard.set_ticks_params(axis=axes[-1])
     axes[-1].xaxis.set_tick_params(length=4, pad=3, width=1)
+
+    # axes[0].text(
+    #     x=-1.3,
+    #     y=3,
+    #     s="(a)",
+    #     fontsize=label_fontsize,
+    #     ha="left",
+    #     va="center",
+    # )
+    #
+    # axes[0].text(
+    #     x=-1.3,
+    #     y=4,
+    #     s="(b)",
+    #     fontsize=label_fontsize,
+    #     ha="left",
+    #     va="center",
+    # )
 
     plt.show()
     if filename is not None:
@@ -139,7 +158,7 @@ def main(args):
 
     _, val_ds, test_ds = data.get_training_ds(
         args,
-        data_dir=args.dataset,
+        data_dir=args.data,
         mouse_ids=args.mouse_ids,
         batch_size=args.batch_size,
         device=args.device,
@@ -151,46 +170,58 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    for mouse_id, mouse_ds in val_ds.items():
-        recorder = Recorder(model.core)
-        results = []
-        for batch in tqdm(val_ds[mouse_id], desc=f"Mouse {mouse_id}"):
-            with torch.no_grad():
-                pupil_center = batch["pupil_center"]
-                behavior = batch["behavior"]
-                image, _ = model.image_cropper(
-                    inputs=batch["image"],
-                    mouse_id=mouse_id,
-                    pupil_centers=pupil_center,
-                    behaviors=behavior,
-                )
-                activations = recorder(
-                    images=image,
-                    behaviors=behavior,
-                    pupil_centers=pupil_center,
-                    mouse_id=mouse_id,
-                )
-                recorder.clear()
-            results.append(activations.numpy())
-        results = np.array(results)
-        # compute the average activation for every block over all samples
-        results = np.mean(results, axis=0)
-        plot_distribution_map(
-            results=results,
-            mouse_id=mouse_id,
-            filename=os.path.join(
-                "plots",
-                "behaviorMLP",
-                f"mouse{mouse_id}_activations.png",
-            ),
-        )
-        recorder.eject()
-        del recorder
+    # results = {}
+    # for mouse_id, mouse_ds in test_ds.items():
+    #     if mouse_id == "1":
+    #         continue
+    #     recorder = Recorder(model.core)
+    #     result = []
+    #     for batch in tqdm(mouse_ds, desc=f"Mouse {mouse_id}"):
+    #         with torch.no_grad():
+    #             behavior = batch["behavior"]
+    #             pupil_center = batch["pupil_center"]
+    #             image, _ = model.image_cropper(
+    #                 inputs=batch["image"],
+    #                 mouse_id=mouse_id,
+    #                 behaviors=behavior,
+    #                 pupil_centers=pupil_center,
+    #             )
+    #             activations = recorder(
+    #                 images=image,
+    #                 behaviors=behavior,
+    #                 pupil_centers=pupil_center,
+    #                 mouse_id=mouse_id,
+    #             )
+    #             recorder.clear()
+    #         result.append(activations.numpy())
+    #     result = np.array(result)
+    #     # compute the average activation for every block over all samples
+    #     result = np.mean(result, axis=0)
+    #     results[mouse_id] = result
+    #     recorder.eject()
+    #     del recorder
+
+    import pickle
+
+    with open(os.path.join(args.output_dir, "behaviorMLP.pkl"), "rb") as file:
+        results = pickle.load(file)
+        # pickle.dump(results, file)
+
+    mouse_id = "2"
+    plot_distribution_map(
+        results=results[mouse_id],
+        mouse_id=mouse_id,
+        filename=os.path.join(
+            args.output_dir,
+            "plots",
+            f"behaviorMLP_mouse{mouse_id}.svg",
+        ),
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, default="../data/sensorium")
+    parser.add_argument("--data", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--device", type=str, default="cpu")
 
