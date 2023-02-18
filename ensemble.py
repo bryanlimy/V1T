@@ -284,17 +284,29 @@ def main(args):
     #     "9": "runs/vit_ensemble/009_vit_gaussian2d_seed9",
     #     "10": "runs/vit_ensemble/010_vit_gaussian2d_seed10",
     # }
+    # args.saved_models = {
+    #     # "1": "runs/stacked2d_ensemble/001_stacked2d_gaussian2d_seed1",
+    #     "2": "runs/stacked2d_ensemble/002_stacked2d_gaussian2d_seed2",
+    #     "3": "runs/stacked2d_ensemble/003_stacked2d_gaussian2d_seed3",
+    #     # "4": "runs/stacked2d_ensemble/004_stacked2d_gaussian2d_seed4",
+    #     # "5": "runs/stacked2d_ensemble/005_stacked2d_gaussian2d_seed5",
+    #     # "6": "runs/stacked2d_ensemble/006_stacked2d_gaussian2d_seed6",
+    #     # "7": "runs/stacked2d_ensemble/007_stacked2d_gaussian2d_seed7",
+    #     "8": "runs/stacked2d_ensemble/008_stacked2d_gaussian2d_seed8",
+    #     "9": "runs/stacked2d_ensemble/009_stacked2d_gaussian2d_seed9",
+    #     "10": "runs/stacked2d_ensemble/010_stacked2d_gaussian2d_seed10",
+    # }
     args.saved_models = {
-        # "1": "runs/stacked2d_ensemble/001_stacked2d_gaussian2d_seed1",
-        "2": "runs/stacked2d_ensemble/002_stacked2d_gaussian2d_seed2",
-        "3": "runs/stacked2d_ensemble/003_stacked2d_gaussian2d_seed3",
-        # "4": "runs/stacked2d_ensemble/004_stacked2d_gaussian2d_seed4",
-        # "5": "runs/stacked2d_ensemble/005_stacked2d_gaussian2d_seed5",
-        # "6": "runs/stacked2d_ensemble/006_stacked2d_gaussian2d_seed6",
-        # "7": "runs/stacked2d_ensemble/007_stacked2d_gaussian2d_seed7",
-        "8": "runs/stacked2d_ensemble/008_stacked2d_gaussian2d_seed8",
-        "9": "runs/stacked2d_ensemble/009_stacked2d_gaussian2d_seed9",
-        "10": "runs/stacked2d_ensemble/010_stacked2d_gaussian2d_seed10",
+        "1": "runs/franke2022_ensemble/011_stacked2d_gaussian2d_seed1",
+        # "2": "runs/franke2022_ensemble/012_stacked2d_gaussian2d_seed2",
+        "3": "runs/franke2022_ensemble/013_stacked2d_gaussian2d_seed3",
+        # "4": "runs/franke2022_ensemble/014_stacked2d_gaussian2d_seed4",
+        "5": "runs/franke2022_ensemble/015_stacked2d_gaussian2d_seed5",
+        # "6": "runs/franke2022_ensemble/016_stacked2d_gaussian2d_seed6",
+        "7": "runs/franke2022_ensemble/017_stacked2d_gaussian2d_seed7",
+        # "8": "runs/franke2022_ensemble/018_stacked2d_gaussian2d_seed8",
+        # "9": "runs/franke2022_ensemble/019_stacked2d_gaussian2d_seed9",
+        "10": "runs/franke2022_ensemble/020_stacked2d_gaussian2d_seed10",
     }
 
     model = EnsembleModel(args, saved_models=args.saved_models, ds=train_ds)
@@ -407,27 +419,25 @@ def main(args):
     if args.use_wandb:
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=0)
 
-    # Sensorium challenge
-    if 0 in test_ds:
-        submission.generate_submission(
-            args,
-            mouse_id=0,
-            test_ds=test_ds,
-            final_test_ds=final_test_ds,
-            model=model,
-            csv_dir=os.path.join(csv_dir, "sensorium"),
-        )
-
-    # Sensorium+ challenge
-    if 1 in test_ds:
-        submission.generate_submission(
-            args,
-            mouse_id=1,
-            test_ds=test_ds,
-            final_test_ds=final_test_ds,
-            model=model,
-            csv_dir=os.path.join(csv_dir, "sensorium+"),
-        )
+    if "sensorium" in args.dataset:
+        if 0 in test_ds:  # Sensorium challenge
+            submission.generate_submission(
+                args,
+                mouse_id="0",
+                test_ds=test_ds,
+                final_test_ds=final_test_ds,
+                model=model,
+                csv_dir=os.path.join(csv_dir, "sensorium"),
+            )
+        if 1 in test_ds:  # Sensorium+ challenge
+            submission.generate_submission(
+                args,
+                mouse_id="1",
+                test_ds=test_ds,
+                final_test_ds=final_test_ds,
+                model=model,
+                csv_dir=os.path.join(csv_dir, "sensorium+"),
+            )
 
     print(f"\nSubmission results saved to {csv_dir}.")
 
