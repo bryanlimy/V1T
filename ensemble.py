@@ -298,14 +298,14 @@ def main(args):
     # }
     args.saved_models = {
         "1": "runs/franke2022_ensemble/011_stacked2d_gaussian2d_seed1",
-        # "2": "runs/franke2022_ensemble/012_stacked2d_gaussian2d_seed2",
+        "2": "runs/franke2022_ensemble/012_stacked2d_gaussian2d_seed2",
         "3": "runs/franke2022_ensemble/013_stacked2d_gaussian2d_seed3",
-        # "4": "runs/franke2022_ensemble/014_stacked2d_gaussian2d_seed4",
+        "4": "runs/franke2022_ensemble/014_stacked2d_gaussian2d_seed4",
         "5": "runs/franke2022_ensemble/015_stacked2d_gaussian2d_seed5",
-        # "6": "runs/franke2022_ensemble/016_stacked2d_gaussian2d_seed6",
+        "6": "runs/franke2022_ensemble/016_stacked2d_gaussian2d_seed6",
         "7": "runs/franke2022_ensemble/017_stacked2d_gaussian2d_seed7",
-        # "8": "runs/franke2022_ensemble/018_stacked2d_gaussian2d_seed8",
-        # "9": "runs/franke2022_ensemble/019_stacked2d_gaussian2d_seed9",
+        "8": "runs/franke2022_ensemble/018_stacked2d_gaussian2d_seed8",
+        "9": "runs/franke2022_ensemble/019_stacked2d_gaussian2d_seed9",
         "10": "runs/franke2022_ensemble/020_stacked2d_gaussian2d_seed10",
     }
 
