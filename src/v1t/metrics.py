@@ -9,6 +9,12 @@ from v1t import losses
 
 
 class Metrics:
+    """
+    Metric class to compute metrics used in the Sensorium challenge
+
+    Code reference: https://github.com/sinzlab/sensorium/blob/e5017df2ff89c60a4d0a7687c4bde67774de346b/sensorium/utility/metrics.py
+    """
+
     def __init__(self, ds: DataLoader, results: t.Dict[str, torch.Tensor]):
         """
         Computes performance metrics of neural response predictions.

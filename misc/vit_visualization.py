@@ -289,7 +289,6 @@ def attention_rollout(image: np.ndarray, attention: np.ndarray):
 
     heatmap = joint_attentions[-1, 0, 1:]
     heatmap = np.reshape(heatmap, newshape=find_shape(len(heatmap)))
-    # heatmap = heatmap / np.max(heatmap)
     heatmap = normalize(heatmap)
     heatmap = resize(
         heatmap,
@@ -326,8 +325,7 @@ def main(args):
     num_plots = 3
     recorder = Recorder(model.core)
 
-    mouse_id = "6"
-    # mouse_id = "static26085-6-3"
+    mouse_id = "2"
 
     test_results = []
     for batch in test_ds[mouse_id]:

@@ -28,30 +28,15 @@ SENSORIUM = {
 
 FRANKE2022 = {
     "static25311-10-26": "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    # 1: "static25311-11-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    # 2: "static25311-4-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    # 3: "static25311-5-8-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    # 4: "static25311-7-34-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    # 5: "static25311-9-24-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
     "static25340-3-19": "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    # 7: "static25340-4-21-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
     "static25704-2-12": "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    # 9: "static25704-3-11-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
     "static25830-10-4": "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    # 11: "static25830-10-6-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
     "static26085-6-3": "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    # 13: "static26085-6-4-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
     "static26142-2-11": "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
-    # 15: "static26142-2-9-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
     "static26426-18-13": "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    # 17: "static26426-18-9-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
     "static26470-4-5": "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
     "static26644-6-2": "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    # 20: "static26644-6-3-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
     "static26872-21-6": "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    # 22: "static26872-24-3-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
-    # 23: "static26872-25-7-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    # 24: "static26872-26-8-ColorImageNet-b7d5a544978737ca47635aaa9307b73c",
 }
 
 
@@ -100,6 +85,8 @@ class CycleDataloaders:
     """
     Cycles through dataloaders until the loader with the largest size is
     exhausted.
+
+    Code reference: https://github.com/sinzlab/neuralpredictors/blob/9b85300ab854be1108b4bf64b0e4fa2e960760e0/neuralpredictors/training/cyclers.py#L68
     """
 
     def __init__(self, ds: t.Dict[int, DataLoader]):
