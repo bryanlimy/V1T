@@ -9,10 +9,10 @@ from torch.utils.data import DataLoader
 from scipy.ndimage import center_of_mass
 from sklearn.metrics import mutual_info_score
 
-from sensorium import data
-from sensorium.utils import utils
-from sensorium.models.model import Model
-from sensorium.utils.scheduler import Scheduler
+from v1t import data
+from v1t.utils import utils
+from v1t.models.model import Model
+from v1t.utils.scheduler import Scheduler
 
 
 from vit_visualization import Recorder, attention_rollout
@@ -105,20 +105,19 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    # results = {}
-    # for mouse_id, mouse_ds in test_ds.items():
-    #     if mouse_id == "1":
-    #         continue
-    #     results[mouse_id] = extract_attention_maps(
-    #         mouse_id=mouse_id, ds=mouse_ds, model=model
-    #     )
-    #
-    # with open("center_mass.pkl", "wb") as file:
-    #     pickle.dump(results, file)
-    # exit()
+    results = {}
+    for mouse_id, mouse_ds in test_ds.items():
+        if mouse_id == "1":
+            continue
+        results[mouse_id] = extract_attention_maps(
+            mouse_id=mouse_id, ds=mouse_ds, model=model
+        )
 
-    with open("center_mass.pkl", "rb") as file:
-        results = pickle.load(file)
+    with open("center_mass.pkl", "wb") as file:
+        pickle.dump(results, file)
+
+    # with open("center_mass.pkl", "rb") as file:
+    #     results = pickle.load(file)
 
     for mouse_id, mouse_dict in results.items():
         # compute correlation center of mass and pupil center

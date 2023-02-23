@@ -10,11 +10,11 @@ from time import time
 from shutil import rmtree
 from einops.layers.torch import Reduce, Rearrange
 
-from sensorium import pretrain
-from sensorium.models.core import get_core
-import sensorium.models.utils as model_utils
-from sensorium.utils import utils, tensorboard
-from sensorium.utils.scheduler import Scheduler
+from v1t import pretrain
+from v1t.models.core import get_core
+import v1t.models.utils as model_utils
+from v1t.utils import utils, tensorboard
+from v1t.utils.scheduler import Scheduler
 
 
 class Model(nn.Module):

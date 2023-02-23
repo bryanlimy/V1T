@@ -1,102 +1,21 @@
 import os
-import math
 import torch
 import argparse
 import numpy as np
 import typing as t
-from torch import nn
 import matplotlib.cm as cm
-from einops import rearrange
 import matplotlib.pyplot as plt
-from skimage.transform import resize
 
-from sensorium import data
-from sensorium.models.model import Model
-from sensorium.utils.scheduler import Scheduler
-from sensorium.utils import utils, tensorboard
-from sensorium.models.core.vit import ViTCore, Attention
+from v1t import data
+from v1t.models.model import Model
+from v1t.utils import utils, tensorboard
+from v1t.utils.scheduler import Scheduler
+from v1t.utils.attention_rollout import attention_rollout, Recorder
 
 
 utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
-
-
-def find_shape(num_patches: int):
-    dim1 = math.ceil(math.sqrt(num_patches))
-    while num_patches % dim1 != 0 and dim1 > 0:
-        dim1 -= 1
-    dim2 = num_patches // dim1
-    return dim1, dim2
-
-
-def normalize(x: np.ndarray):
-    return (x - np.min(x)) / (np.max(x) - np.min(x))
-
-
-class Recorder(nn.Module):
-    def __init__(self, vit: ViTCore, device: str = "cpu"):
-        super().__init__()
-        self.vit = vit
-
-        self.data = None
-        self.recordings = []
-        self.hooks = []
-        self.hook_registered = False
-        self.ejected = False
-        self.device = device
-
-    def _hook(self, _, input, output):
-        self.recordings.append(output.clone().detach())
-
-    @staticmethod
-    def _find_modules(nn_module, type):
-        return [module for module in nn_module.modules() if isinstance(module, type)]
-
-    def _register_hook(self):
-        modules = self._find_modules(self.vit.transformer, Attention)
-        for module in modules:
-            handle = module.attend.register_forward_hook(self._hook)
-            self.hooks.append(handle)
-        self.hook_registered = True
-
-    def eject(self):
-        self.ejected = True
-        for hook in self.hooks:
-            hook.remove()
-        self.hooks.clear()
-        return self.vit
-
-    def clear(self):
-        self.recordings.clear()
-
-    def record(self, attn):
-        recording = attn.clone().detach()
-        self.recordings.append(recording)
-
-    def forward(
-        self,
-        images: torch.Tensor,
-        behaviors: torch.Tensor,
-        pupil_centers: torch.Tensor,
-        mouse_id: str,
-    ):
-        """Return attention output from ViT
-        attns has shape (batch size, num blocks, num heads, num patches, num patches)
-        """
-        assert not self.ejected, "recorder has been ejected, cannot be used anymore"
-        self.clear()
-        if not self.hook_registered:
-            self._register_hook()
-        pred = self.vit(
-            inputs=images,
-            behaviors=behaviors,
-            pupil_centers=pupil_centers,
-            mouse_id=mouse_id,
-        )
-        recordings = tuple(map(lambda tensor: tensor.to(self.device), self.recordings))
-        attns = torch.stack(recordings, dim=1) if len(recordings) > 0 else None
-        return pred, attns
 
 
 def to_rgb(image: np.ndarray):
@@ -264,42 +183,6 @@ def plot_attention_map_2(
         print(f"plot saved to {filename}.")
 
 
-def attention_rollout(image: np.ndarray, attention: np.ndarray):
-    """
-    Attention rollout from https://arxiv.org/abs/2005.00928
-    Code examples
-    - https://keras.io/examples/vision/probing_vits/#method-ii-attention-rollout
-    - https://github.com/jeonsworld/ViT-pytorch/blob/main/visualize_attention_map.ipynb
-    """
-    # average the attention heads
-    attention = np.max(attention, axis=1)
-
-    # to account for residual connections, we add an identity matrix to the
-    # attention matrix and re-normalize the weights.
-    residual_att = np.eye(attention.shape[1])
-    aug_att_mat = attention + residual_att
-    aug_att_mat = aug_att_mat / np.expand_dims(aug_att_mat.sum(axis=-1), axis=-1)
-
-    # recursively multiply the weight matrices
-    joint_attentions = np.zeros(aug_att_mat.shape)
-    joint_attentions[0] = aug_att_mat[0]
-
-    for n in range(1, aug_att_mat.shape[0]):
-        joint_attentions[n] = np.matmul(aug_att_mat[n], joint_attentions[n - 1])
-
-    heatmap = joint_attentions[-1, 0, 1:]
-    heatmap = np.reshape(heatmap, newshape=find_shape(len(heatmap)))
-    # heatmap = heatmap / np.max(heatmap)
-    heatmap = normalize(heatmap)
-    heatmap = resize(
-        heatmap,
-        output_shape=image.shape[1:],
-        preserve_range=True,
-        anti_aliasing=False,
-    )
-    return heatmap
-
-
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
@@ -326,8 +209,7 @@ def main(args):
     num_plots = 3
     recorder = Recorder(model.core)
 
-    mouse_id = "6"
-    # mouse_id = "static26085-6-3"
+    mouse_id = "2"
 
     test_results = []
     for batch in test_ds[mouse_id]:
