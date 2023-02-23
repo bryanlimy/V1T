@@ -213,7 +213,7 @@ def main(args, wandb_sweep: bool = False):
 
     data.get_mouse_ids(args)
 
-    if args.grad_checkpointing is None:
+    if args.grad_checkpointing is None and args.core in ("vit", "cct"):
         args.grad_checkpointing = "cuda" in args.device.type
     if args.grad_checkpointing and args.verbose:
         print(f"Enable gradient checkpointing for ViT.")
@@ -533,96 +533,109 @@ if __name__ == "__main__":
     temp_args = parser.parse_known_args()[0]
 
     # hyper-parameters for core module
-    if temp_args.core == "conv":
-        parser.add_argument("--num_layers", type=int, default=4)
-        parser.add_argument("--num_filters", type=int, default=8)
-        parser.add_argument("--dropout", type=float, default=0.0)
-        parser.add_argument("--core_reg_scale", type=float, default=0)
-        parser.add_argument("--lr", default=0.001, type=float)
-    elif temp_args.core == "stacked2d":
-        parser.add_argument("--num_layers", type=int, default=4)
-        parser.add_argument("--dropout", type=float, default=0.0)
-        parser.add_argument("--core_reg_input", type=float, default=6.3831)
-        parser.add_argument("--core_reg_hidden", type=float, default=0.0)
-        parser.add_argument(
-            "--linear", action="store_true", help="remove non-linearity in core"
-        )
-        parser.add_argument("--lr", default=0.009, type=float)
-    elif temp_args.core == "vit":
-        parser.add_argument("--patch_size", type=int, default=8)
-        parser.add_argument(
-            "--patch_mode",
-            type=int,
-            default=0,
-            choices=[0, 1, 2],
-            help="patch embedding mode:"
-            "0 - nn.Unfold to extract patches"
-            "1 - nn.Conv2D to extract patches"
-            "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1",
-        )
-        parser.add_argument(
-            "--patch_stride",
-            type=int,
-            default=1,
-            help="stride size to extract patches",
-        )
-        parser.add_argument("--num_blocks", type=int, default=4)
-        parser.add_argument("--num_heads", type=int, default=4)
-        parser.add_argument("--emb_dim", type=int, default=155)
-        parser.add_argument("--mlp_dim", type=int, default=488)
-        parser.add_argument(
-            "--p_dropout", type=float, default=0.0229, help="patch embeddings dropout"
-        )
-        parser.add_argument(
-            "--t_dropout", type=float, default=0.2544, help="ViT block dropout"
-        )
-        parser.add_argument(
-            "--drop_path", type=float, default=0.0, help="stochastic depth dropout rate"
-        )
-        parser.add_argument(
-            "--use_lsa", action="store_true", help="Use Locality Self Attention"
-        )
-        parser.add_argument(
-            "--disable_bias",
-            action="store_true",
-            help="Disable bias terms in linear layers in ViT.",
-        )
-        parser.add_argument("--core_reg_scale", type=float, default=0.5379)
-        parser.add_argument("--lr", default=0.001647, type=float)
-    elif temp_args.core == "cct":
-        parser.add_argument("--patch_size", type=int, default=8)
-        parser.add_argument(
-            "--patch_stride",
-            type=int,
-            default=1,
-            help="stride size to extract patches",
-        )
-        parser.add_argument("--num_blocks", type=int, default=4)
-        parser.add_argument("--num_heads", type=int, default=4)
-        parser.add_argument("--emb_dim", type=int, default=160)
-        parser.add_argument("--mlp_dim", type=float, default=488)
-        parser.add_argument(
-            "--pos_emb", type=str, default="sine", choices=["sine", "learn", "none"]
-        )
-        parser.add_argument(
-            "--p_dropout", type=float, default=0.0229, help="patch embeddings dropout"
-        )
-        parser.add_argument(
-            "--t_dropout", type=float, default=0.2544, help="ViT block dropout"
-        )
-        parser.add_argument(
-            "--drop_path", type=float, default=0.0, help="stochastic depth dropout rate"
-        )
-        parser.add_argument("--core_reg_scale", type=float, default=0.5379)
-        parser.add_argument("--lr", default=0.001647, type=float)
-    elif temp_args.core == "stn":
-        parser.add_argument("--num_layers", type=int, default=7)
-        parser.add_argument("--num_filters", type=int, default=63)
-        parser.add_argument("--dropout", type=float, default=0.1135)
-        parser.add_argument("--core_reg_scale", type=float, default=0.0450)
-        parser.add_argument("--lr", default=0.001, type=float)
-    else:
-        parser.add_argument("--core_reg_scale", type=float, default=0)
+    match temp_args.core:
+        case "conv":
+            parser.add_argument("--num_layers", type=int, default=4)
+            parser.add_argument("--num_filters", type=int, default=8)
+            parser.add_argument("--dropout", type=float, default=0.0)
+            parser.add_argument("--core_reg_scale", type=float, default=0)
+            parser.add_argument("--lr", default=0.001, type=float)
+        case "stacked2d":
+            parser.add_argument("--num_layers", type=int, default=4)
+            parser.add_argument("--dropout", type=float, default=0.0)
+            parser.add_argument("--core_reg_input", type=float, default=6.3831)
+            parser.add_argument("--core_reg_hidden", type=float, default=0.0)
+            parser.add_argument(
+                "--linear", action="store_true", help="remove non-linearity in core"
+            )
+            parser.add_argument("--lr", default=0.009, type=float)
+        case "vit":
+            parser.add_argument("--patch_size", type=int, default=8)
+            parser.add_argument(
+                "--patch_mode",
+                type=int,
+                default=0,
+                choices=[0, 1, 2],
+                help="patch embedding mode:"
+                "0 - nn.Unfold to extract patches"
+                "1 - nn.Conv2D to extract patches"
+                "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1",
+            )
+            parser.add_argument(
+                "--patch_stride",
+                type=int,
+                default=1,
+                help="stride size to extract patches",
+            )
+            parser.add_argument("--num_blocks", type=int, default=4)
+            parser.add_argument("--num_heads", type=int, default=4)
+            parser.add_argument("--emb_dim", type=int, default=155)
+            parser.add_argument("--mlp_dim", type=int, default=488)
+            parser.add_argument(
+                "--p_dropout",
+                type=float,
+                default=0.0229,
+                help="patch embeddings dropout",
+            )
+            parser.add_argument(
+                "--t_dropout", type=float, default=0.2544, help="ViT block dropout"
+            )
+            parser.add_argument(
+                "--drop_path",
+                type=float,
+                default=0.0,
+                help="stochastic depth dropout rate",
+            )
+            parser.add_argument(
+                "--use_lsa", action="store_true", help="Use Locality Self Attention"
+            )
+            parser.add_argument(
+                "--disable_bias",
+                action="store_true",
+                help="Disable bias terms in linear layers in ViT.",
+            )
+            parser.add_argument("--core_reg_scale", type=float, default=0.5379)
+            parser.add_argument("--lr", default=0.001647, type=float)
+        case "cct":
+            parser.add_argument("--patch_size", type=int, default=8)
+            parser.add_argument(
+                "--patch_stride",
+                type=int,
+                default=1,
+                help="stride size to extract patches",
+            )
+            parser.add_argument("--num_blocks", type=int, default=4)
+            parser.add_argument("--num_heads", type=int, default=4)
+            parser.add_argument("--emb_dim", type=int, default=160)
+            parser.add_argument("--mlp_dim", type=float, default=488)
+            parser.add_argument(
+                "--pos_emb", type=str, default="sine", choices=["sine", "learn", "none"]
+            )
+            parser.add_argument(
+                "--p_dropout",
+                type=float,
+                default=0.0229,
+                help="patch embeddings dropout",
+            )
+            parser.add_argument(
+                "--t_dropout", type=float, default=0.2544, help="ViT block dropout"
+            )
+            parser.add_argument(
+                "--drop_path",
+                type=float,
+                default=0.0,
+                help="stochastic depth dropout rate",
+            )
+            parser.add_argument("--core_reg_scale", type=float, default=0.5379)
+            parser.add_argument("--lr", default=0.001647, type=float)
+        case "stn":
+            parser.add_argument("--num_layers", type=int, default=7)
+            parser.add_argument("--num_filters", type=int, default=63)
+            parser.add_argument("--dropout", type=float, default=0.1135)
+            parser.add_argument("--core_reg_scale", type=float, default=0.0450)
+            parser.add_argument("--lr", default=0.001, type=float)
+        case _:
+            raise NotImplementedError(f"--core {temp_args.core} not implemented.")
 
     # hyper-parameters for readout modules
     if temp_args.readout == "gaussian2d":

@@ -1,82 +1,88 @@
-# Sensorium 2022 Challenge
-Codebase for NeurIPS 2022 Sensorium challenge
+# V<font size='5'>1</font>T: Large-scale mouse V1 response prediction using a Vision Transformer
 
-## Quick URLs
-- Sensorium 2022 webpage: [sensorium2022.net](https://sensorium2022.net/home)
-- Starting kit: [github.com/sinzlab/sensorium](https://github.com/sinzlab/sensorium)
-- Dataset: [gin.g-node.org/cajal/Sensorium2022](https://gin.g-node.org/cajal/Sensorium2022)
-- Dataset whitepaper: [arxiv.org/abs/2206.08666](https://arxiv.org/abs/2206.08666)
-- ICLR2021 paper (SOTA model) from the organizer: [openreview.net/forum?id=Tp7kI90Htd](https://openreview.net/forum?id=Tp7kI90Htd)
+[![arXiv](https://img.shields.io/badge/arXiv-2302.03023-b31b1b.svg)](https://arxiv.org/abs/2302.03023)
+
+![](misc/images/v1t.png)
+
+Authors: Bryan M. Li, Isabel M. Cornacchia, Nathalie L. Rochefort, Arno Onken
+
+```
+@article{li2023v1t,
+    title={V1T: large-scale mouse V1 response prediction using a Vision Transformer},
+    author={Li, Bryan M and Cornacchia, Isabel M and Rochefort, Nathalie L and Onken, Arno},
+    journal={arXiv preprint arXiv:2302.03023},
+    year={2023}
+}
+```
+
+## Acknowledgement
+
+We sincerely thank [Willeke et al.](https://arxiv.org/abs/2206.08666) for organizing the [Sensorium](https://sensorium2022.net/home) challenge and, along with [Franke et al.](https://www.nature.com/articles/s41586-022-05270-3), for making their high-quality large-scale mouse V1 recordings publicly available. This codebase is inspired by [sinzlab/sensorium](https://github.com/sinzlab/sensorium), [sinzlab/neuralpredictors](https://github.com/sinzlab/neuralpredictors) and [sinzlab/nnfabrik](https://github.com/sinzlab/nnfabrik). 
 
 ## File structure
-The codebase repository should have the following structure. Check [.gitignore](.gitignore) for the ignored files.
+The codebase repository has the following structure. Check [.gitignore](.gitignore) for the ignored files.
 ```
 sensorium2022/
-    data/
-        sensorium/
-            static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-            static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
-            ...
-        franke2022/
-        imagenet/
-        README.md
-    misc/
-    src/
-        sensorium/
-            ...
-    .gitignore
-    LICENSE
-    pyproject.toml
+  data/
+    sensorium/
+      static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
+      ...
+    franke2022/
+      static25311-4-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b.zip
+      ...
     README.md
-    requirements.txt
-    setup.py
-    setup.sh
-    ...
+  misc/
+  src/
+    v1t/
+      ...
+  .gitignore
+  README.md
+  setup.sh
+  demo.ipynb
+  submission.py
+  sweep.py
+  train.py
+  ...
 ```
+- [`demo.ipynb`](demo.ipynb) demonstrates how to load the best V1T model and inference the Sensorium+ test set, as well as extracting the attention rollout maps.
+- [`submission.py`](submission.py) creates the submission `csv` files for the Sensorium challenge.
+- [`sweep.py`](sweep.py) performs hyperparameter tuning using [Weights & Biases](https://wandb.ai/site).
+- [`train.py`](train.py) contains the model training procedure.
 - [data](data/) store the datasets, please check [data/README.md](data/README.md) for more information.
 - [misc](misc/) contains scripts and notebooks to generate various plots and figures used in the paper.
-- [src/sensorium](src/v1t/) contains the code for the main Python package.
+- [src/v1t](src/v1t/) contains the code for the main Python package.
 
 ## Installation
-- Create a new [conda](https://docs.conda.io/en/latest/miniconda.html) environment with Python 3.8.
+- Create a new [conda](https://docs.conda.io/en/latest/miniconda.html) environment in Python 3.10.
   ```bash
-  conda create -n sensorium python=3.8
+  conda create -n v1t python=3.10
   ```
-- Activate `sensorium` virtual environment
+- Activate `v1t` virtual environment
   ```bash
-  conda activate sensorium
+  conda activate v1t
   ```
-- Install all dependencies and packages using `setup.sh` script.
+- We have created a [`setup.sh`](setup.sh) script to install the relevant `conda` and `pip` packages for macOS and Ubuntu devices.
   ```bash
   sh setup.sh
   ```
+- Alternative, you can install PyTorch 1.13.1 and all the relevant packages with:
+  ```bash
+  # install PyTorch
+  conda install -c pytorch pytorch=1.13.1 torchvision torchaudio -y
+  # install V1T package
+  pip install -e .
+  ```
 
-## Demo
-- A demo to load the best model and run the Sensorium test set is available in [demo.ipynb](demo.ipynb) 
-
-## Run model
-- An example command to train a V1T core and Gaussian readout on the Sensorium dataset
+## Train model
+- An example command to train a V1T core and Gaussian readout on the Sensorium+ dataset
   ```bash
   python train.py --data data/sensorium --output_dir runs/v1t_model --core vit --readout gaussian2d --ds_scale --behavior_mode 3 --epochs 400 --batch_size 16
   ```
 - use the `--help` flag to see all available options
 
-## Pull Requests (PRs)
-- Always create a new branch to work on a/any features.
-- When your branch is ready, create a PR on GitHub.
-- Every PR should be reviewed and approved by another person.
-- Once a PR has been approved, the submitter should select **`Squash and merge`** to merge the branch into `main` as a **single** commit.
-
-## Reviewing PRs
-Quality reviews are really important. You should spend time reviewing the code your peers write (not just fixing their mistakes without saying anything). If you can't review something because you don't understand what they're doing, there's something very wrong with their code, not you. Ask clarifying questions and suggest ways for them to make their code more interpretable. Request they put comments where comment are necessary.
-
-If your code is being reviewed, don't be insulted or annoyed at requests to reformat/add comments. Err on the side of helping your colleagues understand your work. We should all have [Black](https://github.com/psf/black) installed:
-- Install [Black](https://github.com/psf/black) `pip install black[jupyter]`, or, if you are using `zsh`: `pip install 'black[jupyter]'`
-- Usage:
-    - Command line:
-      ```
-      black <filename>
-      ```
-    - [PyCharm](https://black.readthedocs.io/en/stable/integrations/editors.html#pycharm-intellij-idea)
-    - [Visual Studio Code](https://black.readthedocs.io/en/stable/integrations/editors.html#visual-studio-code)
-    - [SublimeText 3](https://black.readthedocs.io/en/stable/integrations/editors.html#sublimetext-3)
+## Visualize training performance
+- Use the following command to monitor training performance with [TensorBoard](https://www.tensorflow.org/tensorboard)
+  ```bash
+  tensorboard --logidr runs/v1t_model --port 6006
+  ```
+- Visit `localhost:6006` on your browser

@@ -12,6 +12,10 @@ REDUCTIONS = t.Literal["sum", "mean", None]
 
 @register("gaussian2d")
 class Gaussian2DReadout(Readout):
+    """
+    Code reference: https://github.com/sinzlab/neuralpredictors/blob/9b85300ab854be1108b4bf64b0e4fa2e960760e0/neuralpredictors/layers/readouts/gaussian.py
+    """
+
     def __init__(
         self,
         args,

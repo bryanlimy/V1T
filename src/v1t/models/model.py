@@ -126,7 +126,7 @@ class Model(nn.Module):
             )
         return params
 
-    def regularizer(self, mouse_id: int):
+    def regularizer(self, mouse_id: str):
         reg = self.core.regularizer()
         reg += self.readouts.regularizer(mouse_id=mouse_id)
         reg += self.image_cropper.regularizer(mouse_id=mouse_id)

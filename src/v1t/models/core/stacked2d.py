@@ -1,5 +1,5 @@
 """
-Stacked2d core from https://github.com/sinzlab/neuralpredictors/blob/main/neuralpredictors/layers/cores/conv2d.py
+Code reference: https://github.com/sinzlab/neuralpredictors/blob/main/neuralpredictors/layers/cores/conv2d.py
 """
 
 
@@ -12,7 +12,8 @@ import numpy as np
 from torch import nn
 import torch.nn.init as init
 import torch.nn.functional as F
-from collections import Iterable, OrderedDict
+from collections import OrderedDict
+from collections.abc import Iterable
 
 
 class AttentionConv(nn.Module):

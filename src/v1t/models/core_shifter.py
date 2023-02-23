@@ -5,6 +5,10 @@ from torch.nn import ModuleDict
 
 
 class CoreShifter(nn.Module):
+    """
+    Code reference: https://github.com/sinzlab/neuralpredictors/blob/9b85300ab854be1108b4bf64b0e4fa2e960760e0/neuralpredictors/layers/shifters/mlp.py
+    """
+
     def __init__(
         self,
         args,
