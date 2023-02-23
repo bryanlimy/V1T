@@ -4,7 +4,7 @@ import torch
 import typing as t
 from torch import nn
 
-from sensorium.models import utils
+from v1t.models import utils
 
 
 @register("conv")

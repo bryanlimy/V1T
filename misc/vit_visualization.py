@@ -10,11 +10,11 @@ from einops import rearrange
 import matplotlib.pyplot as plt
 from skimage.transform import resize
 
-from sensorium import data
-from sensorium.models.model import Model
-from sensorium.utils.scheduler import Scheduler
-from sensorium.utils import utils, tensorboard
-from sensorium.models.core.vit import ViTCore, Attention
+from v1t import data
+from v1t.models.model import Model
+from v1t.utils.scheduler import Scheduler
+from v1t.utils import utils, tensorboard
+from v1t.models.core.vit import ViTCore, Attention
 
 
 utils.set_random_seed(1234)

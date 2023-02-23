@@ -35,7 +35,7 @@ sensorium2022/
 ```
 - [data](data/) store the datasets, please check [data/README.md](data/README.md) for more information.
 - [misc](misc/) contains scripts and notebooks to generate various plots and figures used in the paper.
-- [src/sensorium](src/sensorium/) contains the code for the main Python package.
+- [src/sensorium](src/v1t/) contains the code for the main Python package.
 
 ## Installation
 - Create a new [conda](https://docs.conda.io/en/latest/miniconda.html) environment with Python 3.8.

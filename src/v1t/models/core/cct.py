@@ -10,8 +10,8 @@ from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
 from torch.utils.checkpoint import checkpoint
 
-from sensorium.models.utils import DropPath
-from sensorium.models.core.vit import BehaviorMLP
+from v1t.models.utils import DropPath
+from v1t.models.core.vit import BehaviorMLP
 
 
 def sinusoidal_embedding(num_channels: int, dim: int):

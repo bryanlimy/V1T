@@ -8,12 +8,12 @@ import torch.distributed
 from torch.utils.data import DataLoader
 
 
-from sensorium.utils import tensorboard
-from sensorium.models.utils import ELU1
-from sensorium.models.core import get_core
-from sensorium.models.readout import Readouts
-from sensorium.models.core_shifter import CoreShifters
-from sensorium.models.image_cropper import ImageCropper
+from v1t.utils import tensorboard
+from v1t.models.utils import ELU1
+from v1t.models.core import get_core
+from v1t.models.readout import Readouts
+from v1t.models.core_shifter import CoreShifters
+from v1t.models.image_cropper import ImageCropper
 
 
 def get_model_info(

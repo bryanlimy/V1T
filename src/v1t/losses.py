@@ -4,7 +4,7 @@ import typing as t
 from torch.utils.data import DataLoader
 from torch.nn.modules.loss import _Loss
 
-from sensorium.models.utils import BufferDict
+from v1t.models.utils import BufferDict
 
 _CRITERION = dict()
 

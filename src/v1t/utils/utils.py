@@ -11,10 +11,10 @@ from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-from sensorium.models import Model
-from sensorium import losses, data
-from sensorium.metrics import Metrics
-from sensorium.utils import yaml, tensorboard
+from v1t.models import Model
+from v1t import losses, data
+from v1t.metrics import Metrics
+from v1t.utils import yaml, tensorboard
 
 
 def set_random_seed(seed: int, deterministic: bool = False):

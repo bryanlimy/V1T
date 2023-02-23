@@ -9,7 +9,7 @@ from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
 from torch.utils.checkpoint import checkpoint
 
-from sensorium.models.utils import DropPath
+from v1t.models.utils import DropPath
 
 
 class PatchShifting(nn.Module):

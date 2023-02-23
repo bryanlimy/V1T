@@ -5,7 +5,7 @@ from copy import deepcopy
 from torch.utils.data import DataLoader
 
 
-from sensorium import losses
+from v1t import losses
 
 
 class Metrics:

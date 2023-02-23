@@ -7,8 +7,8 @@ import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from sensorium.pretrain import data
-from sensorium.utils import utils, tensorboard
+from v1t.pretrain import data
+from v1t.utils import utils, tensorboard
 
 
 def plot_image(

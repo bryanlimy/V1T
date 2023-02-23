@@ -9,10 +9,10 @@ from tqdm import tqdm
 from datetime import datetime
 from torch.utils.data import DataLoader
 
-from sensorium import data
-from sensorium.utils import utils
-from sensorium.models import Model
-from sensorium.utils.scheduler import Scheduler
+from v1t import data
+from v1t.utils import utils
+from v1t.models import Model
+from v1t.utils.scheduler import Scheduler
 
 
 def save_csv(filename: str, results: t.Dict[str, t.List[t.Union[float, int]]]):

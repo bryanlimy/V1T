@@ -9,10 +9,10 @@ from torch.utils.data import DataLoader
 from scipy.ndimage import center_of_mass
 from sklearn.metrics import mutual_info_score
 
-from sensorium import data
-from sensorium.utils import utils
-from sensorium.models.model import Model
-from sensorium.utils.scheduler import Scheduler
+from v1t import data
+from v1t.utils import utils
+from v1t.models.model import Model
+from v1t.utils.scheduler import Scheduler
 
 
 from vit_visualization import Recorder, attention_rollout

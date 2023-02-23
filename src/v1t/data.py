@@ -8,7 +8,7 @@ from zipfile import ZipFile
 from datetime import datetime
 from torch.utils.data import Dataset, DataLoader
 
-from sensorium.utils import utils
+from v1t.utils import utils
 
 # dataset names
 DS_NAMES = t.Literal["sensorium", "franke2022"]

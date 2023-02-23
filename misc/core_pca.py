@@ -11,10 +11,10 @@ from sklearn.decomposition import PCA
 from torch.utils.data import DataLoader
 
 
-from sensorium import data
-from sensorium.models.model import Model
-from sensorium.utils import utils, tensorboard
-from sensorium.utils.scheduler import Scheduler
+from v1t import data
+from v1t.models.model import Model
+from v1t.utils import utils, tensorboard
+from v1t.utils.scheduler import Scheduler
 
 
 utils.set_random_seed(1234)

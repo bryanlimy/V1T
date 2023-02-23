@@ -10,11 +10,11 @@ from shutil import rmtree
 from torch.utils.data import DataLoader
 from torch.cuda.amp import autocast, GradScaler
 
-from sensorium import losses, data
-from sensorium.utils.logger import Logger
-from sensorium.models import get_model, Model
-from sensorium.utils import utils, tensorboard
-from sensorium.utils.scheduler import Scheduler
+from v1t import losses, data
+from v1t.utils.logger import Logger
+from v1t.models import get_model, Model
+from v1t.utils import utils, tensorboard
+from v1t.utils.scheduler import Scheduler
 
 
 @torch.no_grad()

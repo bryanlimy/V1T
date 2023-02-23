@@ -14,12 +14,12 @@ from torch.utils.data import DataLoader
 
 import submission
 import train as trainer
-from sensorium import losses, data
-from sensorium.models.utils import ELU1
-from sensorium.utils.logger import Logger
-from sensorium.utils import utils, tensorboard
-from sensorium.utils.scheduler import Scheduler
-from sensorium.models import Model, get_model_info
+from v1t import losses, data
+from v1t.models.utils import ELU1
+from v1t.utils.logger import Logger
+from v1t.utils import utils, tensorboard
+from v1t.utils.scheduler import Scheduler
+from v1t.models import Model, get_model_info
 
 
 class Args:

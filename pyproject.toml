@@ -6,12 +6,12 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sensorium"
+name = "v1t"
 version = "0.0.1"
 authors = [
   { name="Bryan M. Li", email="bryan.li@ed.ac.uk" },
 ]
-description = "Codebase for NeurIPS 2022 Sensorium challenge"
+description = "Codebase for V1T: large-scale mouse V1 response prediction using a Vision Transformer"
 readme = "README.md"
 license = { file="LICENSE" }
 requires-python = ">=3.8"
@@ -22,5 +22,5 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/bryanlimy/sensorium2022"
-"Bug Tracker" = "https://github.com/bryanlimy/sensorium2022/issues"
+"Homepage" = "https://github.com/bryanlimy/v1t"
+"Bug Tracker" = "https://github.com/bryanlimy/v1t/issues"

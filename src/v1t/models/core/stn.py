@@ -7,7 +7,7 @@ from torch import nn
 import torch.nn.functional as F
 from collections import OrderedDict
 
-from sensorium.models import utils
+from v1t.models import utils
 
 
 @register("stn")
