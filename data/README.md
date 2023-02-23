@@ -3,7 +3,6 @@
 - Download and store the [Franke et al. 2022](https://www.nature.com/articles/s41586-022-05270-3) dataset to `data/franke2022` from [https://gin.g-node.org/cajal/Franke_Willeke_2022](https://gin.g-node.org/cajal/Franke_Willeke_2022/src/master/imagenet%20scans)
 ```
 data/
-  README.md
   franke2022/
     static25311-4-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b.zip
     static25311-5-8-ColorImageNet-b23ac8521543becfd382e56c657ba29b.zip
