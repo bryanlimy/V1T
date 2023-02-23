@@ -6,7 +6,7 @@
 
 Authors: Bryan M. Li, Isabel M. Cornacchia, Nathalie L. Rochefort, Arno Onken
 
-```
+```bibtex
 @article{li2023v1t,
     title={V1T: large-scale mouse V1 response prediction using a Vision Transformer},
     author={Li, Bryan M and Cornacchia, Isabel M and Rochefort, Nathalie L and Onken, Arno},
