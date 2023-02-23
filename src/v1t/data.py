@@ -516,7 +516,7 @@ def get_submission_ds(
             MiceDataset(args, tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
-        if mouse_id in (0, 1):
+        if mouse_id in ("0", "1"):
             final_test_ds[mouse_id] = DataLoader(
                 MiceDataset(
                     args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id
