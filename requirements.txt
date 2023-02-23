@@ -16,4 +16,6 @@ ruamel.yaml
 tensorboard
 torchvision
 scikit-image
+scikit-learn
 opencv-python
+
