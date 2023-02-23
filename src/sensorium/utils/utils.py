@@ -77,7 +77,7 @@ def inference(
 
 def evaluate(
     args,
-    ds: t.Dict[int, DataLoader],
+    ds: t.Dict[str, DataLoader],
     model: nn.Module,
     epoch: int = 0,
     summary: tensorboard.Summary = None,
