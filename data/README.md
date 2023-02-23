@@ -8,12 +8,6 @@ data/
     static25311-4-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b.zip
     static25311-5-8-ColorImageNet-b23ac8521543becfd382e56c657ba29b.zip
     ...
-  imagenet/
-    n01440764/
-    n01443537/
-    ...
-  lurz2020/
-    static20457-5-9-preproc0/
   sensorium/
     static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
     static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6.zip
