@@ -229,20 +229,7 @@ def main(args, wandb_sweep: bool = False):
     summary = tensorboard.Summary(args)
 
     if args.use_wandb:
-        os.environ["WANDB_SILENT"] = "true"
-        if not wandb_sweep:
-            try:
-                wandb.init(
-                    config=args,
-                    dir=os.path.join(args.output_dir, "wandb"),
-                    project="sensorium",
-                    entity="bryanlimy",
-                    group=args.wandb_group,
-                    name=os.path.basename(args.output_dir),
-                )
-            except AssertionError as e:
-                print(f"wandb.init error: {e}\n")
-                args.use_wandb = False
+        utils.wandb_init(args, wandb_sweep=wandb_sweep)
 
     model = get_model(args, ds=train_ds, summary=summary)
 

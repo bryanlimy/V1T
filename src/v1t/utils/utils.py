@@ -1,6 +1,7 @@
 import os
 import sys
 import copy
+import wandb
 import torch
 import random
 import subprocess
@@ -9,6 +10,7 @@ import typing as t
 import pandas as pd
 from torch import nn
 from tqdm import tqdm
+from copy import deepcopy
 from torch.utils.data import DataLoader
 
 from v1t.models import Model
@@ -305,6 +307,35 @@ def get_device(args):
         elif torch.backends.mps.is_available():
             device = "mps"
     args.device = torch.device(device)
+
+
+def wandb_init(args, wandb_sweep: bool):
+    """initialize wandb and strip information from args"""
+    os.environ["WANDB_SILENT"] = "true"
+    if not wandb_sweep:
+        try:
+            config = deepcopy(args.__dict__)
+            config.pop("input_shape", None)
+            config.pop("output_shapes", None)
+            config.pop("output_dir", None)
+            config.pop("device", None)
+            config.pop("format", None)
+            config.pop("dpi", None)
+            config.pop("save_plots", None)
+            config.pop("verbose", None)
+            config.pop("use_wandb", None)
+            config.pop("wandb_group", None)
+            config.pop("clear_output_dir", None)
+            wandb.init(
+                config=config,
+                project="sensorium",
+                entity="bryanlimy",
+                group=args.wandb_group,
+                name=os.path.basename(args.output_dir),
+            )
+        except AssertionError as e:
+            print(f"wandb.init error: {e}\n")
+            args.use_wandb = False
 
 
 def metrics2df(results: t.Dict[int, torch.Tensor]):
