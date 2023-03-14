@@ -393,23 +393,6 @@ def num_steps(ds: t.Dict[int, DataLoader]):
     return sum([len(ds[k]) for k in ds.keys()])
 
 
-def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
-    filename = os.path.join(args.pretrain_core, "ckpt", "model_state.pt")
-    assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
-    model_dict = model.state_dict()
-    core_ckpt = torch.load(filename, map_location=device)
-    # add 'core.' to parameters in pretrained core
-    core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
-    # check pretrained core has the same parameters in core module
-    for key in model_dict.keys():
-        if key.startswith("core."):
-            assert key in core_dict
-    model_dict.update(core_dict)
-    model.load_state_dict(model_dict)
-    if args.verbose:
-        print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
-
-
 def compute_micro_batch_size(
     args, batch_iterations: int = 5, micro_iterations: int = 5
 ):

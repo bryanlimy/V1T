@@ -9,11 +9,11 @@ from torch.utils.data import DataLoader
 
 
 from v1t.utils import tensorboard
-from v1t.models.utils import ELU1
 from v1t.models.core import get_core
 from v1t.models.readout import Readouts
 from v1t.models.core_shifter import CoreShifters
 from v1t.models.image_cropper import ImageCropper
+from v1t.models.utils import ELU1, load_pretrain_core
 
 
 def get_model_info(
@@ -102,14 +102,17 @@ class Model(nn.Module):
 
     def get_parameters(self, core_lr: float):
         # separate learning rate for core module from the rest
-        params = [
-            {
-                "params": self.core.parameters(),
-                "lr": core_lr,
-                "name": "core",
-            },
-            {"params": self.readouts.parameters(), "name": "readouts"},
-        ]
+        params = []
+        if self.core.requires_grad_:
+            params.append(
+                {
+                    "params": self.core.parameters(),
+                    "lr": core_lr,
+                    "name": "core",
+                }
+            )
+        if self.readouts.requires_grad_:
+            params.append({"params": self.readouts.parameters(), "name": "readouts"})
         if self.image_cropper.image_shifter is not None:
             params.append(
                 {
@@ -179,6 +182,12 @@ class DataParallel(nn.DataParallel):
 
 def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = None):
     model = Model(args, ds=ds)
+
+    if hasattr(args, "pretrain_core") and args.pretrain_core:
+        load_pretrain_core(args, model=model, device=args.device)
+        model.core.requires_grad_(False)
+        if args.verbose:
+            print("Freeze pretrained core")
 
     # get model info
     mouse_id = args.mouse_ids[0]

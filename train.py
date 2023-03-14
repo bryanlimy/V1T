@@ -233,9 +233,6 @@ def main(args, wandb_sweep: bool = False):
 
     model = get_model(args, ds=train_ds, summary=summary)
 
-    if args.pretrain_core:
-        utils.load_pretrain_core(args, model=model)
-
     optimizer = torch.optim.AdamW(
         params=model.get_parameters(core_lr=args.core_lr_scale * args.lr),
         lr=args.lr,
