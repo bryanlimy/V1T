@@ -356,7 +356,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mouse_ids",
         nargs="+",
-        type=int,
+        type=str,
         default=None,
         help="Mouse to use for training.",
     )

@@ -70,19 +70,23 @@ def get_mouse2path(ds_name: DS_NAMES):
 def get_mouse_ids(args):
     """retrieve the mouse IDs when args.mouse_ids is not provided"""
     args.ds_name = os.path.basename(args.dataset)
-    assert args.ds_name in ("sensorium", "franke2022")
-    if not args.mouse_ids:
-        if args.ds_name == "sensorium":
-            mouse_ids = list(SENSORIUM.keys())
-            if args.behavior_mode > 0:
-                mouse_ids.remove("0")
-        else:
-            mouse_ids = list(FRANKE2022.keys())
-        args.mouse_ids = mouse_ids
-    else:
-        if type(args.mouse_ids[0]) == int:
-            # convert IDs from int to str
-            args.mouse_ids = [str(mouse_id) for mouse_id in args.mouse_ids]
+    match args.ds_name:
+        case "sensorium":
+            all_animals = list(SENSORIUM.keys())
+            if not args.mouse_ids:
+                args.mouse_ids = all_animals
+                if args.behavior_mode > 0:
+                    args.mouse_ids.remove("0")
+            for mouse_id in args.mouse_ids:
+                assert mouse_id in all_animals
+        case "franke2022":
+            all_animals = list(FRANKE2022.keys())
+            if not args.mouse_ids:
+                args.mouse_ids = all_animals
+            for mouse_id in args.mouse_ids:
+                assert mouse_id in all_animals
+        case _:
+            raise KeyError(f"--dataset {args.ds_name} not implemented.")
 
 
 class CycleDataloaders:
