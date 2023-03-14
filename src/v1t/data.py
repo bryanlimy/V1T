@@ -79,6 +79,10 @@ def get_mouse_ids(args):
         else:
             mouse_ids = list(FRANKE2022.keys())
         args.mouse_ids = mouse_ids
+    else:
+        if type(args.mouse_ids[0]) == int:
+            # convert IDs from int to str
+            args.mouse_ids = [str(mouse_id) for mouse_id in args.mouse_ids]
 
 
 class CycleDataloaders:
