@@ -16,16 +16,18 @@ def load_pretrain_core(args, model: nn.Module, device: torch.device = "cpu"):
     assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
     model_dict = model.state_dict()
     ckpt = torch.load(filename, map_location=device)
-    condition = lambda var: var.startswith("image_cropper.") or var.startswith("core.")
-    # add 'image_cropper.' and 'core.' to parameters in pretrained core
-    core_dict = {k: v for k, v in ckpt["model"].items() if condition(k)}
+    # extract core parameters 'core.' from pretrained model
+    core_dict = {k: v for k, v in ckpt["model"].items() if k.startswith("core.")}
     # check pretrained core has the same parameters in core module
     for k in model_dict.keys():
-        assert not condition(k) or k in core_dict
+        assert not k.startswith("core.") or k in core_dict
     model_dict.update(core_dict)
     model.load_state_dict(model_dict)
     if args.verbose:
-        print(f"\nLoaded pretrained core from {args.pretrain_core}.")
+        print(
+            f"\nLoaded pretrained core from {args.pretrain_core} "
+            f"(correlation: {ckpt['value']:.04f})."
+        )
 
 
 def conv2d_shape(
