@@ -321,11 +321,12 @@ class MiceDataset(Dataset):
         self.coordinates = metadata["coordinates"]
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
-        self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
+        indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
         if tier == "train" and hasattr(args, "limit_data") and args.limit_data:
-            self.indexes = self.indexes[: args.limit_data]
+            indexes = np.random.choice(indexes, size=args.limit_data, replace=False)
             if args.verbose:
                 print(f"limit training samples to {args.limit_data}.")
+        self.indexes = indexes
         self.image_ids = metadata["image_ids"][self.indexes]
         self.trial_ids = metadata["trial_ids"][self.indexes]
         # standardizer for responses
