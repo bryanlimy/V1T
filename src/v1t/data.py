@@ -303,7 +303,7 @@ class MiceDataset(Dataset):
         indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
         if tier == "train" and hasattr(args, "limit_data") and args.limit_data:
             indexes = np.random.choice(indexes, size=args.limit_data, replace=False)
-            if args.verbose:
+            if args.verbose > 2:
                 print(f"limit mouse {mouse_id} training samples to {args.limit_data}.")
         self.indexes = indexes
         self.image_ids = metadata["image_ids"][self.indexes]
@@ -315,6 +315,20 @@ class MiceDataset(Dataset):
         self.hashed = self.ds_name == "sensorium" and mouse_id in ("S0", "S1")
 
         self.image_shape = get_image_shape(mouse_dir)
+
+        # convert image to gray-scale if args.gray_scale is set and is franke2022 data
+        self.gray_scale = False
+        if (
+            hasattr(args, "gray_scale")
+            and args.gray_scale
+            and self.ds_name == "franke2022"
+        ):
+            if args.verbose > 2:
+                print(f"convert mouse {mouse_id} {tier} image to gray-scale")
+            self.gray_scale = True
+
+        if self.gray_scale:
+            self.image_shape = (1,) + self.image_shape[1:]
 
     def __len__(self):
         return len(self.indexes)
@@ -339,9 +353,15 @@ class MiceDataset(Dataset):
     def num_neurons(self):
         return len(self.neuron_ids)
 
+    def color2gray(self, image: np.ndarray):
+        return np.mean(image, axis=0, keepdims=True)
+
     def transform_image(self, image: np.ndarray):
         stats = self.image_stats
-        return (image - stats["mean"]) / stats["std"]
+        image = (image - stats["mean"]) / stats["std"]
+        if self.gray_scale:
+            image = self.color2gray(image)
+        return image
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""

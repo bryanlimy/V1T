@@ -385,6 +385,9 @@ if __name__ == "__main__":
         "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(
+        "--gray_scale", action="store_true", help="convert colored image to gray-scale"
+    )
+    parser.add_argument(
         "--limit_data",
         default=None,
         type=int,
@@ -492,7 +495,7 @@ if __name__ == "__main__":
         action="store_true",
         help="overwrite content in --output_dir",
     )
-    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
+    parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2, 3])
 
     # model settings
     parser.add_argument(
