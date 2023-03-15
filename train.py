@@ -385,6 +385,12 @@ if __name__ == "__main__":
         "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(
+        "--limit_data",
+        default=None,
+        type=int,
+        help="limit the number of training samples.",
+    )
+    parser.add_argument(
         "--num_workers",
         default=2,
         type=int,
