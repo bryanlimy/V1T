@@ -15,28 +15,28 @@ DS_NAMES = t.Literal["sensorium", "franke2022"]
 
 
 # key - mouse ID, value - filename of the recordings
-# Mouse 0: Sensorium, Mouse 1: Sensorium+, Mouse 3-7: pre-training
+# Mouse T0: Sensorium, Mouse T1: Sensorium+
 SENSORIUM = {
-    "0": "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "1": "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "2": "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "3": "static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "4": "static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "5": "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "6": "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "T0": "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "T1": "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "A": "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "B": "static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "C": "static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "D": "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "E": "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
 }
 
 FRANKE2022 = {
-    "static25311-10-26": "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static25340-3-19": "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static25704-2-12": "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    "static25830-10-4": "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static26085-6-3": "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static26142-2-11": "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
-    "static26426-18-13": "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    "static26470-4-5": "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static26644-6-2": "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    "static26872-21-6": "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "F": "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "G": "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "H": "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "I": "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "J": "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "K": "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    "L": "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "M": "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "N": "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "O": "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
 }
 
 
