@@ -90,10 +90,7 @@ def plot_correlations(
 
     sns.despine(ax=ax, offset={"left": 15, "bottom": 5}, trim=True)
     ax.set_yticklabels(ax.get_yticks().round(1), fontsize=tick_fontsize)
-    ax.set_xticklabels(
-        [data.convert_id(mouse_id) for mouse_id in results.keys()],
-        fontsize=tick_fontsize,
-    )
+    ax.set_xticklabels(list(results.keys()), fontsize=tick_fontsize)
     ax.set_ylabel(ax.get_ylabel(), fontsize=label_fontsize)
     ax.set_xlabel(ax.get_xlabel(), fontsize=label_fontsize)
     ax.set_xlim(-0.45, 4.45)

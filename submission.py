@@ -123,9 +123,9 @@ def main(args):
         args.ds_name = os.path.basename(args.dataset)
     assert args.ds_name == "sensorium"
 
-    if "0" not in args.output_shapes:
+    if "S0" not in args.output_shapes:
         print("Warning: the saved model was not trained on Mouse 1")
-    if "1" not in args.output_shapes:
+    if "S1" not in args.output_shapes:
         print("Warning: the saved model was not trained on Mouse 2")
 
     utils.get_device(args)
@@ -153,10 +153,10 @@ def main(args):
     )
 
     # Sensorium challenge
-    if "0" in test_ds:
+    if "S0" in test_ds:
         generate_submission(
             args,
-            mouse_id="0",
+            mouse_id="S0",
             test_ds=test_ds,
             final_test_ds=final_test_ds,
             model=model,
@@ -164,10 +164,10 @@ def main(args):
         )
 
     # Sensorium+ challenge
-    if "1" in test_ds:
+    if "S1" in test_ds:
         generate_submission(
             args,
-            mouse_id="1",
+            mouse_id="S1",
             test_ds=test_ds,
             final_test_ds=final_test_ds,
             model=model,

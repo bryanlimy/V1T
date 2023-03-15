@@ -273,8 +273,7 @@ def main(args):
 
     # pretrained model to load
     args.saved_models = {}
-    assert hasattr(args, 'saved_models') and args.saved_models 
-
+    assert hasattr(args, "saved_models") and args.saved_models
 
     model = EnsembleModel(args, saved_models=args.saved_models, ds=train_ds)
 
@@ -387,19 +386,19 @@ def main(args):
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=0)
 
     if "sensorium" in args.dataset:
-        if '0' in test_ds:  # Sensorium challenge
+        if "S0" in test_ds:  # Sensorium challenge
             submission.generate_submission(
                 args,
-                mouse_id="0",
+                mouse_id="S0",
                 test_ds=test_ds,
                 final_test_ds=final_test_ds,
                 model=model,
                 csv_dir=os.path.join(csv_dir, "sensorium"),
             )
-        if '1' in test_ds:  # Sensorium+ challenge
+        if "S1" in test_ds:  # Sensorium+ challenge
             submission.generate_submission(
                 args,
-                mouse_id="1",
+                mouse_id="S1",
                 test_ds=test_ds,
                 final_test_ds=final_test_ds,
                 model=model,

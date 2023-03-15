@@ -112,7 +112,7 @@ def evaluate(
     ):
         if (
             mouse_ds.dataset.ds_name == "sensorium"
-            and mouse_id in ("0", "1")
+            and mouse_id in ("S0", "S1")
             and mouse_ds.dataset.tier == "test"
         ):
             continue

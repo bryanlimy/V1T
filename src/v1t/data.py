@@ -15,10 +15,10 @@ DS_NAMES = t.Literal["sensorium", "franke2022"]
 
 
 # key - mouse ID, value - filename of the recordings
-# Mouse T0: Sensorium, Mouse T1: Sensorium+
+# Mouse S0: Sensorium, Mouse S1: Sensorium+
 SENSORIUM = {
-    "T0": "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "T1": "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "S0": "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "S1": "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
     "A": "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
     "B": "static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
     "C": "static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
@@ -40,28 +40,6 @@ FRANKE2022 = {
 }
 
 
-def convert_id(mouse_id: str):
-    """convert mouse ID to the ID used in paper"""
-    pairs = {
-        "2": "A",
-        "3": "B",
-        "4": "C",
-        "5": "D",
-        "6": "E",
-        "static25311-10-26": "F",
-        "static25340-3-19": "G",
-        "static25704-2-12": "H",
-        "static25830-10-4": "I",
-        "static26085-6-3": "J",
-        "static26142-2-11": "K",
-        "static26426-18-13": "L",
-        "static26470-4-5": "M",
-        "static26644-6-2": "N",
-        "static26872-21-6": "O",
-    }
-    return pairs[mouse_id] if mouse_id in pairs else mouse_id
-
-
 def get_mouse2path(ds_name: DS_NAMES):
     assert ds_name in ("sensorium", "franke2022")
     return SENSORIUM if ds_name == "sensorium" else FRANKE2022
@@ -76,7 +54,8 @@ def get_mouse_ids(args):
             if not args.mouse_ids:
                 args.mouse_ids = all_animals
                 if args.behavior_mode > 0:
-                    args.mouse_ids.remove("0")
+                    # mouse S0 does not have behavioral data
+                    args.mouse_ids.remove("S0")
             for mouse_id in args.mouse_ids:
                 assert mouse_id in all_animals
         case "franke2022":
@@ -314,8 +293,8 @@ class MiceDataset(Dataset):
         mouse_dir = os.path.join(data_dir, mouse2path[mouse_id])
         metadata = load_mouse_metadata(self.ds_name, mouse_dir=mouse_dir)
         self.behavior_mode = args.behavior_mode
-        if self.behavior_mode and mouse_id == 0:
-            raise ValueError("Mouse 0 does not have behaviour data.")
+        if self.behavior_mode and mouse_id == "S0":
+            raise ValueError("Mouse S0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
         self.coordinates = metadata["coordinates"]
@@ -333,7 +312,7 @@ class MiceDataset(Dataset):
         self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
-        self.hashed = self.ds_name == "sensorium" and mouse_id in ("0", "1")
+        self.hashed = self.ds_name == "sensorium" and mouse_id in ("S0", "S1")
 
         self.image_shape = get_image_shape(mouse_dir)
 
@@ -529,7 +508,7 @@ def get_submission_ds(
             MiceDataset(args, tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
-        if mouse_id in ("0", "1"):
+        if mouse_id in ("S0", "S1"):
             final_test_ds[mouse_id] = DataLoader(
                 MiceDataset(
                     args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id
