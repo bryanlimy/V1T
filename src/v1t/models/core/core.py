@@ -24,6 +24,22 @@ class Core(nn.Module):
         self.behavior_mode = args.behavior_mode
         if args.core != "vit":
             assert self.behavior_mode != 2
+        self.frozen = False
+        self.verbose = args.verbose
+
+    def freeze(self):
+        for param in self.parameters():
+            param.requires_grad_(False)
+        self.frozen = True
+        if self.verbose:
+            print("freeze core module")
+
+    def unfreeze(self):
+        for param in self.parameters():
+            param.requires_grad_(True)
+        self.forzen = False
+        if self.verbose:
+            print("unfreeze core module")
 
     def initialize(self):
         raise NotImplementedError("initialize function has not been implemented")

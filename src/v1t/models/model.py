@@ -103,7 +103,7 @@ class Model(nn.Module):
     def get_parameters(self, core_lr: float):
         # separate learning rate for core module from the rest
         params = []
-        if self.core.requires_grad_:
+        if not self.core.frozen:
             params.append(
                 {
                     "params": self.core.parameters(),
@@ -111,8 +111,7 @@ class Model(nn.Module):
                     "name": "core",
                 }
             )
-        if self.readouts.requires_grad_:
-            params.append({"params": self.readouts.parameters(), "name": "readouts"})
+        params.append({"params": self.readouts.parameters(), "name": "readouts"})
         if self.image_cropper.image_shifter is not None:
             params.append(
                 {
@@ -130,7 +129,9 @@ class Model(nn.Module):
         return params
 
     def regularizer(self, mouse_id: str):
-        reg = self.core.regularizer()
+        reg = 0
+        if not self.core.frozen:
+            reg += self.core.regularizer()
         reg += self.readouts.regularizer(mouse_id=mouse_id)
         reg += self.image_cropper.regularizer(mouse_id=mouse_id)
         if self.core_shifter is not None:
@@ -185,9 +186,7 @@ def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = 
 
     if hasattr(args, "pretrain_core") and args.pretrain_core:
         load_pretrain_core(args, model=model, device=args.device)
-        model.core.requires_grad_(False)
-        if args.verbose:
-            print("Freeze pretrained core")
+        model.core.freeze()
 
     # get model info
     mouse_id = args.mouse_ids[0]
