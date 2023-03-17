@@ -32,14 +32,14 @@ class Core(nn.Module):
             param.requires_grad_(False)
         self.frozen = True
         if self.verbose:
-            print("freeze core module")
+            print("Freeze core module.")
 
     def unfreeze(self):
         for param in self.parameters():
             param.requires_grad_(True)
         self.forzen = False
         if self.verbose:
-            print("unfreeze core module")
+            print("Unfreeze core module.")
 
     def initialize(self):
         raise NotImplementedError("initialize function has not been implemented")
