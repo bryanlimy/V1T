@@ -76,7 +76,7 @@ class CycleDataloaders:
     Code reference: https://github.com/sinzlab/neuralpredictors/blob/9b85300ab854be1108b4bf64b0e4fa2e960760e0/neuralpredictors/training/cyclers.py#L68
     """
 
-    def __init__(self, ds: t.Dict[int, DataLoader]):
+    def __init__(self, ds: t.Dict[str, DataLoader]):
         self.ds = ds
         self.max_iterations = max([len(ds) for ds in self.ds.values()])
 
