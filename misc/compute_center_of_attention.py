@@ -91,49 +91,66 @@ def main(args):
     args.batch_size = 1
     args.device = torch.device(args.device)
 
-    _, _, test_ds = data.get_training_ds(
-        args,
-        data_dir=args.dataset,
-        mouse_ids=args.mouse_ids,
-        batch_size=args.batch_size,
-        device=args.device,
-    )
+    # _, _, test_ds = data.get_training_ds(
+    #     args,
+    #     data_dir=args.dataset,
+    #     mouse_ids=args.mouse_ids,
+    #     batch_size=args.batch_size,
+    #     device=args.device,
+    # )
+    #
+    # model = Model(args, ds=test_ds)
+    # model.train(False)
+    #
+    # scheduler = Scheduler(args, model=model, save_optimizer=False)
+    # scheduler.restore(force=True)
+    #
+    # results = {}
+    # for mouse_id, mouse_ds in test_ds.items():
+    #     if mouse_id == "1":
+    #         continue
+    #     results[mouse_id] = extract_attention_maps(
+    #         mouse_id=mouse_id, ds=mouse_ds, model=model
+    #     )
+    #
+    # with open("center_mass.pkl", "wb") as file:
+    #     pickle.dump(results, file)
 
-    model = Model(args, ds=test_ds)
-    model.train(False)
+    with open("center_mass.pkl", "rb") as file:
+        results = pickle.load(file)
 
-    scheduler = Scheduler(args, model=model, save_optimizer=False)
-    scheduler.restore(force=True)
-
-    results = {}
-    for mouse_id, mouse_ds in test_ds.items():
-        if mouse_id == "1":
-            continue
-        results[mouse_id] = extract_attention_maps(
-            mouse_id=mouse_id, ds=mouse_ds, model=model
-        )
-
-    with open("center_mass.pkl", "wb") as file:
-        pickle.dump(results, file)
-
-    # with open("center_mass.pkl", "rb") as file:
-    #     results = pickle.load(file)
-
+    spreads = {"x": [], "y": []}
     for mouse_id, mouse_dict in results.items():
         # compute correlation center of mass and pupil center
         mass_centers = computer_centers(mouse_dict["heatmaps"])
         pupil_centers = mouse_dict["pupil_centers"][:, 0, :]
         corr_x, p_x = pearsonr(mass_centers[:, 0], pupil_centers[:, 0])
         corr_y, p_y = pearsonr(mass_centers[:, 1], pupil_centers[:, 1])
+        # standard deviation in x and y axes
+        spread_x = np.std(np.sum(mouse_dict["heatmaps"], axis=1), axis=1)
+        spread_y = np.std(np.sum(mouse_dict["heatmaps"], axis=2), axis=1)
+        dilation = mouse_dict["behaviors"][:, 0, 0]
+        # absolute correlation between pupil dilation and attention map
+        # standard deviation
+        corr_dx, p_dx = pearsonr(spread_x, dilation)
+        corr_dy, p_dy = pearsonr(spread_y, dilation)
+        spreads["x"].append(np.abs(corr_dx))
+        spreads["y"].append(np.abs(corr_dy))
 
         print(
             f"Mouse {mouse_id}\n"
             f"\tCorr(center of mass,  pupil center)\n"
             f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e})\n"
             f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e})\n"
+            f"\tCorr(attention map std, pupil dilation)\n"
+            f"\t\tx-axis: {corr_dx:.03f} (p-value: {p_dx:.03e})\n"
+            f"\t\ty-axis: {corr_dy:.03f} (p-value: {p_dy:.03e})\n"
         )
 
-    print("Done")
+    print(
+        f'mean abs corr(dilation, spread): x-axis: {np.mean(spreads["x"]):.3f}, '
+        f'y-axis: {np.mean(spreads["y"]):.3f}'
+    )
 
 
 if __name__ == "__main__":
