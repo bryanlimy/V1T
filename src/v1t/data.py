@@ -302,9 +302,12 @@ class MiceDataset(Dataset):
         # extract indexes that correspond to the tier
         indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
         if tier == "train" and hasattr(args, "limit_data") and args.limit_data:
-            indexes = np.random.choice(indexes, size=args.limit_data, replace=False)
-            if args.verbose > 2:
-                print(f"limit mouse {mouse_id} training samples to {args.limit_data}.")
+            if len(indexes) < args.limit_data:
+                indexes = np.random.choice(indexes, size=args.limit_data, replace=False)
+                if args.verbose > 2:
+                    print(
+                        f"limit mouse {mouse_id} training samples to {args.limit_data}."
+                    )
         self.indexes = indexes
         self.image_ids = metadata["image_ids"][self.indexes]
         self.trial_ids = metadata["trial_ids"][self.indexes]
