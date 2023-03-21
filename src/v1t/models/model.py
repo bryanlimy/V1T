@@ -1,6 +1,7 @@
 import os
 import wandb
 import torch
+import warnings
 import torchinfo
 import typing as t
 from torch import nn
@@ -34,7 +35,11 @@ def get_model_info(
     }
     if mouse_id is not None:
         args["mouse_id"] = mouse_id
-    model_info = torchinfo.summary(**args)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        model_info = torchinfo.summary(**args)
+
     if filename is not None:
         with open(filename, "w") as file:
             file.write(str(model_info))
