@@ -403,7 +403,7 @@ if __name__ == "__main__":
     # training settings
     parser.add_argument(
         "--epochs",
-        default=200,
+        default=400,
         type=int,
         help="maximum epochs to train the model.",
     )
