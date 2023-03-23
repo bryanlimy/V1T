@@ -57,14 +57,15 @@ def inference(args, model: Model, ds: DataLoader):
         behaviors = torch.zeros((batch_size, 3), device=device)
         pupil_centers = torch.zeros((batch_size, 2), device=device)
         # run model without image cropper
-        outputs = model.core(
-            images,
-            mouse_id=mouse_id,
-            behaviors=behaviors,
-            pupil_centers=pupil_centers,
-        )
-        outputs = model.readouts(outputs, mouse_id=mouse_id, shifts=None)
-        outputs = model.elu1(outputs)
+        with device:
+            outputs = model.core(
+                images,
+                mouse_id=mouse_id,
+                behaviors=behaviors,
+                pupil_centers=pupil_centers,
+            )
+            outputs = model.readouts(outputs, mouse_id=mouse_id, shifts=None)
+            outputs = model.elu1(outputs)
 
         results.append(outputs)
     results = torch.concat(results, dim=0)
