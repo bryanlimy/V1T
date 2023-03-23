@@ -184,7 +184,7 @@ def main(args):
         utils.load_args(args)
         model = load_model(args)
 
-        ds, noise = generate_ds(args, num_samples=5000)
+        ds, noise = generate_ds(args, num_samples=args.sample_size)
         activations = inference(args, model=model, ds=ds)
 
         weighted_activations = compute_weighted_activations(
@@ -195,7 +195,7 @@ def main(args):
             pickle.dump(weighted_activations, file)
 
     # plot_grid(args, weighted_activations)
-    fit_gabor(args, weighted_activations=weighted_activations)
+    # fit_gabor(args, weighted_activations=weighted_activations)
 
     print(f"Results saved to {args.output_dir}.")
 
@@ -206,5 +206,6 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--sample_size", type=int, default=5000)
     parser.add_argument("--overwrite", action="store_true")
     main(parser.parse_args())
