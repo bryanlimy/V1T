@@ -16,7 +16,10 @@ from torch.utils.data import TensorDataset, DataLoader
 from v1t.models import Model
 import pickle
 from einops import rearrange, repeat, einsum
+from torch import nn
+from torch.nn import functional as F
 
+from v1t.fitgabor import GaborGenerator, trainer_fn
 
 IMAGE_SIZE = (1, 36, 64)
 
@@ -93,11 +96,18 @@ def compute_weighted_activations(args, activations: torch.tensor, noise: torch.t
     return weighted_activations
 
 
-def normalize(image: np.ndarray):
-    return (image - np.min(image)) / (np.max(image) - np.min(image))
+import typing as t
 
 
-def plot_grid(args, weighted_activations: torch.tensor):
+def normalize(image: t.Union[np.array, torch.tensor]):
+    if torch.is_tensor(image):
+        i_min, i_max = torch.min(image), torch.max(image)
+    else:
+        i_min, i_max = np.min(image), np.max(image)
+    return (image - i_min) / (i_max - i_min)
+
+
+def plot_grid(args, weighted_activations: torch.tensor, title: str = None):
     images = weighted_activations.numpy()
 
     nrows, ncols = 5, 3
@@ -122,52 +132,55 @@ def plot_grid(args, weighted_activations: torch.tensor):
         ax.set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
         ax.axis("off")
 
+    if title:
+        figure.suptitle(title, fontsize=label_fontsize)
     plt.show()
     filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved weighted activations to {filename}.")
 
 
-# import fitgabor
-# from torch.nn import functional as F
-# from torch import nn
-# from fitgabor.utils import gabor_fn
-# from fitgabor import GaborGenerator, trainer_fn
-#
-#
-# class Neuron(nn.Module):
-#     def __init__(self, rf: torch.tensor):
-#         super(Neuron, self).__init__()
-#         self.rf = torch.tensor(rf, dtype=torch.float32)
-#
-#     def forward(self, x):
-#         return F.elu((x * self.rf).sum()) + 1
-#
-#
-# def fit_gabor(args, weighted_activations: torch.tensor):
-#     num_units = weighted_activations.shape[0]
-#     units = np.random.choice(num_units, size=50, replace=False)
-#
-#     tick_fontsize, label_fontsize = 8, 9
-#     for unit in units:
-#         ground_truth = normalize(weighted_activations[unit][0])
-#         neuron = Neuron(rf=ground_truth)
-#         gabor_gen = GaborGenerator(image_size=IMAGE_SIZE[1:])
-#         gabor_gen, _ = trainer_fn(gabor_gen, neuron)
-#         learned_gabor = gabor_gen().data.numpy()[0, 0]
-#         figure, axes = plt.subplots(
-#             nrows=1,
-#             ncols=2,
-#             gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-#             figsize=(4, 2),
-#             dpi=120,
-#         )
-#         axes[0].imshow(ground_truth, cmap="gray", vmin=0, vmax=1)
-#         axes[1].imshow(normalize(learned_gabor), cmap="gray", vmin=0, vmax=1)
-#         axes[0].axis("off")
-#         axes[1].axis("off")
-#         axes[0].set_title(f"Unit #{unit}", fontsize=label_fontsize)
-#         plt.show()
+class Neuron(nn.Module):
+    def __init__(self, rf: torch.tensor):
+        super(Neuron, self).__init__()
+        self.rf = torch.tensor(rf, dtype=torch.float32)
+
+    def forward(self, x):
+        return F.elu((x * self.rf).sum()) + 1
+
+
+def fit_gabor(args, weighted_activations: torch.tensor):
+    # num_units = weighted_activations.shape[0]
+    # units = np.random.choice(num_units, size=1000, replace=False)
+    num_units = 1000
+    tick_fontsize, label_fontsize = 8, 9
+    sigmas = []
+    for i, unit in enumerate(tqdm(range(num_units), desc="Fit Gabor")):
+        ground_truth = normalize(weighted_activations[unit][0])
+        neuron = Neuron(rf=ground_truth)
+        gabor_gen = GaborGenerator(image_size=IMAGE_SIZE[1:])
+        gabor_gen, evolved_rfs = trainer_fn(gabor_gen, neuron, epochs=500)
+        learned_gabor = gabor_gen().data.numpy()[0, 0]
+        sigma = gabor_gen.sigma.data.numpy()[0]
+        sigmas.append(sigma)
+        if i < 10:
+            figure, axes = plt.subplots(
+                nrows=1,
+                ncols=2,
+                gridspec_kw={"wspace": 0.02, "hspace": 0.2},
+                figsize=(4, 2),
+                dpi=120,
+            )
+            axes[0].imshow(ground_truth, cmap="gray", vmin=0, vmax=1)
+            axes[1].imshow(normalize(learned_gabor), cmap="gray", vmin=0, vmax=1)
+            axes[0].axis("off")
+            axes[1].axis("off")
+            axes[0].set_title(f"Unit #{unit}", fontsize=label_fontsize)
+            plt.show()
+    sigmas = np.array(sigmas)
+    with open(os.path.join(args.output_dir, "gabor_sigmas.pkl"), "wb") as file:
+        pickle.dump(sigmas, file)
+    print(f"average sigma: {np.mean(sigmas):.04f} \pm {np.std(sigmas):.04f}")
 
 
 def main(args):
@@ -194,7 +207,12 @@ def main(args):
         with open(filename, "wb") as file:
             pickle.dump(weighted_activations, file)
 
-    # plot_grid(args, weighted_activations)
+    tensorboard.set_font()
+    plot_grid(
+        args,
+        weighted_activations=weighted_activations,
+        title="ViT" if "vit" in args.output_dir else "CNN",
+    )
     # fit_gabor(args, weighted_activations=weighted_activations)
 
     print(f"Results saved to {args.output_dir}.")
