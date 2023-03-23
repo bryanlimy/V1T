@@ -18,6 +18,9 @@ import pickle
 from einops import rearrange, repeat, einsum
 
 
+IMAGE_SIZE = (1, 36, 64)
+
+
 def load_model(args):
     _, val_ds, _ = data.get_training_ds(
         args,
@@ -34,7 +37,7 @@ def load_model(args):
 
 
 def generate_ds(args, num_samples: int = 5000):
-    noise = torch.rand((num_samples, 1, 36, 64))
+    noise = torch.rand((num_samples, *IMAGE_SIZE))
     # standardize images
     mean, std = torch.mean(noise), torch.std(noise)
     images = (noise - mean) / std
@@ -87,38 +90,84 @@ def compute_weighted_activations(args, activations: torch.tensor, noise: torch.t
     #     weighted_activation = noise * repeat(activation, "b -> b 1 1 1")
     #     weighted_activations[unit] = torch.sum(weighted_activation, dim=0)
     weighted_activations = einsum(activations, noise, "b n, b c h w -> n c h w")
-    return weighted_activations.numpy()
+    return weighted_activations
 
 
 def normalize(image: np.ndarray):
     return (image - np.min(image)) / (np.max(image) - np.min(image))
 
 
-def plot_grid(args, weighted_activations: np.ndarray):
-    max_images = 9
+def plot_grid(args, weighted_activations: torch.tensor):
+    images = weighted_activations.numpy()
+
+    nrows, ncols = 5, 3
+    max_images = nrows * ncols
 
     # randomly select 9 units
     num_units = weighted_activations.shape[0]
-    unit_idx = np.random.choice(num_units, size=max_images, replace=False)
+    units = np.random.choice(num_units, size=max_images, replace=False)
 
     tick_fontsize, label_fontsize = 8, 9
     figure, axes = plt.subplots(
-        nrows=3,
-        ncols=3,
+        nrows=nrows,
+        ncols=ncols,
         gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-        figsize=(8, 4),
+        figsize=(6, 6),
         dpi=120,
     )
 
     for i, ax in enumerate(axes.flat):
-        unit = unit_idx[i]
-        image = weighted_activations[unit][0]
-        ax.imshow(normalize(image), cmap="gray", vmin=0, vmax=1)
+        unit = units[i]
+        ax.imshow(normalize(images[unit][0]), cmap="gray", vmin=0, vmax=1)
         ax.set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
         ax.axis("off")
 
     plt.show()
-    # plt.close(figure)
+    filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
+    tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
+    print(f"Saved weighted activations to {filename}.")
+
+
+# import fitgabor
+# from torch.nn import functional as F
+# from torch import nn
+# from fitgabor.utils import gabor_fn
+# from fitgabor import GaborGenerator, trainer_fn
+#
+#
+# class Neuron(nn.Module):
+#     def __init__(self, rf: torch.tensor):
+#         super(Neuron, self).__init__()
+#         self.rf = torch.tensor(rf, dtype=torch.float32)
+#
+#     def forward(self, x):
+#         return F.elu((x * self.rf).sum()) + 1
+#
+#
+# def fit_gabor(args, weighted_activations: torch.tensor):
+#     num_units = weighted_activations.shape[0]
+#     units = np.random.choice(num_units, size=50, replace=False)
+#
+#     tick_fontsize, label_fontsize = 8, 9
+#     for unit in units:
+#         ground_truth = normalize(weighted_activations[unit][0])
+#         neuron = Neuron(rf=ground_truth)
+#         gabor_gen = GaborGenerator(image_size=IMAGE_SIZE[1:])
+#         gabor_gen, _ = trainer_fn(gabor_gen, neuron)
+#         learned_gabor = gabor_gen().data.numpy()[0, 0]
+#         figure, axes = plt.subplots(
+#             nrows=1,
+#             ncols=2,
+#             gridspec_kw={"wspace": 0.02, "hspace": 0.2},
+#             figsize=(4, 2),
+#             dpi=120,
+#         )
+#         axes[0].imshow(ground_truth, cmap="gray", vmin=0, vmax=1)
+#         axes[1].imshow(normalize(learned_gabor), cmap="gray", vmin=0, vmax=1)
+#         axes[0].axis("off")
+#         axes[1].axis("off")
+#         axes[0].set_title(f"Unit #{unit}", fontsize=label_fontsize)
+#         plt.show()
 
 
 def main(args):
@@ -127,7 +176,8 @@ def main(args):
 
     filename = os.path.join(args.output_dir, "weighted_activations.pkl")
 
-    if os.path.exists(filename):
+    if os.path.exists(filename) and not args.overwrite:
+        print(f"Load weighted activations from {filename}.")
         with open(filename, "rb") as file:
             weighted_activations = pickle.load(file)
     else:
@@ -144,9 +194,10 @@ def main(args):
         with open(filename, "wb") as file:
             pickle.dump(weighted_activations, file)
 
-    plot_grid(args, weighted_activations)
+    # plot_grid(args, weighted_activations)
+    fit_gabor(args, weighted_activations=weighted_activations)
 
-    print(f"results saved to {args.output_dir}.")
+    print(f"Results saved to {args.output_dir}.")
 
 
 if __name__ == "__main__":
@@ -155,4 +206,5 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--overwrite", action="store_true")
     main(parser.parse_args())
