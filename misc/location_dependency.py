@@ -27,6 +27,7 @@ def load_model(args):
         device=args.device,
     )
     model = Model(args, ds=val_ds)
+    model.to(args.device)
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     _ = scheduler.restore(force=True)
     return model
