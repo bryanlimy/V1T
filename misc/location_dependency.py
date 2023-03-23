@@ -67,7 +67,7 @@ def inference(args, model: Model, ds: DataLoader):
             outputs = model.readouts(outputs, mouse_id=mouse_id, shifts=None)
             outputs = model.elu1(outputs)
 
-        results.append(outputs)
+        results.append(outputs.cpu())
     results = torch.concat(results, dim=0)
     # reshape activations from (N, C, H, W) to (N, H*W, C)
     # results = rearrange(results, "b c h w -> b (h w) c")
