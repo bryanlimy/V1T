@@ -57,15 +57,14 @@ def inference(args, model: Model, ds: DataLoader):
         behaviors = torch.zeros((batch_size, 3), device=device)
         pupil_centers = torch.zeros((batch_size, 2), device=device)
         # run model without image cropper
-        with device:
-            outputs = model.core(
-                images,
-                mouse_id=mouse_id,
-                behaviors=behaviors,
-                pupil_centers=pupil_centers,
-            )
-            outputs = model.readouts(outputs, mouse_id=mouse_id, shifts=None)
-            outputs = model.elu1(outputs)
+        outputs = model.core(
+            images,
+            mouse_id=mouse_id,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
+        )
+        outputs = model.readouts(outputs, mouse_id=mouse_id, shifts=None)
+        outputs = model.elu1(outputs)
 
         results.append(outputs.cpu())
     results = torch.concat(results, dim=0)
@@ -126,19 +125,24 @@ def main(args):
     utils.set_random_seed(1234)
     args.device = torch.device(args.device)
 
-    utils.load_args(args)
-    model = load_model(args)
-
-    ds, noise = generate_ds(args, num_samples=5000)
-    activations = inference(args, model=model, ds=ds)
-
-    weighted_activations = compute_weighted_activations(
-        args, activations=activations, noise=noise
-    )
-
     filename = os.path.join(args.output_dir, "weighted_activations.pkl")
-    with open(filename, "w") as file:
-        pickle.dump(weighted_activations, file)
+
+    if os.path.exists(filename):
+        with open(filename, "rb") as file:
+            weighted_activations = pickle.load(file)
+    else:
+        utils.load_args(args)
+        model = load_model(args)
+
+        ds, noise = generate_ds(args, num_samples=5000)
+        activations = inference(args, model=model, ds=ds)
+
+        weighted_activations = compute_weighted_activations(
+            args, activations=activations, noise=noise
+        )
+
+        with open(filename, "wb") as file:
+            pickle.dump(weighted_activations, file)
 
     plot_grid(args, weighted_activations)
 
