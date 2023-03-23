@@ -34,7 +34,7 @@ def load_model(args):
 
 
 def generate_ds(args, num_samples: int = 5000):
-    noise = torch.rand((num_samples, 1, 36, 64), device=args.device)
+    noise = torch.rand((num_samples, 1, 36, 64))
     # standardize images
     mean, std = torch.mean(noise), torch.std(noise)
     images = (noise - mean) / std
