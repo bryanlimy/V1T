@@ -7,7 +7,7 @@ from tqdm import tqdm
 from PIL import ImageColor
 import matplotlib
 import matplotlib.pyplot as plt
-
+import typing as t
 from v1t import data
 from v1t.models.model import Model
 from v1t.utils import utils, tensorboard
@@ -82,7 +82,7 @@ def inference(args, model: Model, ds: DataLoader):
     return activations
 
 
-def compute_weighted_activations(args, activations: torch.tensor, noise: torch.tensor):
+def compute_weighted_RFs(args, activations: torch.tensor, noise: torch.tensor):
     # num_units = activations.size(1)
     # weighted_activations = torch.zeros(
     #     (num_units,) + noise.shape[1:], device=args.device
@@ -92,11 +92,8 @@ def compute_weighted_activations(args, activations: torch.tensor, noise: torch.t
     #     activation = activations[:, unit]
     #     weighted_activation = noise * repeat(activation, "b -> b 1 1 1")
     #     weighted_activations[unit] = torch.sum(weighted_activation, dim=0)
-    weighted_activations = einsum(activations, noise, "b n, b c h w -> n c h w")
-    return weighted_activations
-
-
-import typing as t
+    RFs = einsum(activations, noise, "b n, b c h w -> n c h w")
+    return RFs
 
 
 def normalize(image: t.Union[np.array, torch.tensor]):
@@ -107,22 +104,25 @@ def normalize(image: t.Union[np.array, torch.tensor]):
     return (image - i_min) / (i_max - i_min)
 
 
-def plot_grid(args, weighted_activations: torch.tensor, title: str = None):
-    images = weighted_activations.numpy()
+def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array], title: str = None):
+    images = weighted_RFs
+    if torch.is_tensor(images):
+        images = weighted_RFs.numpy()
 
     nrows, ncols = 5, 3
     max_images = nrows * ncols
 
-    # randomly select 9 units
-    num_units = weighted_activations.shape[0]
-    units = np.random.choice(num_units, size=max_images, replace=False)
+    num_units = images.shape[0]
 
-    tick_fontsize, label_fontsize = 8, 9
+    # randomly select max_images to plot
+    units = sorted(np.random.choice(num_units, size=max_images, replace=False))
+
+    tick_fontsize, label_fontsize, title_fontsize = 8, 9, 10
     figure, axes = plt.subplots(
         nrows=nrows,
         ncols=ncols,
         gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-        figsize=(6, 6),
+        figsize=(6, 7),
         dpi=120,
     )
 
@@ -133,11 +133,15 @@ def plot_grid(args, weighted_activations: torch.tensor, title: str = None):
         ax.axis("off")
 
     if title:
-        figure.suptitle(title, fontsize=label_fontsize)
+        pos = axes[0, 1].get_position()
+        figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.05)
+
     plt.show()
-    filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
-    tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
-    print(f"Saved weighted activations to {filename}.")
+
+    if title:
+        filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
+        tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
+        print(f"Saved weighted RFs to {filename}.")
 
 
 class Neuron(nn.Module):
@@ -149,14 +153,12 @@ class Neuron(nn.Module):
         return F.elu((x * self.rf).sum()) + 1
 
 
-def fit_gabor(args, weighted_activations: torch.tensor):
-    # num_units = weighted_activations.shape[0]
-    # units = np.random.choice(num_units, size=1000, replace=False)
-    num_units = 1000
+def fit_gabor(args, weighted_RFs: torch.tensor):
+    num_units = weighted_RFs.shape[0]
     tick_fontsize, label_fontsize = 8, 9
     sigmas = []
     for i, unit in enumerate(tqdm(range(num_units), desc="Fit Gabor")):
-        ground_truth = normalize(weighted_activations[unit][0])
+        ground_truth = normalize(weighted_RFs[unit][0])
         neuron = Neuron(rf=ground_truth)
         gabor_gen = GaborGenerator(image_size=IMAGE_SIZE[1:])
         gabor_gen, evolved_rfs = trainer_fn(gabor_gen, neuron, epochs=500)
@@ -183,6 +185,103 @@ def fit_gabor(args, weighted_activations: torch.tensor):
     print(f"average sigma: {np.mean(sigmas):.04f} \pm {np.std(sigmas):.04f}")
 
 
+def Gaussian2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
+    x, y = xy
+    xo = float(xo)
+    yo = float(yo)
+    a = (np.cos(theta) ** 2) / (2 * sigma_x**2) + (np.sin(theta) ** 2) / (
+        2 * sigma_y**2
+    )
+    b = -(np.sin(2 * theta)) / (4 * sigma_x**2) + (np.sin(2 * theta)) / (
+        4 * sigma_y**2
+    )
+    c = (np.sin(theta) ** 2) / (2 * sigma_x**2) + (np.cos(theta) ** 2) / (
+        2 * sigma_y**2
+    )
+    g = offset + amplitude * np.exp(
+        -(a * ((x - xo) ** 2) + 2 * b * (x - xo) * (y - yo) + c * ((y - yo) ** 2))
+    )
+    return g.ravel()
+
+
+import scipy.optimize as opt
+
+
+def fit_gaussian(args, weighted_RFs: torch.tensor):
+    weighted_RFs = weighted_RFs.numpy()
+    # standardize RFs
+    mean = np.mean(weighted_RFs, axis=(1, 2, 3))
+    std = np.std(weighted_RFs, axis=(1, 2, 3))
+    broadcast = lambda a: rearrange(a, "n -> n 1 1 1")
+    weighted_RFs = (weighted_RFs - broadcast(mean)) / broadcast(std)
+    # take absolute values
+    weighted_RFs = np.abs(weighted_RFs)
+    num_units = weighted_RFs.shape[0]
+    # plot_grid(args, weighted_RFs=weighted_RFs)
+    height, width = weighted_RFs.shape[2:]
+    x, y = np.linspace(0, width, width), np.linspace(0, height, height)
+    x, y = np.meshgrid(x, y)
+
+    nrows, ncols = 5, 3
+    max_images = nrows * ncols
+    units = sorted(np.random.choice(num_units, size=max_images, replace=False))
+    tick_fontsize, label_fontsize, title_fontsize = 8, 9, 10
+    figure, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        gridspec_kw={"wspace": 0.02, "hspace": 0.2},
+        figsize=(6, 7),
+        dpi=120,
+    )
+    axes = axes.flatten()
+
+    sigma_x = []
+    sigma_y = []
+    standard_deviations = []
+    plot_idx = 0
+    for i, unit in enumerate(tqdm(range(num_units), desc="Fit 2D Gaussian")):
+        data = weighted_RFs[unit][0]
+        data = data.ravel()
+        data_noisy = data + 0.2 * np.random.normal(size=data.shape)
+        try:
+            popt, pcov = opt.curve_fit(
+                f=Gaussian2d,
+                xdata=(x, y),
+                ydata=data_noisy,
+                p0=(3, width // 2, height // 2, 10, 10, 0, 10),
+            )
+            sigma_x.append(popt[3])
+            sigma_y.append(popt[4])
+            if unit in units:
+                fitted = Gaussian2d((x, y), *popt)
+                axes[plot_idx].imshow(
+                    normalize(data.reshape(height, width)), cmap="gray", vmin=0, vmax=1
+                )
+                axes[plot_idx].contour(
+                    x, y, fitted.reshape(height, width), z=8, alpha=0.4, colors="red"
+                )
+                axes[plot_idx].set_title(
+                    f"Unit #{unit}", pad=0, fontsize=label_fontsize
+                )
+                plot_idx += 1
+        except RuntimeError:
+            print(f"Cannot find optimal parameters for unit {unit}.")
+
+    for ax in axes:
+        ax.axis("off")
+
+    sigma_x, sigma_y = np.array(sigma_x), np.array(sigma_y)
+    print(
+        f"sigma X: {np.mean(sigma_x):.04f} \pm {np.std(sigma_x):.04f}\n"
+        f"sigma Y: {np.mean(sigma_y):.04f} \pm {np.std(sigma_y):.04f}"
+    )
+
+    plt.show()
+    filename = os.path.join(args.output_dir, "plots", "fit_gaussian.jpg")
+    tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
+    print(f"Saved plot to {filename}.")
+
+
 def main(args):
     utils.set_random_seed(1234)
     args.device = torch.device(args.device)
@@ -192,7 +291,7 @@ def main(args):
     if os.path.exists(filename) and not args.overwrite:
         print(f"Load weighted activations from {filename}.")
         with open(filename, "rb") as file:
-            weighted_activations = pickle.load(file)
+            weighted_RFs = pickle.load(file)
     else:
         utils.load_args(args)
         model = load_model(args)
@@ -200,20 +299,19 @@ def main(args):
         ds, noise = generate_ds(args, num_samples=args.sample_size)
         activations = inference(args, model=model, ds=ds)
 
-        weighted_activations = compute_weighted_activations(
-            args, activations=activations, noise=noise
-        )
+        weighted_RFs = compute_weighted_RFs(args, activations=activations, noise=noise)
 
         with open(filename, "wb") as file:
-            pickle.dump(weighted_activations, file)
+            pickle.dump(weighted_RFs, file)
 
     tensorboard.set_font()
     plot_grid(
         args,
-        weighted_activations=weighted_activations,
-        title="ViT" if "vit" in args.output_dir else "CNN",
+        weighted_RFs=weighted_RFs,
+        title="ViT RFs" if "vit" in args.output_dir else "CNN RFs",
     )
-    # fit_gabor(args, weighted_activations=weighted_activations)
+    # fit_gabor(args, weighted_RFs=weighted_RFs)
+    fit_gaussian(args, weighted_RFs=weighted_RFs)
 
     print(f"Results saved to {args.output_dir}.")
 
