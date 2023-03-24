@@ -1,26 +1,26 @@
 import os
 import torch
+import pickle
 import argparse
-import platform
+import warnings
 import numpy as np
-from tqdm import tqdm
-from PIL import ImageColor
-import matplotlib
-import matplotlib.pyplot as plt
 import typing as t
+from torch import nn
+from tqdm import tqdm
+import scipy.optimize as opt
+import matplotlib.pyplot as plt
+from torch.nn import functional as F
+from einops import rearrange, einsum
+
 from v1t import data
 from v1t.models.model import Model
 from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
-from torch.utils.data import TensorDataset, DataLoader
-from v1t.models import Model
-import pickle
-from einops import rearrange, repeat, einsum
-from torch import nn
-from torch.nn import functional as F
-
 from v1t.fitgabor import GaborGenerator, trainer_fn
+from torch.utils.data import TensorDataset, DataLoader
 
+
+warnings.simplefilter("error", opt.OptimizeWarning)
 IMAGE_SIZE = (1, 36, 64)
 
 
@@ -73,25 +73,20 @@ def inference(args, model: Model, ds: DataLoader):
         outputs = model.elu1(outputs)
 
         results.append(outputs.cpu())
-    results = torch.concat(results, dim=0)
-    # reshape activations from (N, C, H, W) to (N, H*W, C)
-    # results = rearrange(results, "b c h w -> b (h w) c")
-    # compute activations in the hidden dimension by average
-    # activations = torch.mean(results, dim=-1)
-    activations = results
+    activations = torch.concat(results, dim=0)
     return activations
 
 
 def compute_weighted_RFs(args, activations: torch.tensor, noise: torch.tensor):
     # num_units = activations.size(1)
-    # weighted_activations = torch.zeros(
+    # RFs = torch.zeros(
     #     (num_units,) + noise.shape[1:], device=args.device
     # )
     #
     # for unit in tqdm(range(num_units), desc="Compute activations"):
     #     activation = activations[:, unit]
-    #     weighted_activation = noise * repeat(activation, "b -> b 1 1 1")
-    #     weighted_activations[unit] = torch.sum(weighted_activation, dim=0)
+    #     RF = noise * repeat(activation, "b -> b 1 1 1")
+    #     RFs[unit] = torch.sum(RF, dim=0)
     RFs = einsum(activations, noise, "b n, b c h w -> n c h w")
     return RFs
 
@@ -109,25 +104,19 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array], title: str = 
     if torch.is_tensor(images):
         images = weighted_RFs.numpy()
 
-    nrows, ncols = 5, 3
-    max_images = nrows * ncols
-
-    num_units = images.shape[0]
-
-    # randomly select max_images to plot
-    units = sorted(np.random.choice(num_units, size=max_images, replace=False))
+    nrows, ncols = 6, 3
 
     tick_fontsize, label_fontsize, title_fontsize = 8, 9, 10
     figure, axes = plt.subplots(
         nrows=nrows,
         ncols=ncols,
         gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-        figsize=(6, 7),
+        figsize=(6, 8),
         dpi=120,
     )
 
     for i, ax in enumerate(axes.flat):
-        unit = units[i]
+        unit = args.random_units[i]
         ax.imshow(normalize(images[unit][0]), cmap="gray", vmin=0, vmax=1)
         ax.set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
         ax.axis("off")
@@ -136,7 +125,7 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array], title: str = 
         pos = axes[0, 1].get_position()
         figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.05)
 
-    plt.show()
+    # plt.show()
 
     if title:
         filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
@@ -204,9 +193,6 @@ def Gaussian2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
     return g.ravel()
 
 
-import scipy.optimize as opt
-
-
 def fit_gaussian(args, weighted_RFs: torch.tensor):
     weighted_RFs = weighted_RFs.numpy()
     # standardize RFs
@@ -217,28 +203,25 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
     # take absolute values
     weighted_RFs = np.abs(weighted_RFs)
     num_units = weighted_RFs.shape[0]
-    # plot_grid(args, weighted_RFs=weighted_RFs)
+
     height, width = weighted_RFs.shape[2:]
     x, y = np.linspace(0, width, width), np.linspace(0, height, height)
     x, y = np.meshgrid(x, y)
 
-    nrows, ncols = 5, 3
-    max_images = nrows * ncols
-    units = sorted(np.random.choice(num_units, size=max_images, replace=False))
+    nrows, ncols = 6, 3
     tick_fontsize, label_fontsize, title_fontsize = 8, 9, 10
     figure, axes = plt.subplots(
         nrows=nrows,
         ncols=ncols,
         gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-        figsize=(6, 7),
+        figsize=(6, 8),
         dpi=120,
     )
     axes = axes.flatten()
+    ax_idx = 0  # index of the flattened axes
 
-    sigma_x = []
-    sigma_y = []
-    standard_deviations = []
-    plot_idx = 0
+    # numpy array of optimal parameters where rows are unit index
+    popts = np.full(shape=(num_units, 7), fill_value=np.inf, dtype=np.float32)
     for i, unit in enumerate(tqdm(range(num_units), desc="Fit 2D Gaussian")):
         data = weighted_RFs[unit][0]
         data = data.ravel()
@@ -250,33 +233,55 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
                 ydata=data_noisy,
                 p0=(3, width // 2, height // 2, 10, 10, 0, 10),
             )
-            sigma_x.append(popt[3])
-            sigma_y.append(popt[4])
-            if unit in units:
+        except (RuntimeError, opt.OptimizeWarning):
+            popt, pcov = None, None
+
+        if unit in args.random_units:
+            axes[ax_idx].imshow(
+                normalize(data.reshape(height, width)), cmap="gray", vmin=0, vmax=1
+            )
+            if popt is not None:
                 fitted = Gaussian2d((x, y), *popt)
-                axes[plot_idx].imshow(
-                    normalize(data.reshape(height, width)), cmap="gray", vmin=0, vmax=1
+                fitted = fitted.reshape(height, width)
+                axes[ax_idx].contour(
+                    x,
+                    y,
+                    fitted,
+                    levels=[1],
+                    alpha=0.8,
+                    linewidths=2,
+                    colors="orangered",
                 )
-                axes[plot_idx].contour(
-                    x, y, fitted.reshape(height, width), z=8, alpha=0.4, colors="red"
-                )
-                axes[plot_idx].set_title(
-                    f"Unit #{unit}", pad=0, fontsize=label_fontsize
-                )
-                plot_idx += 1
-        except RuntimeError:
-            print(f"Cannot find optimal parameters for unit {unit}.")
+            axes[ax_idx].set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
+            ax_idx += 1
+        if popt is not None:
+            popts[unit] = popt
 
     for ax in axes:
         ax.axis("off")
 
-    sigma_x, sigma_y = np.array(sigma_x), np.array(sigma_y)
+    # filter out the last 5% of the results to eliminate poor fit
+    num_drops = int(0.05 * len(popts))
+    large_sigma_x = np.argsort(popts[:, 3])[-num_drops:]
+    large_sigma_y = np.argsort(popts[:, 4])[-num_drops:]
+    drop_units = np.unique(np.concatenate((large_sigma_x, large_sigma_y), axis=0))
+    popts[drop_units] = np.nan
+
     print(
-        f"sigma X: {np.mean(sigma_x):.04f} \pm {np.std(sigma_x):.04f}\n"
-        f"sigma Y: {np.mean(sigma_y):.04f} \pm {np.std(sigma_y):.04f}"
+        f"sigma X: {np.nanmean(popts[:, 3]):.03f} \pm {np.nanstd(popts[:, 3]):.03f}\n"
+        f"sigma Y: {np.nanmean(popts[:, 4]):.03f} \pm {np.nanstd(popts[:, 4]):.03f}"
     )
 
-    plt.show()
+    with open(os.path.join(args.output_dir, "gaussian_fit.pkl"), "wb") as file:
+        pickle.dump(popts, file)
+
+    title = "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
+    title += " 2D Gaussian Fit"
+    pos = axes[1].get_position()
+    figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 + 0.04)
+
+    # plt.show()
+
     filename = os.path.join(args.output_dir, "plots", "fit_gaussian.jpg")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved plot to {filename}.")
@@ -305,13 +310,18 @@ def main(args):
             pickle.dump(weighted_RFs, file)
 
     tensorboard.set_font()
+
+    # randomly select 18 units to plot
+    args.random_units = np.sort(
+        np.random.choice(weighted_RFs.shape[0], size=18, replace=False)
+    )
     plot_grid(
         args,
         weighted_RFs=weighted_RFs,
         title="ViT RFs" if "vit" in args.output_dir else "CNN RFs",
     )
     # fit_gabor(args, weighted_RFs=weighted_RFs)
-    fit_gaussian(args, weighted_RFs=weighted_RFs)
+    # fit_gaussian(args, weighted_RFs=weighted_RFs)
 
     print(f"Results saved to {args.output_dir}.")
 
