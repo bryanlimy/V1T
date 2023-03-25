@@ -289,7 +289,7 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
 
 
 def main(args):
-    utils.set_random_seed(1234)
+    utils.set_random_seed(args.seed)
     args.device = torch.device(args.device)
 
     filename = os.path.join(args.output_dir, "weighted_activations.pkl")
@@ -318,7 +318,7 @@ def main(args):
     )
     plot_grid(args, weighted_RFs=weighted_RFs)
     # fit_gabor(args, weighted_RFs=weighted_RFs)
-    fit_gaussian(args, weighted_RFs=weighted_RFs)
+    # fit_gaussian(args, weighted_RFs=weighted_RFs)
 
     print(f"Results saved to {args.output_dir}.")
 
@@ -331,4 +331,5 @@ if __name__ == "__main__":
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--sample_size", type=int, default=5000)
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--seed", type=int, default=1234)
     main(parser.parse_args())
