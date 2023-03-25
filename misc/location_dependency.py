@@ -294,7 +294,9 @@ if __name__ == "__main__":
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument(
+        "--device", type=str, choices=["cpu", "cuda", "mps"], default=""
+    )
     parser.add_argument("--sample_size", type=int, default=100000)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
