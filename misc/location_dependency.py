@@ -16,7 +16,6 @@ from v1t import data
 from v1t.models.model import Model
 from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
-from v1t.fitgabor import GaborGenerator, trainer_fn
 from torch.utils.data import TensorDataset, DataLoader
 
 
@@ -39,7 +38,7 @@ def load_model(args):
     return model
 
 
-def generate_ds(args, num_samples: int = 5000):
+def generate_ds(args, num_samples: int):
     noise = torch.rand((num_samples, *IMAGE_SIZE))
     # standardize images
     mean, std = torch.mean(noise), torch.std(noise)
@@ -56,7 +55,7 @@ def generate_ds(args, num_samples: int = 5000):
 @torch.no_grad()
 def inference(args, model: Model, ds: DataLoader):
     results = []
-    device, mouse_id = args.device, "A"
+    device, mouse_id = args.device, args.mouse_ids[0]
     for batch in tqdm(ds, desc="Inference"):
         images = batch[0].to(device)
         batch_size = images.size(0)
@@ -121,8 +120,7 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
         ax.set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
         ax.axis("off")
 
-    title = "Figure C: "
-    title += "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
+    title = "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
     pos = axes[0, 1].get_position()
     figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.05)
 
@@ -133,48 +131,17 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
     print(f"Saved weighted RFs to {filename}.")
 
 
-class Neuron(nn.Module):
-    def __init__(self, rf: torch.tensor):
-        super(Neuron, self).__init__()
-        self.rf = torch.tensor(rf, dtype=torch.float32)
+def Gaussian2d(
+    xy: np.ndarray,
+    amplitude: float,
+    xo: float,
+    yo: float,
+    sigma_x: float,
+    sigma_y: float,
+    theta: float,
+    offset: float,
+):
 
-    def forward(self, x):
-        return F.elu((x * self.rf).sum()) + 1
-
-
-def fit_gabor(args, weighted_RFs: torch.tensor):
-    num_units = weighted_RFs.shape[0]
-    tick_fontsize, label_fontsize = 8, 9
-    sigmas = []
-    for i, unit in enumerate(tqdm(range(num_units), desc="Fit Gabor")):
-        ground_truth = normalize(weighted_RFs[unit][0])
-        neuron = Neuron(rf=ground_truth)
-        gabor_gen = GaborGenerator(image_size=IMAGE_SIZE[1:])
-        gabor_gen, evolved_rfs = trainer_fn(gabor_gen, neuron, epochs=500)
-        learned_gabor = gabor_gen().data.numpy()[0, 0]
-        sigma = gabor_gen.sigma.data.numpy()[0]
-        sigmas.append(sigma)
-        if i < 10:
-            figure, axes = plt.subplots(
-                nrows=1,
-                ncols=2,
-                gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-                figsize=(4, 2),
-                dpi=120,
-            )
-            axes[0].imshow(ground_truth, cmap="gray", vmin=0, vmax=1)
-            axes[1].imshow(normalize(learned_gabor), cmap="gray", vmin=0, vmax=1)
-            axes[0].axis("off")
-            axes[1].axis("off")
-            axes[0].set_title(f"Unit #{unit}", fontsize=label_fontsize)
-            plt.show()
-    sigmas = np.array(sigmas)
-    with open(os.path.join(args.output_dir, "gabor_sigmas.pkl"), "wb") as file:
-        pickle.dump(sigmas, file)
-    print(f"average sigma: {np.mean(sigmas):.04f} \pm {np.std(sigmas):.04f}")
-
-
-def Gaussian2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
     x, y = xy
     xo = float(xo)
     yo = float(yo)
@@ -194,6 +161,7 @@ def Gaussian2d(xy, amplitude, xo, yo, sigma_x, sigma_y, theta, offset):
 
 
 def fit_gaussian(args, weighted_RFs: torch.tensor):
+    """Reference: https://stackoverflow.com/a/21566831"""
     weighted_RFs = weighted_RFs.numpy()
     # standardize RFs
     mean = np.mean(weighted_RFs, axis=(1, 2, 3))
@@ -275,8 +243,7 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
     with open(os.path.join(args.output_dir, "gaussian_fit.pkl"), "wb") as file:
         pickle.dump(popts, file)
 
-    title = "Figure E: "
-    title += "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
+    title = "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
     title += " 2D Gaussian Fit"
     pos = axes[1].get_position()
     figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 + 0.04)
@@ -289,8 +256,8 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
 
 
 def main(args):
+    utils.get_device(args)
     utils.set_random_seed(args.seed)
-    args.device = torch.device(args.device)
 
     filename = os.path.join(args.output_dir, "weighted_activations.pkl")
 
@@ -317,8 +284,7 @@ def main(args):
         np.random.choice(weighted_RFs.shape[0], size=18, replace=False)
     )
     plot_grid(args, weighted_RFs=weighted_RFs)
-    # fit_gabor(args, weighted_RFs=weighted_RFs)
-    # fit_gaussian(args, weighted_RFs=weighted_RFs)
+    fit_gaussian(args, weighted_RFs=weighted_RFs)
 
     print(f"Results saved to {args.output_dir}.")
 
@@ -329,7 +295,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--sample_size", type=int, default=5000)
+    parser.add_argument("--sample_size", type=int, default=100000)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
     main(parser.parse_args())
