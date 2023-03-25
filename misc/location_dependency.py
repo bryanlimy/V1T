@@ -99,7 +99,7 @@ def normalize(image: t.Union[np.array, torch.tensor]):
     return (image - i_min) / (i_max - i_min)
 
 
-def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array], title: str = None):
+def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
     images = weighted_RFs
     if torch.is_tensor(images):
         images = weighted_RFs.numpy()
@@ -121,16 +121,16 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array], title: str = 
         ax.set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
         ax.axis("off")
 
-    if title:
-        pos = axes[0, 1].get_position()
-        figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.05)
+    title = "Figure C: "
+    title += "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
+    pos = axes[0, 1].get_position()
+    figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.05)
 
     # plt.show()
 
-    if title:
-        filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
-        tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
-        print(f"Saved weighted RFs to {filename}.")
+    filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
+    tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
+    print(f"Saved weighted RFs to {filename}.")
 
 
 class Neuron(nn.Module):
@@ -275,7 +275,8 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
     with open(os.path.join(args.output_dir, "gaussian_fit.pkl"), "wb") as file:
         pickle.dump(popts, file)
 
-    title = "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
+    title = "Figure E: "
+    title += "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
     title += " 2D Gaussian Fit"
     pos = axes[1].get_position()
     figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 + 0.04)
@@ -315,13 +316,9 @@ def main(args):
     args.random_units = np.sort(
         np.random.choice(weighted_RFs.shape[0], size=18, replace=False)
     )
-    plot_grid(
-        args,
-        weighted_RFs=weighted_RFs,
-        title="ViT RFs" if "vit" in args.output_dir else "CNN RFs",
-    )
+    plot_grid(args, weighted_RFs=weighted_RFs)
     # fit_gabor(args, weighted_RFs=weighted_RFs)
-    # fit_gaussian(args, weighted_RFs=weighted_RFs)
+    fit_gaussian(args, weighted_RFs=weighted_RFs)
 
     print(f"Results saved to {args.output_dir}.")
 
