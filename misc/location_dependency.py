@@ -56,7 +56,7 @@ def generate_ds(args, num_samples: int = 5000):
 @torch.no_grad()
 def inference(args, model: Model, ds: DataLoader):
     results = []
-    device, mouse_id = args.device, args.mouse_ids[0]
+    device, mouse_id = args.device, "A"
     for batch in tqdm(ds, desc="Inference"):
         images = batch[0].to(device)
         batch_size = images.size(0)
