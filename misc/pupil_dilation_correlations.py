@@ -157,6 +157,7 @@ def main(args):
     if os.path.exists(filename) and not args.overwrite:
         with open(filename, "rb") as file:
             results = pickle.load(file)
+        print(f"Load pupil dilation result from {filename}.")
     else:
         results = {}
         for mouse_id, mouse_ds in test_ds.items():
@@ -167,6 +168,8 @@ def main(args):
             )
             correlations = correlation_by_dilation(mouse_result)
             results[mouse_id] = correlations
+        with open(filename, "wb") as file:
+            pickle.dump(results, file)
 
     plot_correlations(
         results,
