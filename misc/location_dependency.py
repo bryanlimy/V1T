@@ -122,11 +122,11 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
 
     title = "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
     pos = axes[0, 1].get_position()
-    figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.05)
+    figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.04)
 
     # plt.show()
 
-    filename = os.path.join(args.output_dir, "plots", "location_filters.jpg")
+    filename = os.path.join(args.output_dir, "plots", "location_filters.png")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved weighted RFs to {filename}.")
 
@@ -250,7 +250,7 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
 
     # plt.show()
 
-    filename = os.path.join(args.output_dir, "plots", "fit_gaussian.jpg")
+    filename = os.path.join(args.output_dir, "plots", "fit_gaussian.png")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved plot to {filename}.")
 

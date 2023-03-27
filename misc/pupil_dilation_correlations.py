@@ -1,5 +1,6 @@
 import os
 import torch
+import pickle
 import argparse
 import numpy as np
 import typing as t
@@ -24,9 +25,8 @@ BACKGROUND_COLOR = "#ffffff"
 
 
 @torch.no_grad()
-def inference(
-    model: Model, ds: DataLoader, mouse_id: str, device: torch.device = "cpu"
-):
+def inference(model: Model, ds: DataLoader, mouse_id: str, device: torch.device):
+    transform_behaviors = ds.dataset.i_transform_behavior
     results = {"predictions": [], "targets": [], "pupil_dilations": []}
     model.to(device)
     model.train(False)
@@ -39,9 +39,11 @@ def inference(
         )
         results["predictions"].append(predictions.cpu().numpy())
         results["targets"].append(data["response"].numpy())
-        results["pupil_dilations"].append(data["behavior"][:, 0].numpy())
-    results = {k: np.vstack(v) for k, v in results.items()}
-    results["pupil_dilations"] = np.squeeze(results["pupil_dilations"], axis=-1)
+        behavior = transform_behaviors(data["behavior"])
+        results["pupil_dilations"].append(behavior[:, 0].numpy())
+    results["predictions"] = np.vstack(results["predictions"])
+    results["targets"] = np.vstack(results["targets"])
+    results["pupil_dilations"] = np.concatenate(results["pupil_dilations"])
     return results
 
 
@@ -135,7 +137,6 @@ def main(args):
     tensorboard.set_font()
 
     utils.load_args(args)
-    args.batch_size = 1
     args.device = torch.device(args.device)
 
     _, val_ds, test_ds = data.get_training_ds(
@@ -152,20 +153,20 @@ def main(args):
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     scheduler.restore(force=True)
 
-    # results = {}
-    # for mouse_id, mouse_ds in test_ds.items():
-    #     if mouse_id == "1":
-    #         continue
-    #     mouse_result = inference(
-    #         model=model, ds=mouse_ds, mouse_id=mouse_id, device=args.device
-    #     )
-    #     correlations = correlation_by_dilation(mouse_result)
-    #     results[mouse_id] = correlations
-
-    import pickle
-
-    with open(os.path.join(args.output_dir, "pupil_dilation.pkl"), "rb") as file:
-        results = pickle.load(file)
+    filename = os.path.join(args.output_dir, "pupil_dilation.pkl")
+    if os.path.exists(filename) and not args.overwrite:
+        with open(filename, "rb") as file:
+            results = pickle.load(file)
+    else:
+        results = {}
+        for mouse_id, mouse_ds in test_ds.items():
+            if mouse_id in ("S0", "S1"):
+                continue
+            mouse_result = inference(
+                model=model, ds=mouse_ds, mouse_id=mouse_id, device=args.device
+            )
+            correlations = correlation_by_dilation(mouse_result)
+            results[mouse_id] = correlations
 
     plot_correlations(
         results,
@@ -179,6 +180,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--overwrite", action="store_true")
 
     main(parser.parse_args())
