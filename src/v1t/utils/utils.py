@@ -221,10 +221,10 @@ def plot_samples(
             for micro_batch in data.micro_batching(batch, args.micro_batch_size):
                 images = micro_batch["image"]
                 predictions, crop_images, image_grids = model(
-                    inputs=images,
+                    inputs=images.to(device),
                     mouse_id=mouse_id,
-                    pupil_centers=micro_batch["pupil_center"],
-                    behaviors=micro_batch["behavior"],
+                    pupil_centers=micro_batch["pupil_center"].to(device),
+                    behaviors=micro_batch["behavior"].to(device),
                 )
                 images = i_transform_image(images.cpu())
                 crop_images = i_transform_image(crop_images.cpu())
