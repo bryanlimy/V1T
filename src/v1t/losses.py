@@ -95,7 +95,7 @@ class Loss(_Loss):
     def __init__(
         self,
         args,
-        ds: t.Dict[int, DataLoader],
+        ds: t.Dict[str, DataLoader],
         size_average: bool = None,
         reduce: bool = None,
         reduction: REDUCTION = "sum",
@@ -106,15 +106,15 @@ class Loss(_Loss):
         self.ds_scale = args.ds_scale
         self.ds_sizes = BufferDict(
             buffers={
-                str(mouse_id): torch.tensor(len(mouse_ds.dataset), dtype=torch.float32)
+                mouse_id: torch.tensor(len(mouse_ds.dataset), dtype=torch.float32)
                 for mouse_id, mouse_ds in ds.items()
             }
         )
 
-    def scale_ds(self, loss: torch.Tensor, mouse_id: int, batch_size: int):
+    def scale_ds(self, loss: torch.Tensor, mouse_id: str, batch_size: int):
         """Scale loss based on the size of the dataset"""
         if self.ds_scale:
-            scale = torch.sqrt(self.ds_sizes[str(mouse_id)] / batch_size)
+            scale = torch.sqrt(self.ds_sizes[mouse_id] / batch_size)
             loss = scale * loss
         return loss
 
@@ -127,7 +127,7 @@ class MSSE(Loss):
         self,
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         reduction: REDUCTION = "sum",
         batch_size: int = None,
     ):
@@ -143,7 +143,7 @@ class PoissonLoss(Loss):
     def __init__(
         self,
         args,
-        ds: t.Dict[int, DataLoader],
+        ds: t.Dict[str, DataLoader],
         eps: float = EPS,
         reduction: REDUCTION = "sum",
     ):
@@ -154,7 +154,7 @@ class PoissonLoss(Loss):
         self,
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         batch_size: int = None,
     ):
         if batch_size is None:
@@ -170,7 +170,7 @@ class PoissonLoss(Loss):
 class Correlation(Loss):
     """single trial correlation"""
 
-    def __init__(self, args, ds: t.Dict[int, DataLoader], eps: float = EPS):
+    def __init__(self, args, ds: t.Dict[str, DataLoader], eps: float = EPS):
         super(Correlation, self).__init__(args, ds=ds)
         self.register_buffer("eps", torch.tensor(eps))
 
@@ -178,7 +178,7 @@ class Correlation(Loss):
         self,
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
-        mouse_id: int,
+        mouse_id: str,
         batch_size: int = None,
     ):
         if batch_size is None:
@@ -190,7 +190,7 @@ class Correlation(Loss):
         return loss
 
 
-def get_criterion(args, ds: t.Dict[int, DataLoader]):
+def get_criterion(args, ds: t.Dict[str, DataLoader]):
     assert args.criterion in _CRITERION, f"Criterion {args.criterion} not found."
     criterion = _CRITERION[args.criterion](args, ds=ds)
     criterion.to(args.device)
