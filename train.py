@@ -49,8 +49,8 @@ def train_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    result, batch_loss = {}, 0.0
-    batch_size = batch["image"].size(0)
+    batch_loss = torch.tensor(0.0, dtype=torch.float32, device=device)
+    batch_size, result = batch["image"].size(0), {}
     for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
@@ -136,8 +136,8 @@ def validation_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    result, batch_loss = {}, 0.0
-    batch_size = batch["image"].size(0)
+    batch_loss = torch.tensor(0.0, dtype=torch.float32, device=device)
+    batch_size, result = batch["image"].size(0), {}
     for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             responses = micro_batch["response"].to(device)
