@@ -447,7 +447,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--ds_scale",
-        action="store_true",
+        type=int,
+        default=1,
+        choices=[0, 1],
         help="scale loss by the size of the dataset",
     )
 
