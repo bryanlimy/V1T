@@ -31,6 +31,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
         torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
 
 
 @torch.no_grad()
