@@ -30,6 +30,8 @@ install_torch() {
     printf "\nInstalling PyTorch...\n"
     case $device in
         osx-arm64)
+            export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
+            export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1
             conda install pytorch=2.0 torchvision torchaudio -c pytorch -y
             ;;
         osx-64)
