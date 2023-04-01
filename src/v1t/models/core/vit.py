@@ -389,6 +389,8 @@ class ViTCore(Core):
         )
         if not hasattr(args, "grad_checkpointing"):
             args.grad_checkpointing = False
+        if args.grad_checkpointing and args.verbose:
+            print(f"Enable gradient checkpointing in ViT")
         if not hasattr(args, "disable_bias"):
             args.disable_bias = False
         self.transformer = Transformer(

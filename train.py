@@ -215,8 +215,6 @@ def main(args, wandb_sweep: bool = False):
 
     if args.grad_checkpointing is None and args.core in ("vit", "cct"):
         args.grad_checkpointing = "cuda" in args.device.type
-    if args.grad_checkpointing and args.verbose:
-        print(f"Enable gradient checkpointing for ViT.")
     utils.compute_micro_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
