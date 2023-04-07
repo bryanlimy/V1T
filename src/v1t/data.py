@@ -303,7 +303,8 @@ class MiceDataset(Dataset):
         indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
         if tier == "train" and hasattr(args, "limit_data") and args.limit_data:
             if len(indexes) > args.limit_data:
-                indexes = np.random.choice(indexes, size=args.limit_data, replace=False)
+                rng = np.random.default_rng(seed=args.seed)
+                indexes = rng.choice(indexes, size=args.limit_data, replace=False)
                 if args.verbose > 2:
                     print(
                         f"limit mouse {mouse_id} training samples to {args.limit_data}."
@@ -519,8 +520,12 @@ def get_submission_ds(
     if not hasattr(args, "ds_name"):
         args.ds_name = os.path.basename(args.dataset)
     # settings for DataLoader
-    test_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": False}
-    if device.type in ["cuda", "mps"]:
+    test_kwargs = {
+        "batch_size": batch_size,
+        "num_workers": args.num_workers,
+        "shuffle": False,
+    }
+    if device.type in ("cuda", "mps"):
         test_kwargs.update({"prefetch_factor": 2, "pin_memory": True})
 
     # a dictionary of DataLoader for each live test and final test set
