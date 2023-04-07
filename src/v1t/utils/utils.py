@@ -27,11 +27,25 @@ def set_random_seed(seed: int, deterministic: bool = False):
     """
     random.seed(seed)
     np.random.seed(seed)
-    if deterministic:
-        torch.backends.cudnn.benchmark = False
-        torch.use_deterministic_algorithms(True)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+    if deterministic:
+        torch.use_deterministic_algorithms(True)
+
+
+def get_device(args):
+    """Get the appropriate torch.device from args.device argument"""
+    device = args.device
+    if not device:
+        device = "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.allow_tf32 = True
+            torch.backends.cuda.matmul.allow_tf32 = True
+        elif torch.backends.mps.is_available():
+            device = "mps"
+    args.device = torch.device(device)
 
 
 @torch.no_grad()
@@ -300,21 +314,6 @@ def load_args(args):
         and type(list(args.output_shapes.keys())[0]) == int
     ):
         args.output_shapes = {str(k): v for k, v in args.output_shapes.items()}
-
-
-def get_device(args):
-    """Get the appropriate torch.device from args.device argument"""
-    device = args.device
-    if not device:
-        device = "cpu"
-        if torch.cuda.is_available():
-            device = "cuda"
-            # allow TensorFloat32 computation
-            torch.backends.cudnn.allow_tf32 = True
-            torch.backends.cuda.matmul.allow_tf32 = True
-        elif torch.backends.mps.is_available():
-            device = "mps"
-    args.device = torch.device(device)
 
 
 def wandb_init(args, wandb_sweep: bool):
