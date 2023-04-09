@@ -209,7 +209,7 @@ def main(args, wandb_sweep: bool = False):
 
     Logger(args)
     utils.get_device(args)
-    utils.set_random_seed(args.seed)
+    utils.set_random_seed(args.seed, deterministic=args.deterministic)
 
     data.get_mouse_ids(args)
 
@@ -433,6 +433,11 @@ if __name__ == "__main__":
         choices=[0, 1],
         help="Enable gradient checkpointing if 1. If None is provided, then "
         "enable by default if CUDA is detected.",
+    )
+    parser.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="use deterministic algorithms in PyTorch",
     )
 
     # optimizer settings

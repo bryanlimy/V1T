@@ -20,7 +20,7 @@ from v1t.utils import yaml, tensorboard
 
 
 def set_random_seed(seed: int, deterministic: bool = False):
-    """Set random seed for Python, Numpy asn PyTorch.
+    """Set random seed for Python, Numpy and PyTorch.
     Args:
         seed: int, the random seed to use.
         deterministic: bool, use "deterministic" algorithms in PyTorch.
@@ -30,6 +30,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     if deterministic:
+        torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
 
 
@@ -40,7 +41,6 @@ def get_device(args):
         device = "cpu"
         if torch.cuda.is_available():
             device = "cuda"
-            torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.allow_tf32 = True
             torch.backends.cuda.matmul.allow_tf32 = True
         elif torch.backends.mps.is_available():
@@ -395,7 +395,7 @@ def log_metrics(
     return overall_result
 
 
-def num_steps(ds: t.Dict[int, DataLoader]):
+def num_steps(ds: t.Dict[str, DataLoader]):
     """Return the number of total steps to iterate all the DataLoaders"""
     return sum([len(ds[k]) for k in ds.keys()])
 
