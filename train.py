@@ -30,13 +30,6 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     }
 
 
-def gather(result: t.Dict[str, t.List[torch.Tensor]]):
-    return {
-        k: torch.sum(torch.stack(v)) if "loss" in k else torch.mean(torch.stack(v))
-        for k, v in result.items()
-    }
-
-
 def train_step(
     mouse_id: str,
     batch: t.Dict[str, torch.Tensor],
@@ -50,7 +43,8 @@ def train_step(
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
     batch_size = batch["image"].size(0)
-    result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
+    result = {"loss": [], "reg_loss": [], "total_loss": []}
+    targets, predictions = [], []
     for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             y_true = micro_batch["response"].to(device)
@@ -72,15 +66,20 @@ def train_step(
         result["loss/loss"].append(loss.detach())
         result["loss/reg_loss"].append(reg_loss.detach())
         result["loss/total_loss"].append(total_loss.detach())
-        utils.update_dict(
-            result,
-            compute_metrics(y_true=y_true.detach(), y_pred=y_pred.detach()),
-        )
+        targets.append(y_true.detach())
+        predictions.append(y_pred.detach())
     if update:
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
-    return gather(result)
+    result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
+    result.update(
+        compute_metrics(
+            y_true=torch.vstack(targets),
+            y_pred=torch.vstack(predictions),
+        )
+    )
+    return result
 
 
 def train(
@@ -131,6 +130,7 @@ def validation_step(
     model.to(device)
     batch_size = batch["image"].size(0)
     result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
+    targets, predictions = [], []
     for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             y_true = micro_batch["response"].to(device)
@@ -151,11 +151,16 @@ def validation_step(
         result["loss/loss"].append(loss.detach())
         result["loss/reg_loss"].append(reg_loss.detach())
         result["loss/total_loss"].append(total_loss.detach())
-        utils.update_dict(
-            result,
-            compute_metrics(y_true=y_true.detach(), y_pred=y_pred.detach()),
+        targets.append(y_true.detach())
+        predictions.append(y_pred.detach())
+    result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
+    result.update(
+        compute_metrics(
+            y_true=torch.vstack(targets),
+            y_pred=torch.vstack(predictions),
         )
-    return gather(result)
+    )
+    return result
 
 
 def validate(

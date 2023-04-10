@@ -354,7 +354,7 @@ def metrics2df(results: t.Dict[int, torch.Tensor]):
 
 
 def log_metrics(
-    results: t.Dict[t.Union[int, str], t.Dict[str, t.Any]],
+    results: t.Dict[str, t.Dict[str, t.Any]],
     epoch: int,
     summary: tensorboard.Summary = None,
     mode: int = 0,
@@ -362,7 +362,7 @@ def log_metrics(
     """Compute the mean of the metrics in results and log to Summary
 
     Args:
-        results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
+        results: t.Dict[str, t.Dict[str, t.List[float]]],
             a dictionary of tensors where keys are the name of the metrics
             that represent results from of a mouse.
         epoch: int, the current epoch number.
