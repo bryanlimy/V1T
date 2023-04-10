@@ -58,7 +58,7 @@ class Model(nn.Module):
         4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
 
-    def __init__(self, args, ds: t.Dict[str, DataLoader], name: str = "Model"):
+    def __init__(self, args: t.Any, ds: t.Dict[str, DataLoader], name: str = "Model"):
         super(Model, self).__init__()
         assert isinstance(
             args.output_shapes, dict

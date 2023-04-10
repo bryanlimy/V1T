@@ -56,38 +56,40 @@ class Image2Patches(nn.Module):
         dropout: float = 0.0,
     ):
         super(Image2Patches, self).__init__()
-        assert patch_mode in (0, 1, 2)
         assert 1 <= stride <= patch_size
         c, h, w = image_shape
         self.input_shape = image_shape
 
         num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
-        if patch_mode == 0:
-            patch_dim = patch_size * patch_size * c
-            self.projection = nn.Sequential(
-                nn.Unfold(kernel_size=patch_size, stride=stride),
-                Rearrange("b c l -> b l c"),
-                nn.Linear(in_features=patch_dim, out_features=emb_dim),
-            )
-        elif patch_mode == 1:
-            self.projection = nn.Sequential(
-                nn.Conv2d(
-                    in_channels=c,
-                    out_channels=emb_dim,
-                    kernel_size=patch_size,
-                    stride=stride,
-                ),
-                Rearrange("b c h w -> b (h w) c"),
-            )
-        else:
-            patch_dim = patch_size * patch_size * (c + 4)
-            self.projection = nn.Sequential(
-                PatchShifting(patch_size=patch_size),
-                nn.Unfold(kernel_size=patch_size, stride=stride),
-                Rearrange("b c l -> b l c"),
-                nn.LayerNorm(normalized_shape=patch_dim),
-                nn.Linear(in_features=patch_dim, out_features=emb_dim),
-            )
+        match patch_mode:
+            case 0:
+                patch_dim = patch_size * patch_size * c
+                self.projection = nn.Sequential(
+                    nn.Unfold(kernel_size=patch_size, stride=stride),
+                    Rearrange("b c l -> b l c"),
+                    nn.Linear(in_features=patch_dim, out_features=emb_dim),
+                )
+            case 1:
+                self.projection = nn.Sequential(
+                    nn.Conv2d(
+                        in_channels=c,
+                        out_channels=emb_dim,
+                        kernel_size=patch_size,
+                        stride=stride,
+                    ),
+                    Rearrange("b c h w -> b (h w) c"),
+                )
+            case 2:
+                patch_dim = patch_size * patch_size * (c + 4)
+                self.projection = nn.Sequential(
+                    PatchShifting(patch_size=patch_size),
+                    nn.Unfold(kernel_size=patch_size, stride=stride),
+                    Rearrange("b c l -> b l c"),
+                    nn.LayerNorm(normalized_shape=patch_dim),
+                    nn.Linear(in_features=patch_dim, out_features=emb_dim),
+                )
+            case _:
+                raise NotImplementedError(f"--patch_mode {patch_mode} not implemented.")
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
         self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
