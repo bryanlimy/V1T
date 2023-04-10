@@ -43,7 +43,7 @@ def train_step(
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
     batch_size = batch["image"].size(0)
-    result = {"loss": [], "reg_loss": [], "total_loss": []}
+    result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
     targets, predictions = [], []
     for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
