@@ -165,44 +165,31 @@ class BehaviorMLP(nn.Module):
         assert behavior_mode in (2, 3, 4)
         self.behavior_mode = behavior_mode
         in_dim = 3 if behavior_mode == 2 else 5
-        if behavior_mode == 4:
-            self.model = nn.ModuleDict(
-                {
-                    mouse_id: self.build_model(
-                        in_dim=in_dim,
-                        out_dim=out_dim,
-                        dropout=dropout,
-                        use_bias=use_bias,
-                    )
-                    for mouse_id in mouse_ids
-                }
-            )
-        else:
-            self.model = self.build_model(
-                in_dim=in_dim, out_dim=out_dim, dropout=dropout
-            )
-
-    def build_model(
-        self,
-        in_dim: int,
-        out_dim: int,
-        dropout: float = 0.0,
-        use_bias: bool = True,
-    ):
-        return nn.Sequential(
-            nn.Linear(in_features=in_dim, out_features=out_dim // 2, bias=use_bias),
-            nn.Tanh(),
-            nn.Dropout(p=dropout),
-            nn.Linear(in_features=out_dim // 2, out_features=out_dim, bias=use_bias),
-            nn.Tanh(),
+        mouse_ids = mouse_ids if behavior_mode == 4 else ["share"]
+        self.models = nn.ModuleDict(
+            {
+                mouse_id: nn.Sequential(
+                    nn.Linear(
+                        in_features=in_dim,
+                        out_features=out_dim // 2,
+                        bias=use_bias,
+                    ),
+                    nn.Tanh(),
+                    nn.Dropout(p=dropout),
+                    nn.Linear(
+                        in_features=out_dim // 2,
+                        out_features=out_dim,
+                        bias=use_bias,
+                    ),
+                    nn.Tanh(),
+                )
+                for mouse_id in mouse_ids
+            }
         )
 
     def forward(self, inputs: torch.Tensor, mouse_id: str):
-        if self.behavior_mode == 4:
-            outputs = self.model[mouse_id](inputs)
-        else:
-            outputs = self.model(inputs)
-        return outputs
+        mouse_id = mouse_id if self.behavior_mode == 4 else "share"
+        return self.models[mouse_id](inputs)
 
 
 class Attention(nn.Module):
