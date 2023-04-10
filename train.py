@@ -49,44 +49,37 @@ def train_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    batch_loss = torch.tensor(0.0, dtype=torch.float32, device=device)
-    batch_size, result = batch["image"].size(0), {}
-    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
+    batch_size = batch["image"].size(0)
+    result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
+    for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
-            responses = micro_batch["response"].to(device)
-            outputs, _, _ = model(
+            y_true = micro_batch["response"].to(device)
+            y_pred, _, _ = model(
                 inputs=micro_batch["image"].to(device),
                 mouse_id=mouse_id,
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
             loss = criterion(
-                y_true=responses,
-                y_pred=outputs,
+                y_true=y_true,
+                y_pred=y_pred,
                 mouse_id=mouse_id,
                 batch_size=batch_size,
             )
-            batch_loss += loss
-            utils.update_dict(
-                result,
-                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
-            )
-    reg_loss = model.regularizer(mouse_id=mouse_id)
-    total_loss = batch_loss + reg_loss
-    # calculate and accumulate gradients
-    scaler.scale(total_loss).backward()
+            reg_loss = (y_true.size(0) / batch_size) * model.regularizer(mouse_id)
+            total_loss = loss + reg_loss
+        scaler.scale(total_loss).backward()
+        result["loss/loss"].append(loss.detach())
+        result["loss/reg_loss"].append(reg_loss.detach())
+        result["loss/total_loss"].append(total_loss.detach())
+        utils.update_dict(
+            result,
+            compute_metrics(y_true=y_true.detach(), y_pred=y_pred.detach()),
+        )
     if update:
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
-    utils.update_dict(
-        result,
-        {
-            "loss/loss": batch_loss.detach(),
-            "loss/reg_loss": reg_loss.detach(),
-            "loss/total_loss": total_loss.detach(),
-        },
-    )
     return gather(result)
 
 
@@ -136,38 +129,32 @@ def validation_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    batch_loss = torch.tensor(0.0, dtype=torch.float32, device=device)
-    batch_size, result = batch["image"].size(0), {}
-    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
+    batch_size = batch["image"].size(0)
+    result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
+    for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
-            responses = micro_batch["response"].to(device)
-            outputs, _, _ = model(
+            y_true = micro_batch["response"].to(device)
+            y_pred, _, _ = model(
                 inputs=micro_batch["image"].to(device),
                 mouse_id=mouse_id,
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
             loss = criterion(
-                y_true=responses,
-                y_pred=outputs,
+                y_true=y_true,
+                y_pred=y_pred,
                 mouse_id=mouse_id,
                 batch_size=batch_size,
             )
-            batch_loss += loss
-            utils.update_dict(
-                result,
-                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
-            )
-    reg_loss = model.regularizer(mouse_id=mouse_id)
-    total_loss = batch_loss + reg_loss
-    utils.update_dict(
-        result,
-        {
-            "loss/loss": batch_loss.detach(),
-            "loss/reg_loss": reg_loss.detach(),
-            "loss/total_loss": total_loss.detach(),
-        },
-    )
+            reg_loss = (y_true.size(0) / batch_size) * model.regularizer(mouse_id)
+            total_loss = loss + reg_loss
+        result["loss/loss"].append(loss.detach())
+        result["loss/reg_loss"].append(reg_loss.detach())
+        result["loss/total_loss"].append(total_loss.detach())
+        utils.update_dict(
+            result,
+            compute_metrics(y_true=y_true.detach(), y_pred=y_pred.detach()),
+        )
     return gather(result)
 
 
