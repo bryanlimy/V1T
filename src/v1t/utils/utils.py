@@ -1,5 +1,4 @@
 import os
-import sys
 import copy
 import wandb
 import torch
@@ -212,24 +211,24 @@ def plot_samples(
     summary: tensorboard.Summary,
     epoch: int,
     mode: int = 1,
-    num_samples: int = 5,
+    num_plots: int = 5,
 ):
     device = args.device
     model.to(device)
     model.train(False)
-    vstack = lambda a, b: a if b is None else torch.vstack((a, b))
     for mouse_id, mouse_ds in ds.items():
         results = {
-            "images": None,
-            "crop_images": None,
-            "image_grids": None,
-            "targets": None,
-            "predictions": None,
-            "pupil_center": None,
-            "behaviors": None,
-            "image_ids": None,
+            "images": [],
+            "crop_images": [],
+            "image_grids": [],
+            "targets": [],
+            "predictions": [],
+            "pupil_center": [],
+            "behaviors": [],
+            "image_ids": [],
         }
         i_transform_image = mouse_ds.dataset.i_transform_image
+        num_samples = 0
         for batch in mouse_ds:
             should_break = False
             for micro_batch in data.micro_batching(batch, args.micro_batch_size):
@@ -245,28 +244,23 @@ def plot_samples(
                 image_grids = image_grids.cpu()
                 predictions = predictions.cpu()
 
-                results["images"] = vstack(images, results["images"])
-                results["crop_images"] = vstack(crop_images, results["crop_images"])
-                results["image_grids"] = vstack(image_grids, results["image_grids"])
-                results["targets"] = vstack(micro_batch["response"], results["targets"])
-                results["predictions"] = vstack(predictions, results["predictions"])
-                results["pupil_center"] = vstack(
-                    micro_batch["pupil_center"], results["pupil_center"]
-                )
-                results["behaviors"] = vstack(
-                    micro_batch["behavior"], results["behaviors"]
-                )
-                results["image_ids"] = vstack(
-                    micro_batch["image_id"], results["image_ids"]
-                )
-                should_break = len(results["images"]) >= num_samples
+                results["images"].append(images)
+                results["crop_images"].append(crop_images)
+                results["image_grids"].append(image_grids)
+                results["targets"].append(micro_batch["response"])
+                results["predictions"].append(predictions)
+                results["pupil_center"].append(micro_batch["pupil_center"])
+                results["behaviors"].append(micro_batch["behavior"])
+                results["image_ids"].append(micro_batch["image_id"])
+                num_samples += len(images)
+                should_break = num_samples >= num_plots
                 if should_break:
                     break
-
             if should_break:
                 break
+        results = {k: torch.vstack(v) for k, v in results.items()}
         results["image_ids"] = torch.flatten(results["image_ids"])
-        results = {k: v[:num_samples].cpu().numpy() for k, v in results.items()}
+        results = {k: v[:num_plots].cpu().numpy() for k, v in results.items()}
         summary.plot_image_response(
             f"image_response/mouse{mouse_id}", results=results, step=epoch, mode=mode
         )

@@ -141,7 +141,7 @@ class Model(nn.Module):
         return params
 
     def regularizer(self, mouse_id: str):
-        loss = torch.tensor(0, dtype=torch.float32, device=self.device)
+        loss = 0.0
         loss += self.image_cropper.regularizer(mouse_id=mouse_id)
         if not self.core.frozen:
             loss += self.core.regularizer()

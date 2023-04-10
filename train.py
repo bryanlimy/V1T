@@ -241,7 +241,7 @@ def main(args, wandb_sweep: bool = False):
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
+    utils.plot_samples(args, model=model, ds=val_ds, summary=summary, epoch=epoch)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -322,7 +322,7 @@ def main(args, wandb_sweep: bool = False):
     if args.use_wandb:
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
     utils.plot_samples(
-        args, model=model, ds=test_ds, summary=summary, epoch=epoch, mode=2
+        args, model=model, ds=val_ds, summary=summary, epoch=epoch, mode=2
     )
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
@@ -361,14 +361,14 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--center_crop",
-        default=1.0,
         type=float,
+        default=1.0,
         help="crop the center of the image to (scale * height, scale, width)",
     )
     parser.add_argument(
         "--resize_image",
-        default=1,
         type=int,
+        default=1,
         choices=[0, 1],
         help="resize image mode:"
         "0: no resizing, return full image (1, 144, 256)"
@@ -379,29 +379,29 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--limit_data",
-        default=None,
         type=int,
+        default=None,
         help="limit the number of training samples.",
     )
     parser.add_argument(
         "--num_workers",
-        default=2,
         type=int,
+        default=2,
         help="number of works for DataLoader.",
     )
 
     # training settings
     parser.add_argument(
         "--epochs",
-        default=400,
         type=int,
+        default=400,
         help="maximum epochs to train the model.",
     )
     parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument(
         "--micro_batch_size",
-        default=0,
         type=int,
+        default=0,
         help="micro batch size to train the model. if the model is being "
         "trained on CUDA device and micro batch size 0 is provided, then "
         "automatically increase micro batch size until OOM.",
@@ -416,7 +416,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument(
-        "--amp", action="store_true", help="automatic mixed precision training"
+        "--amp",
+        action="store_true",
+        help="automatic mixed precision training",
     )
     parser.add_argument(
         "--grad_checkpointing",
@@ -529,7 +531,7 @@ if __name__ == "__main__":
             parser.add_argument("--num_filters", type=int, default=8)
             parser.add_argument("--dropout", type=float, default=0.0)
             parser.add_argument("--core_reg_scale", type=float, default=0)
-            parser.add_argument("--lr", default=0.001, type=float)
+            parser.add_argument("--lr", type=float, default=0.001)
         case "stacked2d":
             parser.add_argument("--num_layers", type=int, default=4)
             parser.add_argument("--dropout", type=float, default=0.0)
@@ -538,7 +540,7 @@ if __name__ == "__main__":
             parser.add_argument(
                 "--linear", action="store_true", help="remove non-linearity in core"
             )
-            parser.add_argument("--lr", default=0.009, type=float)
+            parser.add_argument("--lr", type=float, default=0.009)
         case "vit":
             parser.add_argument("--patch_size", type=int, default=8)
             parser.add_argument(
@@ -585,7 +587,7 @@ if __name__ == "__main__":
                 help="Disable bias terms in linear layers in ViT.",
             )
             parser.add_argument("--core_reg_scale", type=float, default=0.5379)
-            parser.add_argument("--lr", default=0.001647, type=float)
+            parser.add_argument("--lr", type=float, default=0.001647)
         case "cct":
             parser.add_argument("--patch_size", type=int, default=8)
             parser.add_argument(
@@ -617,13 +619,13 @@ if __name__ == "__main__":
                 help="stochastic depth dropout rate",
             )
             parser.add_argument("--core_reg_scale", type=float, default=0.5379)
-            parser.add_argument("--lr", default=0.001647, type=float)
+            parser.add_argument("--lr", type=float, default=0.001647)
         case "stn":
             parser.add_argument("--num_layers", type=int, default=7)
             parser.add_argument("--num_filters", type=int, default=63)
             parser.add_argument("--dropout", type=float, default=0.1135)
             parser.add_argument("--core_reg_scale", type=float, default=0.0450)
-            parser.add_argument("--lr", default=0.001, type=float)
+            parser.add_argument("--lr", type=float, default=0.001)
         case _:
             raise NotImplementedError(f"--core {temp_args.core} not implemented.")
 
