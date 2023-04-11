@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 class ImageShifter(nn.Module):
     def __init__(
         self,
-        args,
+        args: t.Any,
         max_shift: float,
         hidden_features: int = 10,
         num_layers: int = 1,
@@ -57,7 +57,7 @@ class ImageCropper(nn.Module):
         4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
 
-    def __init__(self, args, ds: t.Dict[str, DataLoader]):
+    def __init__(self, args: t.Any, ds: t.Dict[str, DataLoader]):
         super().__init__()
         self.shift_mode = args.shift_mode
         self.input_shape = args.input_shape

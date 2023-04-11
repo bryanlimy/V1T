@@ -11,7 +11,7 @@ class CoreShifter(nn.Module):
 
     def __init__(
         self,
-        args,
+        args: t.Any,
         in_features: int,
         hidden_features: int,
         num_layers: int,

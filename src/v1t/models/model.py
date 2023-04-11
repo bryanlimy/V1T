@@ -140,15 +140,16 @@ class Model(nn.Module):
             )
         return params
 
-    def regularizer(self, mouse_id: str):
-        loss = 0.0
-        loss += self.image_cropper.regularizer(mouse_id=mouse_id)
+    def regularizer(self, mouse_id: str) -> torch.tensor:
+        loss = []
+        if self.image_cropper.image_shifter is not None:
+            loss.append(self.image_cropper.regularizer(mouse_id=mouse_id))
         if not self.core.frozen:
-            loss += self.core.regularizer()
-        loss += self.readouts.regularizer(mouse_id=mouse_id)
+            loss.append(self.core.regularizer())
+        loss.append(self.readouts.regularizer(mouse_id=mouse_id))
         if self.core_shifter is not None:
-            loss += self.core_shifter.regularizer(mouse_id=mouse_id)
-        return loss
+            loss.append(self.core_shifter.regularizer(mouse_id=mouse_id))
+        return torch.sum(torch.stack(loss))
 
     def forward(
         self,
