@@ -28,8 +28,8 @@ def set_random_seed(seed: int, deterministic: bool = False):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.benchmark = False
     if deterministic:
-        torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
 
 
