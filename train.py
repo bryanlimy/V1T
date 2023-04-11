@@ -63,12 +63,11 @@ def train_step(
             reg_loss = (y_true.size(0) / batch_size) * model.regularizer(mouse_id)
             total_loss = loss + reg_loss
         scaler.scale(total_loss).backward()
-        result["loss/loss"].append(loss.detach())
-        result["loss/reg_loss"].append(reg_loss.detach())
-        result["loss/total_loss"].append(total_loss.detach())
-        targets.append(y_true.detach())
-        predictions.append(y_pred.detach())
-        del micro_batch
+        result["loss/loss"].append(loss.detach().cpu())
+        result["loss/reg_loss"].append(reg_loss.detach().cpu())
+        result["loss/total_loss"].append(total_loss.detach().cpu())
+        targets.append(y_true.detach().cpu())
+        predictions.append(y_pred.detach().cpu())
     if update:
         scaler.step(optimizer)
         scaler.update()
@@ -80,7 +79,6 @@ def train_step(
             y_pred=torch.vstack(predictions),
         )
     )
-    del batch, targets, predictions
     return result
 
 
