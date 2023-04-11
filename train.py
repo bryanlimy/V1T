@@ -68,6 +68,7 @@ def train_step(
         result["loss/total_loss"].append(total_loss.detach().cpu())
         targets.append(y_true.detach().cpu())
         predictions.append(y_pred.detach().cpu())
+        del micro_batch, y_true, y_pred
     if update:
         scaler.step(optimizer)
         scaler.update()
