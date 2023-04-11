@@ -28,7 +28,6 @@ def set_random_seed(seed: int, deterministic: bool = False):
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.benchmark = False
     if deterministic:
         torch.use_deterministic_algorithms(True)
 
@@ -40,6 +39,7 @@ def get_device(args):
         device = "cpu"
         if torch.cuda.is_available():
             device = "cuda"
+            torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.allow_tf32 = True
             torch.backends.cuda.matmul.allow_tf32 = True
         elif torch.backends.mps.is_available():
