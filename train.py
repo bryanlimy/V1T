@@ -71,7 +71,7 @@ def train_step(
     if update:
         scaler.step(optimizer)
         scaler.update()
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
     result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
     result.update(
         compute_metrics(
@@ -98,7 +98,7 @@ def train(
     # accumulate gradients over all mouse for one batch
     update_frequency = len(mouse_ids)
     model.train(True)
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
     for i, (mouse_id, mouse_batch) in tqdm(
         enumerate(ds), desc="Train", total=len(ds), disable=args.verbose < 2
     ):
