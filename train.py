@@ -585,6 +585,13 @@ if __name__ == "__main__":
                 help="stochastic depth dropout rate",
             )
             parser.add_argument(
+                "--attention_mode",
+                type=int,
+                default=0,
+                choices=[0, 1],
+                help="use FlashAttention implementation",
+            )
+            parser.add_argument(
                 "--use_lsa", action="store_true", help="Use Locality Self Attention"
             )
             parser.add_argument(
