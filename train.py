@@ -241,6 +241,11 @@ def main(args, wandb_sweep: bool = False):
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
+    if args.compile:
+        model = torch.compile(
+            model, fullgraph=False, backend="inductor", mode="default"
+        )
+
     utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
     while (epoch := epoch + 1) < args.epochs + 1:
@@ -416,8 +421,11 @@ if __name__ == "__main__":
     )
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument(
-        "--amp", action="store_true", help="automatic mixed precision training"
+        "--amp",
+        action="store_true",
+        help="automatic mixed precision training",
     )
+    parser.add_argument("--compile", action="store_true", help="use torch.compile")
     parser.add_argument(
         "--grad_checkpointing",
         type=int,
