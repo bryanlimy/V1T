@@ -63,12 +63,11 @@ def train_step(
             reg_loss = (y_true.size(0) / batch_size) * model.regularizer(mouse_id)
             total_loss = loss + reg_loss
         scaler.scale(total_loss).backward()
-        result["loss/loss"].append(loss.detach().cpu())
-        result["loss/reg_loss"].append(reg_loss.detach().cpu())
-        result["loss/total_loss"].append(total_loss.detach().cpu())
-        targets.append(y_true.detach().cpu())
-        predictions.append(y_pred.detach().cpu())
-        del micro_batch, y_true, y_pred
+        result["loss/loss"].append(loss.detach())
+        result["loss/reg_loss"].append(reg_loss.detach())
+        result["loss/total_loss"].append(total_loss.detach())
+        targets.append(y_true.detach())
+        predictions.append(y_pred.detach())
     if update:
         scaler.step(optimizer)
         scaler.update()
@@ -242,7 +241,7 @@ def main(args, wandb_sweep: bool = False):
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    utils.plot_samples(args, model=model, ds=val_ds, summary=summary, epoch=epoch)
+    utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -323,7 +322,7 @@ def main(args, wandb_sweep: bool = False):
     if args.use_wandb:
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
     utils.plot_samples(
-        args, model=model, ds=val_ds, summary=summary, epoch=epoch, mode=2
+        args, model=model, ds=test_ds, summary=summary, epoch=epoch, mode=2
     )
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
@@ -398,7 +397,7 @@ if __name__ == "__main__":
         default=400,
         help="maximum epochs to train the model.",
     )
-    parser.add_argument("--batch_size", default=8, type=int)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument(
         "--micro_batch_size",
         type=int,
@@ -410,16 +409,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--device",
         type=str,
-        choices=["cpu", "cuda", "mps"],
         default="",
+        choices=["cpu", "cuda", "mps"],
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument(
-        "--amp",
-        action="store_true",
-        help="automatic mixed precision training",
+        "--amp", action="store_true", help="automatic mixed precision training"
     )
     parser.add_argument(
         "--grad_checkpointing",
@@ -441,8 +438,8 @@ if __name__ == "__main__":
     parser.add_argument("--adam_eps", type=float, default=1e-8)
     parser.add_argument(
         "--criterion",
-        default="poisson",
         type=str,
+        default="poisson",
         help="criterion (loss function) to use.",
     )
     parser.add_argument(

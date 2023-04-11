@@ -43,7 +43,7 @@ class CoreShifter(nn.Module):
 class CoreShifters(ModuleDict):
     def __init__(
         self,
-        args,
+        args: t.Any,
         mouse_ids: t.List[str],
         input_channels: int,
         hidden_features: int,

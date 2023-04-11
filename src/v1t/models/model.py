@@ -25,12 +25,11 @@ def get_model_info(
     summary: tensorboard.Summary = None,
     device: torch.device = "cpu",
     tag: str = "model/trainable_parameters",
-    depth: int = 5,
 ):
     args = {
         "model": model,
         "input_data": input_data,
-        "depth": depth,
+        "depth": 5,
         "device": device,
         "verbose": 0,
     }
@@ -140,16 +139,15 @@ class Model(nn.Module):
             )
         return params
 
-    def regularizer(self, mouse_id: str) -> torch.tensor:
-        loss = []
-        if self.image_cropper.image_shifter is not None:
-            loss.append(self.image_cropper.regularizer(mouse_id=mouse_id))
+    def regularizer(self, mouse_id: str):
+        reg = 0
         if not self.core.frozen:
-            loss.append(self.core.regularizer())
-        loss.append(self.readouts.regularizer(mouse_id=mouse_id))
+            reg += self.core.regularizer()
+        reg += self.readouts.regularizer(mouse_id=mouse_id)
+        reg += self.image_cropper.regularizer(mouse_id=mouse_id)
         if self.core_shifter is not None:
-            loss.append(self.core_shifter.regularizer(mouse_id=mouse_id))
-        return torch.sum(torch.stack(loss))
+            reg += self.core_shifter.regularizer(mouse_id=mouse_id)
+        return reg
 
     def forward(
         self,
@@ -233,7 +231,6 @@ def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = 
         filename=os.path.join(args.output_dir, "model_core.txt"),
         summary=summary,
         tag="model/trainable_parameters/core",
-        depth=6,
     )
     # get readout summary
     get_model_info(

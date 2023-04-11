@@ -29,6 +29,7 @@ def set_random_seed(seed: int, deterministic: bool = False):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     if deterministic:
+        torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
 
 
@@ -39,7 +40,6 @@ def get_device(args):
         device = "cpu"
         if torch.cuda.is_available():
             device = "cuda"
-            torch.backends.cudnn.benchmark = False
             torch.backends.cudnn.allow_tf32 = True
             torch.backends.cuda.matmul.allow_tf32 = True
         elif torch.backends.mps.is_available():
@@ -252,8 +252,7 @@ def plot_samples(
                 results["pupil_center"].append(micro_batch["pupil_center"])
                 results["behaviors"].append(micro_batch["behavior"])
                 results["image_ids"].append(micro_batch["image_id"])
-                num_samples += len(images)
-                should_break = num_samples >= num_plots
+                should_break = (num_samples := num_samples + len(images)) >= num_plots
                 if should_break:
                     break
             if should_break:
