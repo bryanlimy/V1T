@@ -24,9 +24,9 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
     correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
     return {
-        "metrics/msse": msse.cpu(),
-        "metrics/poisson_loss": poisson_loss.cpu(),
-        "metrics/single_trial_correlation": correlation.cpu(),
+        "metrics/msse": msse,
+        "metrics/poisson_loss": poisson_loss,
+        "metrics/single_trial_correlation": correlation,
     }
 
 
@@ -72,13 +72,14 @@ def train_step(
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
-    result = {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
+    result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
     result.update(
         compute_metrics(
             y_true=torch.vstack(targets),
             y_pred=torch.vstack(predictions),
         )
     )
+    del batch, targets, predictions
     return result
 
 
@@ -153,7 +154,7 @@ def validation_step(
         result["loss/total_loss"].append(total_loss.detach())
         targets.append(y_true.detach())
         predictions.append(y_pred.detach())
-    result = {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
+    result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
     result.update(
         compute_metrics(
             y_true=torch.vstack(targets),
