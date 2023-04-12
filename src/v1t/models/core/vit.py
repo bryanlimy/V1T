@@ -268,7 +268,7 @@ class Attention(nn.Module):
         if self.grad_checkpointing:
             outputs = checkpoint(self._forward, inputs, use_reentrant=False)
         else:
-            outputs = self.forward(inputs)
+            outputs = self._forward(inputs)
         return outputs
 
 
