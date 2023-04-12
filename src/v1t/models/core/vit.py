@@ -241,7 +241,7 @@ class Attention(nn.Module):
             self.mask = None
             self.register_buffer("scale", torch.tensor(scale))
 
-    def _forward(self, inputs: torch.Tensor):
+    def mha(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         inputs = self.layer_norm(inputs)
         qkv = self.to_qkv(inputs).chunk(3, dim=-1)
@@ -249,14 +249,12 @@ class Attention(nn.Module):
             lambda a: rearrange(a, "b n (h d) -> b h n d", h=self.num_heads),
             qkv,
         )
-
         if self.mask is None:
             dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
         else:
             scale = repeat(self.scale, "h -> b h 1 1", b=batch_size)
             dots = torch.matmul(q, k.transpose(-1, -2)) * scale
             dots[:, :, self.mask[:, 0], self.mask[:, 1]] = -self.max_value
-
         attn = self.attend(dots)
         attn = self.dropout(attn)
         outputs = einsum(attn, v, "b h n i, b h i d -> b h n d")
@@ -266,9 +264,11 @@ class Attention(nn.Module):
 
     def forward(self, inputs: torch.Tensor):
         if self.grad_checkpointing:
-            outputs = checkpoint(self._forward, inputs, use_reentrant=False)
+            outputs = checkpoint(
+                self.mha, inputs, preserve_rng_state=True, use_reentrant=False
+            )
         else:
-            outputs = self._forward(inputs)
+            outputs = self.mha(inputs)
         return outputs
 
 
