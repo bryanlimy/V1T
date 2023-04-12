@@ -204,9 +204,6 @@ def main(args, wandb_sweep: bool = False):
     utils.set_random_seed(args.seed, deterministic=args.deterministic)
 
     data.get_mouse_ids(args)
-
-    if args.grad_checkpointing is None and args.core in ("vit", "cct"):
-        args.grad_checkpointing = "cuda" in args.device.type
     utils.compute_micro_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(

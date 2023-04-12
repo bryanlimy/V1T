@@ -378,10 +378,10 @@ class ViTCore(Core):
         )
         if not hasattr(args, "grad_checkpointing"):
             args.grad_checkpointing = False
+        elif args.grad_checkpointing is None:
+            args.grad_checkpointing = "cuda" in args.device.type
         if args.grad_checkpointing and args.verbose:
             print(f"Enable gradient checkpointing in ViT")
-        if not hasattr(args, "disable_bias"):
-            args.disable_bias = False
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,
