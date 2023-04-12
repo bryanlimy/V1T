@@ -11,8 +11,6 @@ from torch.utils.checkpoint import checkpoint
 
 from v1t.models.utils import DropPath
 
-ATTENTION_MODE = t.Literal[0, 1]
-
 
 class PatchShifting(nn.Module):
     """Patch shifting for Shifted Patch Tokenization"""
@@ -194,120 +192,75 @@ class BehaviorMLP(nn.Module):
         return self.models[mouse_id](inputs)
 
 
-class ScaledDotProductAttention(nn.Module):
+class Attention(nn.Module):
     def __init__(
         self,
-        attention_mode: ATTENTION_MODE,
         num_patches: int,
         emb_dim: int,
-        num_heads: int,
-        dropout: float = 0.0,
-        use_lsa: bool = False,
-        is_causal: bool = False,
-    ):
-        """Scaled dot product attention layer
-        Attention mode:
-            0 - use custom attention layer
-            1 - use efficient F.scaled_dot_product_attention
-        """
-        super(ScaledDotProductAttention, self).__init__()
-        assert attention_mode in (0, 1)
-        self.attention_mode = 0 if use_lsa else attention_mode
-        self.dropout = dropout
-        self.is_causal = is_causal
-
-        if self.attention_mode == 0:
-            self.softmax = nn.Softmax(dim=-1)
-            self.dropout = nn.Dropout(p=self.dropout)
-
-            scale = math.sqrt(emb_dim)
-            if use_lsa:
-                self.register_parameter(
-                    "scale",
-                    nn.Parameter(torch.full(size=(num_heads,), fill_value=scale)),
-                )
-                self.register_buffer(
-                    "mask",
-                    torch.nonzero(
-                        torch.eye(num_patches, num_patches) == 1, as_tuple=False
-                    ),
-                )
-                self.register_buffer(
-                    "max_value",
-                    torch.tensor(torch.finfo(torch.get_default_dtype()).max),
-                )
-            else:
-                self.mask = None
-                self.register_buffer("scale", torch.tensor(scale))
-
-    def custom_attention(
-        self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
-    ):
-        batch_size = query.size(0)
-        outputs = torch.matmul(query, key.transpose(-1, -2))
-        if self.mask is None:
-            outputs = outputs / self.scale
-        else:
-            outputs = outputs / repeat(self.scale, "h -> b h 1 1", b=batch_size)
-            outputs[:, :, self.mask[:, 0], self.mask[:, 1]] = -self.max_value
-        outputs = self.softmax(outputs)
-        outputs = self.dropout(outputs)
-        outputs = einsum(outputs, value, "b h n i, b h i d -> b h n d")
-        return outputs
-
-    def forward(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor):
-        if self.attention_mode == 0:
-            outputs = self.custom_attention(query, key, value)
-        else:
-            outputs = F.scaled_dot_product_attention(
-                query, key, value, dropout_p=self.dropout, is_causal=self.is_causal
-            )
-        outputs = rearrange(outputs, "b h n d -> b n (h d)")
-        return outputs
-
-
-class MultiHeadAttention(nn.Module):
-    def __init__(
-        self,
-        attention_mode: ATTENTION_MODE,
-        num_patches: int,
-        emb_dim: int,
-        num_heads: int,
+        num_heads: int = 8,
         dropout: float = 0.0,
         use_lsa: bool = False,
         use_bias: bool = True,
         grad_checkpointing: bool = False,
     ):
-        super(MultiHeadAttention, self).__init__()
+        super(Attention, self).__init__()
         self.grad_checkpointing = grad_checkpointing
         inner_dim = emb_dim * num_heads
 
-        self.layer_norm = nn.LayerNorm(emb_dim)
+        self.num_heads = num_heads
+
+        self.attend = nn.Softmax(dim=-1)
+        self.dropout = nn.Dropout(p=dropout)
+
         self.to_qkv = nn.Linear(
             in_features=emb_dim, out_features=inner_dim * 3, bias=False
         )
-        self.rearrange = Rearrange("b n (h d) -> b h n d", h=num_heads)
-        self.scaled_dot_attention = ScaledDotProductAttention(
-            attention_mode=attention_mode,
-            dropout=dropout,
-            use_lsa=use_lsa,
-            num_patches=num_patches,
-            emb_dim=emb_dim,
-            num_heads=num_heads,
-        )
+
         self.projection = nn.Sequential(
             nn.Linear(in_features=inner_dim, out_features=emb_dim, bias=use_bias),
             nn.Dropout(p=dropout),
         )
+        self.layer_norm = nn.LayerNorm(emb_dim)
+
+        scale = emb_dim**-0.5
+        if use_lsa:
+            self.register_parameter(
+                "scale",
+                param=nn.Parameter(torch.full(size=(num_heads,), fill_value=scale)),
+            )
+            diagonal = torch.eye(num_patches, num_patches)
+            self.register_buffer(
+                "mask",
+                torch.nonzero(diagonal == 1, as_tuple=False),
+            )
+            self.register_buffer(
+                "max_value",
+                torch.tensor(torch.finfo(torch.get_default_dtype()).max),
+            )
+        else:
+            self.mask = None
+            self.register_buffer("scale", torch.tensor(scale))
 
     def _forward(self, inputs: torch.Tensor):
-        outputs = self.layer_norm(inputs)
-        q, k, v = self.to_qkv(outputs).chunk(3, dim=-1)
-        outputs = self.scaled_dot_attention(
-            query=self.rearrange(q),
-            key=self.rearrange(k),
-            value=self.rearrange(v),
+        batch_size = inputs.size(0)
+        inputs = self.layer_norm(inputs)
+        qkv = self.to_qkv(inputs).chunk(3, dim=-1)
+        q, k, v = map(
+            lambda a: rearrange(a, "b n (h d) -> b h n d", h=self.num_heads),
+            qkv,
         )
+
+        if self.mask is None:
+            dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+        else:
+            scale = repeat(self.scale, "h -> b h 1 1", b=batch_size)
+            dots = torch.matmul(q, k.transpose(-1, -2)) * scale
+            dots[:, :, self.mask[:, 0], self.mask[:, 1]] = -self.max_value
+
+        attn = self.attend(dots)
+        attn = self.dropout(attn)
+        outputs = einsum(attn, v, "b h n i, b h i d -> b h n d")
+        outputs = rearrange(outputs, "b h n d -> b n (h d)")
         outputs = self.projection(outputs)
         return outputs
 
@@ -315,7 +268,7 @@ class MultiHeadAttention(nn.Module):
         if self.grad_checkpointing:
             outputs = checkpoint(self._forward, inputs, use_reentrant=False)
         else:
-            outputs = self._forward(inputs)
+            outputs = self.forward(inputs)
         return outputs
 
 
@@ -323,7 +276,6 @@ class Transformer(nn.Module):
     def __init__(
         self,
         input_shape: t.Tuple[int, int],
-        attention_mode: ATTENTION_MODE,
         emb_dim: int,
         num_blocks: int,
         num_heads: int,
@@ -336,20 +288,19 @@ class Transformer(nn.Module):
         use_bias: bool = True,
         grad_checkpointing: bool = False,
     ):
-        super().__init__()
+        super(Transformer, self).__init__()
         self.blocks = nn.ModuleList([])
-        self.grad_checkpointing = grad_checkpointing
         for i in range(num_blocks):
             block = nn.ModuleDict(
                 {
-                    "mha": MultiHeadAttention(
-                        attention_mode=attention_mode,
+                    "mha": Attention(
                         num_patches=input_shape[0],
                         emb_dim=emb_dim,
                         num_heads=num_heads,
                         dropout=dropout,
                         use_lsa=use_lsa,
                         use_bias=use_bias,
+                        grad_checkpointing=grad_checkpointing,
                     ),
                     "mlp": MLP(
                         in_dim=emb_dim,
@@ -429,9 +380,10 @@ class ViTCore(Core):
             args.grad_checkpointing = False
         if args.grad_checkpointing and args.verbose:
             print(f"Enable gradient checkpointing in ViT")
+        if not hasattr(args, "disable_bias"):
+            args.disable_bias = False
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
-            attention_mode=args.attention_mode,
             emb_dim=args.emb_dim,
             num_blocks=args.num_blocks,
             num_heads=args.num_heads,
