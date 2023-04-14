@@ -117,7 +117,7 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
 
     # plt.show()
 
-    filename = os.path.join(args.output_dir, "plots", f"location_filters.{args.format}")
+    filename = os.path.join(args.output_dir, "plots", f"receptive_fields.{args.format}")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved weighted RFs to {filename}.")
 
