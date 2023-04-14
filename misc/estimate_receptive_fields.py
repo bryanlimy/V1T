@@ -117,7 +117,7 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
 
     # plt.show()
 
-    filename = os.path.join(args.output_dir, "plots", "location_filters.png")
+    filename = os.path.join(args.output_dir, "plots", f"location_filters.{args.format}")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved weighted RFs to {filename}.")
 
@@ -241,7 +241,7 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
 
     # plt.show()
 
-    filename = os.path.join(args.output_dir, "plots", "fit_gaussian.png")
+    filename = os.path.join(args.output_dir, "plots", f"fit_gaussian.{args.format}")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved plot to {filename}.")
 
@@ -291,4 +291,7 @@ if __name__ == "__main__":
     parser.add_argument("--sample_size", type=int, default=100000)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument(
+        "--format", type=str, default="svg", choices=["png", "jpg", "pdf", "svg"]
+    )
     main(parser.parse_args())
