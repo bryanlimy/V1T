@@ -76,16 +76,7 @@ def inference(args, model: Model, ds: DataLoader):
     return activations
 
 
-def compute_weighted_RFs(args, activations: torch.tensor, noise: torch.tensor):
-    # num_units = activations.size(1)
-    # RFs = torch.zeros(
-    #     (num_units,) + noise.shape[1:], device=args.device
-    # )
-    #
-    # for unit in tqdm(range(num_units), desc="Compute activations"):
-    #     activation = activations[:, unit]
-    #     RF = noise * repeat(activation, "b -> b 1 1 1")
-    #     RFs[unit] = torch.sum(RF, dim=0)
+def estimate_RFs(activations: torch.tensor, noise: torch.tensor):
     RFs = einsum(activations, noise, "b n, b c h w -> n c h w")
     return RFs
 
@@ -272,7 +263,7 @@ def main(args):
         ds, noise = generate_ds(args, num_samples=args.sample_size)
         activations = inference(args, model=model, ds=ds)
 
-        weighted_RFs = compute_weighted_RFs(args, activations=activations, noise=noise)
+        weighted_RFs = estimate_RFs(activations=activations, noise=noise)
 
         with open(filename, "wb") as file:
             pickle.dump(weighted_RFs, file)
