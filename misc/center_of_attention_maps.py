@@ -17,7 +17,6 @@ from v1t.utils.scheduler import Scheduler
 
 from vit_visualization import Recorder, attention_rollout
 
-utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
 
@@ -87,9 +86,12 @@ def mutual_information(x: np.ndarray, y: np.ndarray):
 def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
-    utils.load_args(args)
+
+    utils.set_random_seed(1234)
+
     args.batch_size = 1
     args.device = torch.device(args.device)
+    utils.load_args(args)
 
     filename = os.path.join(args.output_dir, "center_mass.pkl")
     if not os.path.exists(filename) or args.overwrite:
@@ -109,7 +111,7 @@ def main(args):
 
         results = {}
         for mouse_id, mouse_ds in test_ds.items():
-            if mouse_id == "1":
+            if mouse_id in ("S0", "S1"):
                 continue
             results[mouse_id] = extract_attention_maps(
                 mouse_id=mouse_id, ds=mouse_ds, model=model

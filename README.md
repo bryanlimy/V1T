@@ -65,10 +65,10 @@ sensorium2022/
   ```bash
   sh setup.sh
   ```
-- Alternative, you can install PyTorch 1.13.1 and all the relevant packages with:
+- Alternative, you can install PyTorch 2.0 and all the relevant packages with:
   ```bash
   # install PyTorch
-  conda install -c pytorch pytorch=1.13.1 torchvision torchaudio -y
+  conda install -c pytorch pytorch=2.0 torchvision torchaudio -y
   # install V1T package
   pip install -e .
   ```
