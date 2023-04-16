@@ -91,33 +91,36 @@ def main(args):
     args.batch_size = 1
     args.device = torch.device(args.device)
 
-    # _, _, test_ds = data.get_training_ds(
-    #     args,
-    #     data_dir=args.dataset,
-    #     mouse_ids=args.mouse_ids,
-    #     batch_size=args.batch_size,
-    #     device=args.device,
-    # )
-    #
-    # model = Model(args, ds=test_ds)
-    # model.train(False)
-    #
-    # scheduler = Scheduler(args, model=model, save_optimizer=False)
-    # scheduler.restore(force=True)
-    #
-    # results = {}
-    # for mouse_id, mouse_ds in test_ds.items():
-    #     if mouse_id == "1":
-    #         continue
-    #     results[mouse_id] = extract_attention_maps(
-    #         mouse_id=mouse_id, ds=mouse_ds, model=model
-    #     )
-    #
-    # with open("center_mass.pkl", "wb") as file:
-    #     pickle.dump(results, file)
+    filename = os.path.join(args.output_dir, "center_mass.pkl")
+    if not os.path.exists(filename) or args.overwrite:
+        _, _, test_ds = data.get_training_ds(
+            args,
+            data_dir=args.dataset,
+            mouse_ids=args.mouse_ids,
+            batch_size=args.batch_size,
+            device=args.device,
+        )
 
-    with open("center_mass.pkl", "rb") as file:
-        results = pickle.load(file)
+        model = Model(args, ds=test_ds)
+        model.train(False)
+
+        scheduler = Scheduler(args, model=model, save_optimizer=False)
+        scheduler.restore(force=True)
+
+        results = {}
+        for mouse_id, mouse_ds in test_ds.items():
+            if mouse_id == "1":
+                continue
+            results[mouse_id] = extract_attention_maps(
+                mouse_id=mouse_id, ds=mouse_ds, model=model
+            )
+
+        with open(filename, "wb") as file:
+            pickle.dump(results, file)
+    else:
+        print(f"load attention maps from {filename}.")
+        with open(filename, "rb") as file:
+            results = pickle.load(file)
 
     spreads = {"x": [], "y": []}
     for mouse_id, mouse_dict in results.items():
@@ -157,6 +160,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--device", type=str, default="cpu")
 
     main(parser.parse_args())

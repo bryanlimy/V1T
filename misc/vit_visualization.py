@@ -1,6 +1,7 @@
 import os
 import torch
 import argparse
+import matplotlib
 import numpy as np
 import typing as t
 import matplotlib.cm as cm
@@ -12,8 +13,6 @@ from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
 from v1t.utils.attention_rollout import attention_rollout, Recorder
 
-
-utils.set_random_seed(1234)
 
 BACKGROUND_COLOR = "#ffffff"
 
@@ -31,7 +30,7 @@ def plot_attention_map(
     colormap: str = "turbo",
     alpha: float = 0.5,
 ):
-    cmap = cm.get_cmap(colormap)
+    cmap = matplotlib.colormaps.get_cmap(colormap)
     colors = cmap(np.arange(256))[:, :3]
     label_fontsize, tick_fontsize = 10, 8
     figure, axes = plt.subplots(
@@ -102,7 +101,7 @@ def plot_attention_map_2(
     alpha: float = 0.5,
 ):
     assert len(val_results) == len(test_results) == 3
-    cmap = cm.get_cmap(colormap)
+    cmap = matplotlib.colormaps.get_cmap(colormap)
     colors = cmap(np.arange(256))[:, :3]
     label_fontsize, tick_fontsize = 10, 8
     figure, axes = plt.subplots(
@@ -187,6 +186,8 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
     tensorboard.set_font()
+
+    utils.set_random_seed(1234)
 
     utils.load_args(args)
     args.batch_size = 1
