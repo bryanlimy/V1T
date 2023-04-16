@@ -4,7 +4,7 @@
 
 ![](misc/images/v1t.png)
 
-Authors: Bryan M. Li, Isabel M. Cornacchia, Nathalie L. Rochefort, Arno Onken
+Authors: [Bryan M. Li](https://twitter.com/bryanlimy), [Isabel M. Cornacchia](https://twitter.com/isabelmaria_c), [Nathalie L. Rochefort](https://twitter.com/RochefortLab), [Arno Onken](https://homepages.inf.ed.ac.uk/aonken/)
 
 ```bibtex
 @article{li2023v1t,
@@ -76,13 +76,17 @@ sensorium2022/
 ## Train model
 - An example command to train a V1T core and Gaussian readout on the Sensorium+ dataset
   ```bash
-  python train.py --data data/sensorium --output_dir runs/v1t_model --core vit --readout gaussian2d --ds_scale --behavior_mode 3 --epochs 400 --batch_size 16
+  python train.py --dataset data/sensorium --output_dir runs/v1t_model --core vit --readout gaussian2d --behavior_mode 3 --batch_size 16
   ```
 - use the `--help` flag to see all available options
 
 ## Visualize training performance
-- Use the following command to monitor training performance with [TensorBoard](https://www.tensorflow.org/tensorboard)
-  ```bash
-  tensorboard --logidr runs/v1t_model --port 6006
-  ```
-- Visit `localhost:6006` on your browser
+- The training code `train.py` uses both [TensorBoard](https://www.tensorflow.org/tensorboard) and [Weights & Biases](https://wandb.ai/site) to log training information.
+  - TensorBoard
+    - Use the following command to monitor training performance with TensorBoard
+      ```bash
+      tensorboard --logidr runs/v1t_model --port 6006
+      ```
+    - Visit `localhost:6006` on your browser
+  - Weights & Biases
+    - use `--use_wandb` and (optional) `--wandb_group <group name>` to enable `wandb` logging.
