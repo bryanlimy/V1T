@@ -3,6 +3,7 @@ import torch
 import pickle
 import argparse
 import numpy as np
+import typing as t
 from tqdm import tqdm
 from scipy.stats import pearsonr
 from torch.utils.data import DataLoader
@@ -77,6 +78,21 @@ def computer_centers(heatmaps: np.ndarray):
     return centers
 
 
+def abs_correlation(x: np.ndarray, y: np.ndarray) -> t.Tuple[float, str]:
+    """Return the absolute Pearson correlation and its p-value in asterisk"""
+    corr, p_value = pearsonr(x, y)
+    asterisks = "n.s."
+    if p_value <= 0.0001:
+        asterisks = "****"
+    elif p_value <= 0.001:
+        asterisks = "***"
+    elif p_value <= 0.01:
+        asterisks = "**"
+    elif p_value <= 0.05:
+        asterisks = "*"
+    return np.abs(corr), asterisks
+
+
 def mutual_information(x: np.ndarray, y: np.ndarray):
     c_xy = np.histogram2d(x, y, len(x))[0]
     mi = mutual_info_score(None, None, contingency=c_xy)
@@ -95,7 +111,7 @@ def main(args):
 
     filename = os.path.join(args.output_dir, "center_mass.pkl")
     if not os.path.exists(filename) or args.overwrite:
-        _, _, test_ds = data.get_training_ds(
+        _, val_ds, test_ds = data.get_training_ds(
             args,
             data_dir=args.dataset,
             mouse_ids=args.mouse_ids,
@@ -103,7 +119,7 @@ def main(args):
             device=args.device,
         )
 
-        model = Model(args, ds=test_ds)
+        model = Model(args, ds=val_ds)
         model.train(False)
 
         scheduler = Scheduler(args, model=model, save_optimizer=False)
@@ -124,38 +140,31 @@ def main(args):
         with open(filename, "rb") as file:
             results = pickle.load(file)
 
-    spreads = {"x": [], "y": []}
     for mouse_id, mouse_dict in results.items():
         # compute correlation center of mass and pupil center
         mass_centers = computer_centers(mouse_dict["heatmaps"])
         pupil_centers = mouse_dict["pupil_centers"][:, 0, :]
-        corr_x, p_x = pearsonr(mass_centers[:, 0], pupil_centers[:, 0])
-        corr_y, p_y = pearsonr(mass_centers[:, 1], pupil_centers[:, 1])
+        corr_x, p_x = abs_correlation(mass_centers[:, 0], pupil_centers[:, 0])
+        corr_y, p_y = abs_correlation(mass_centers[:, 1], pupil_centers[:, 1])
+
         # standard deviation in x and y axes
         spread_x = np.std(np.sum(mouse_dict["heatmaps"], axis=1), axis=1)
         spread_y = np.std(np.sum(mouse_dict["heatmaps"], axis=2), axis=1)
         dilation = mouse_dict["behaviors"][:, 0, 0]
         # absolute correlation between pupil dilation and attention map
         # standard deviation
-        corr_dx, p_dx = pearsonr(spread_x, dilation)
-        corr_dy, p_dy = pearsonr(spread_y, dilation)
-        spreads["x"].append(np.abs(corr_dx))
-        spreads["y"].append(np.abs(corr_dy))
+        corr_dx, p_dx = abs_correlation(spread_x, dilation)
+        corr_dy, p_dy = abs_correlation(spread_y, dilation)
 
         print(
             f"Mouse {mouse_id}\n"
-            f"\tCorr(center of mass,  pupil center)\n"
-            f"\t\tx-axis: {corr_x:.03f} (p-value: {p_x:.03e})\n"
-            f"\t\ty-axis: {corr_y:.03f} (p-value: {p_y:.03e})\n"
-            f"\tCorr(attention map std, pupil dilation)\n"
-            f"\t\tx-axis: {corr_dx:.03f} (p-value: {p_dx:.03e})\n"
-            f"\t\ty-axis: {corr_dy:.03f} (p-value: {p_dy:.03e})\n"
+            f"\tAbs. Corr(center of mass,  pupil center)\n"
+            f"\t\tx-axis: {corr_x:.03f} ({p_x})\n"
+            f"\t\ty-axis: {corr_y:.03f} ({p_y})\n"
+            f"\tAbs. Corr(attention map std, pupil dilation)\n"
+            f"\t\tx-axis: {corr_dx:.03f} ({p_dx})\n"
+            f"\t\ty-axis: {corr_dy:.03f} ({p_dy})\n"
         )
-
-    print(
-        f'mean abs corr(dilation, spread): x-axis: {np.mean(spreads["x"]):.3f}, '
-        f'y-axis: {np.mean(spreads["y"]):.3f}'
-    )
 
 
 if __name__ == "__main__":
