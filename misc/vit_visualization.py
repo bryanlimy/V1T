@@ -1,18 +1,17 @@
 import os
-import torch
 import argparse
 import matplotlib
 import numpy as np
 import typing as t
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader
+
 
 from v1t import data
 from v1t.models.model import Model
 from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
-from v1t.utils.attention_rollout import attention_rollout, Recorder
+from v1t.utils.attention_rollout import extract_attention_maps
 
 
 def to_rgb(image: np.ndarray):
@@ -40,7 +39,7 @@ def plot_attention_map(
     )
     for i in range(len(results["images"])):
         image = results["images"][i]
-        heatmap = np.squeeze(results["heatmaps"][i], axis=0)
+        heatmap = results["heatmaps"][i]
         behavior = results["behaviors"][i]
         pupil_center = results["pupil_centers"][i]
         gray_image = image.shape[0] == 1
@@ -104,6 +103,7 @@ def plot_attention_map_2(
     cmap = matplotlib.colormaps.get_cmap(colormap)
     colors = cmap(np.arange(256))[:, :3]
     label_fontsize, tick_fontsize = 10, 8
+    x_labelpad, y_labelpad = 2, 1
     figure, axes = plt.subplots(
         nrows=2,
         ncols=3,
@@ -113,7 +113,7 @@ def plot_attention_map_2(
     )
     for i in range(len(val_results["images"])):
         image = val_results["images"][i]
-        heatmap = np.squeeze(val_results["heatmaps"][i], axis=0)
+        heatmap = val_results["heatmaps"][i]
         behavior = val_results["behaviors"][i]
         pupil_center = val_results["pupil_centers"][i]
         gray_image = image.shape[0] == 1
@@ -132,11 +132,13 @@ def plot_attention_map_2(
             f"({pupil_center[0]:.01f}, {pupil_center[1]:.01f}), "  # pupil center
             f"{behavior[2]:.01f}]"  # speed
         )
-        axes[0, i].set_xlabel(description, labelpad=0, fontsize=tick_fontsize)
-    axes[0, 0].set_ylabel("Validation samples", labelpad=0.05, fontsize=tick_fontsize)
+        axes[0, i].set_xlabel(description, labelpad=x_labelpad, fontsize=tick_fontsize)
+    axes[0, 0].set_ylabel(
+        "Validation samples", labelpad=y_labelpad, fontsize=tick_fontsize
+    )
     for i in range(len(test_results["images"])):
         image = test_results["images"][i]
-        heatmap = np.squeeze(test_results["heatmaps"][i], axis=0)
+        heatmap = test_results["heatmaps"][i]
         behavior = test_results["behaviors"][i]
         pupil_center = test_results["pupil_centers"][i]
         gray_image = image.shape[0] == 1
@@ -155,13 +157,8 @@ def plot_attention_map_2(
             f"({pupil_center[0]:.01f}, {pupil_center[1]:.01f}), "  # pupil center
             f"{behavior[2]:.01f}]"  # speed
         )
-        axes[1, i].set_xlabel(description, labelpad=0, fontsize=tick_fontsize)
-    axes[-1, 0].set_ylabel("Test samples", labelpad=0.05, fontsize=tick_fontsize)
-    # figure.suptitle(
-    #     r"$\bf{A}$ Attention rollout visualization",
-    #     y=axes[0].get_position().y1 + 0.05,
-    #     fontsize=tick_fontsize,
-    # )
+        axes[1, i].set_xlabel(description, labelpad=x_labelpad, fontsize=tick_fontsize)
+    axes[-1, 0].set_ylabel("Test samples", labelpad=y_labelpad, fontsize=tick_fontsize)
 
     # plot colorbar
     pos1 = axes[0, -1].get_position()
@@ -187,60 +184,6 @@ def plot_attention_map_2(
     if filename is not None:
         tensorboard.save_figure(figure, filename=filename, dpi=120)
         print(f"plot saved to {filename}.")
-
-
-@torch.no_grad()
-def extract_attention_maps(
-    ds: DataLoader,
-    model: Model,
-    num_plots: int = 3,
-    device: torch.device = "cpu",
-) -> t.Dict[str, np.ndarray]:
-    model.to(device)
-    model.train(False)
-    mouse_id = ds.dataset.mouse_id
-    i_transform_image = ds.dataset.i_transform_image
-    i_transform_behavior = ds.dataset.i_transform_behavior
-    i_transform_pupil_center = ds.dataset.i_transform_pupil_center
-    recorder = Recorder(model.core)
-    results = {"images": [], "attentions": [], "pupil_centers": [], "behaviors": []}
-    count = num_plots
-    for batch in ds:
-        images = batch["image"].to(device)
-        behaviors = batch["behavior"].to(device)
-        pupil_centers = batch["pupil_center"].to(device)
-        images, _ = model.image_cropper(
-            inputs=images,
-            mouse_id=mouse_id,
-            behaviors=behaviors,
-            pupil_centers=pupil_centers,
-        )
-        _, attentions = recorder(
-            images=images,
-            behaviors=behaviors,
-            pupil_centers=pupil_centers,
-            mouse_id=mouse_id,
-        )
-        recorder.clear()
-
-        results["images"].append(i_transform_image(images.cpu()))
-        results["attentions"].append(attentions.cpu())
-        results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
-        results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
-
-        if (count := count - len(images)) <= 0:
-            break
-
-    recorder.eject()
-    del recorder
-    results = {k: torch.vstack(v).numpy()[:num_plots] for k, v in results.items()}
-
-    results["heatmaps"] = np.zeros_like(results["images"])
-    for i in range(num_plots):
-        results["heatmaps"][i] = attention_rollout(
-            image=results["images"][i], attention=results["attentions"][i]
-        )
-    return results
 
 
 def main(args):
@@ -270,17 +213,17 @@ def main(args):
     mouse_id = "A"
 
     val_results = extract_attention_maps(
-        val_ds[mouse_id], model=model, device=args.device
+        val_ds[mouse_id], model=model, num_samples=3, device=args.device
     )
     test_results = extract_attention_maps(
-        test_ds[mouse_id], model=model, device=args.device
+        test_ds[mouse_id], model=model, num_samples=3, device=args.device
     )
 
     plot_dir = os.path.join(args.output_dir, "plots")
-    # plot_attention_map(
-    #     results=val_results,
-    #     filename=os.path.join(plot_dir, f"attention_rollout_mouse{mouse_id}.jpg"),
-    # )
+    plot_attention_map(
+        results=val_results,
+        filename=os.path.join(plot_dir, f"attention_rollout_mouse{mouse_id}.jpg"),
+    )
     plot_attention_map_2(
         val_results=val_results,
         test_results=test_results,

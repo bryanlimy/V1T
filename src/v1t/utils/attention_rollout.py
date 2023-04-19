@@ -2,8 +2,11 @@ import math
 import torch
 import numpy as np
 from torch import nn
+from torch.utils.data import DataLoader
 from torchvision.transforms.functional import resize
 
+
+from v1t.models import Model
 from v1t.models.core.vit import ViTCore, Attention
 
 
@@ -129,3 +132,70 @@ def attention_rollouts(attentions: torch.Tensor, image_shape: t.List[int]):
         for i in range(batch_size):
             heatmaps[i] = attention_rollout(attentions[i], image_shape=image_shape)
     return heatmaps
+
+
+@torch.no_grad()
+def extract_attention_maps(
+    ds: DataLoader,
+    model: Model,
+    num_samples: int = None,
+    device: torch.device = "cpu",
+) -> t.Dict[str, np.ndarray]:
+    """Extract attention rollout maps for a given DataLoader ds.
+
+    Args:
+        ds: DataLoader, DataLoader for a MouseDataset
+        model: Model, model with ViT/V1T core
+        num_samples: int, number of samples to extract, extract all samples if None.
+        device: torch.device, device to run on.
+    """
+    model.to(device)
+    model.train(False)
+
+    mouse_id = ds.dataset.mouse_id
+    i_transform_image = ds.dataset.i_transform_image
+    i_transform_behavior = ds.dataset.i_transform_behavior
+    i_transform_pupil_center = ds.dataset.i_transform_pupil_center
+
+    recorder = Recorder(model.core)
+    results = {"images": [], "heatmaps": [], "pupil_centers": [], "behaviors": []}
+
+    count = num_samples
+    for batch in ds:
+        images = batch["image"].to(device)
+        behaviors = batch["behavior"].to(device)
+        pupil_centers = batch["pupil_center"].to(device)
+        images, _ = model.image_cropper(
+            inputs=images,
+            mouse_id=mouse_id,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
+        )
+        _, attentions = recorder(
+            images=images,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
+            mouse_id=mouse_id,
+        )
+        recorder.clear()
+
+        # extract attention rollout maps within the loop in order to avoid OOM
+        heatmaps = attention_rollouts(
+            attentions=attentions, image_shape=images.shape[2:]
+        )
+
+        results["images"].append(i_transform_image(images.cpu()))
+        results["heatmaps"].append(heatmaps.cpu())
+        results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
+        results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
+
+        if num_samples is not None and (count := count - len(images)) <= 0:
+            break
+
+    recorder.eject()
+    del recorder
+
+    results = {k: torch.vstack(v).numpy() for k, v in results.items()}
+    if num_samples is not None:
+        results = {k: v[:num_samples] for k, v in results.items()}
+    return results

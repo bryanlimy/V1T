@@ -14,56 +14,10 @@ from v1t import data
 from v1t.utils import utils
 from v1t.models.model import Model
 from v1t.utils.scheduler import Scheduler
-from v1t.utils.attention_rollout import Recorder, attention_rollouts
+from v1t.utils.attention_rollout import extract_attention_maps
 
 
 BACKGROUND_COLOR = "#ffffff"
-
-
-@torch.no_grad()
-def extract_attention_maps(
-    ds: DataLoader, model: Model, device: torch.device = "cpu"
-) -> t.Dict[str, np.ndarray]:
-    model.to(device)
-    model.train(False)
-    mouse_id = ds.dataset.mouse_id
-    i_transform_image = ds.dataset.i_transform_image
-    i_transform_behavior = ds.dataset.i_transform_behavior
-    i_transform_pupil_center = ds.dataset.i_transform_pupil_center
-    recorder = Recorder(model.core)
-    results = {"images": [], "heatmaps": [], "pupil_centers": [], "behaviors": []}
-    for batch in tqdm(ds, desc=f"Mouse {mouse_id}"):
-        images = batch["image"].to(device)
-        behaviors = batch["behavior"].to(device)
-        pupil_centers = batch["pupil_center"].to(device)
-        images, _ = model.image_cropper(
-            inputs=images,
-            mouse_id=mouse_id,
-            behaviors=behaviors,
-            pupil_centers=pupil_centers,
-        )
-        _, attentions = recorder(
-            images=images,
-            behaviors=behaviors,
-            pupil_centers=pupil_centers,
-            mouse_id=mouse_id,
-        )
-        recorder.clear()
-
-        # extract attention rollout maps within the loop in order to avoid OOM
-        heatmaps = attention_rollouts(
-            attentions=attentions, image_shape=images.shape[2:]
-        )
-
-        results["images"].append(i_transform_image(images.cpu()))
-        results["heatmaps"].append(heatmaps.cpu())
-        results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
-        results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
-
-    recorder.eject()
-    del recorder
-
-    return {k: torch.vstack(v).numpy() for k, v in results.items()}
 
 
 def computer_centers(heatmaps: np.ndarray):
