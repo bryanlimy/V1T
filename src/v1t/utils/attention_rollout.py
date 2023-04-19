@@ -132,24 +132,25 @@ def attention_rollout_2(image: torch.Tensor, attention: torch.Tensor):
     - https://keras.io/examples/vision/probing_vits/#method-ii-attention-rollout
     - https://github.com/jeonsworld/ViT-pytorch/blob/main/visualize_attention_map.ipynb
     """
-    # take max values of attention heads
-    attention, _ = torch.max(attention, dim=1)
+    with torch.device(attention.device):
+        # take max values of attention heads
+        attention, _ = torch.max(attention, dim=1)
 
-    # to account for residual connections, we add an identity matrix to the
-    # attention matrix and re-normalize the weights.
-    residual_att = torch.eye(attention.size(1))
-    aug_att_mat = attention + residual_att
-    aug_att_mat = aug_att_mat / torch.sum(aug_att_mat, dim=-1, keepdim=True)
+        # to account for residual connections, we add an identity matrix to the
+        # attention matrix and re-normalize the weights.
+        residual_att = torch.eye(attention.size(1))
+        aug_att_mat = attention + residual_att
+        aug_att_mat = aug_att_mat / torch.sum(aug_att_mat, dim=-1, keepdim=True)
 
-    # recursively multiply the weight matrices
-    joint_attentions = torch.zeros_like(aug_att_mat)
-    joint_attentions[0] = aug_att_mat[0]
+        # recursively multiply the weight matrices
+        joint_attentions = torch.zeros_like(aug_att_mat)
+        joint_attentions[0] = aug_att_mat[0]
 
-    for n in range(1, aug_att_mat.size(0)):
-        joint_attentions[n] = torch.matmul(aug_att_mat[n], joint_attentions[n - 1])
+        for n in range(1, aug_att_mat.size(0)):
+            joint_attentions[n] = torch.matmul(aug_att_mat[n], joint_attentions[n - 1])
 
-    heatmap = joint_attentions[-1, 0, 1:]
-    heatmap = torch.reshape(heatmap, shape=find_shape(len(heatmap)))
-    heatmap = normalize(heatmap)
-    heatmap = F.resize(heatmap[None, ...], size=image.shape[1:], antialias=False)
+        heatmap = joint_attentions[-1, 0, 1:]
+        heatmap = torch.reshape(heatmap, shape=find_shape(len(heatmap)))
+        heatmap = normalize(heatmap)
+        heatmap = F.resize(heatmap[None, ...], size=image.shape[1:], antialias=False)
     return heatmap[0]
