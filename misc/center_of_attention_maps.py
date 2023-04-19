@@ -52,7 +52,7 @@ def extract_attention_maps(
 
         # extract attention rollout maps
         heatmaps = torch.zeros_like(images)
-        heatmaps = torch.squeeze(images, dim=1)  # remove channel dimension
+        heatmaps = torch.squeeze(heatmaps, dim=1)  # remove channel dimension
         for i in range(len(images)):
             heatmaps[i] = attention_rollout_2(image=images[i], attention=attentions[i])
 
