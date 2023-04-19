@@ -51,7 +51,9 @@ def extract_attention_maps(
         recorder.clear()
 
         # extract attention rollout maps
-        heatmaps = torch.zeros_like(images)
+        heatmaps = torch.zeros(
+            images.shape[-2:], dtype=images.dtype, device=images.device
+        )
         for i in range(len(images)):
             heatmaps[i] = attention_rollout_2(image=images[i], attention=attentions[i])
 
@@ -66,6 +68,7 @@ def extract_attention_maps(
 
     recorder.eject()
     del recorder
+
     results = {k: torch.vstack(v).numpy() for k, v in results.items()}
 
     return results
