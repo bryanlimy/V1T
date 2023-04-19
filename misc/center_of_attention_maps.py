@@ -50,15 +50,14 @@ def extract_attention_maps(
         )
         recorder.clear()
 
-        images = i_transform_image(images.cpu().numpy())
-        attentions = attentions.cpu().numpy()
-        behaviors = i_transform_behavior(behaviors.cpu().numpy())
-        pupil_centers = i_transform_pupil_center(pupil_centers.cpu().numpy())
-
         # extract attention rollout maps
-        heatmaps = np.zeros_like(images)
+        heatmaps = torch.zeros_like(images)
         for i in range(len(images)):
             heatmaps[i] = attention_rollout(image=images[i], attention=attentions[i])
+
+        images = i_transform_image(images.cpu())
+        behaviors = i_transform_behavior(behaviors.cpu())
+        pupil_centers = i_transform_pupil_center(pupil_centers.cpu())
 
         results["images"].append(images)
         results["heatmaps"].append(heatmaps)
