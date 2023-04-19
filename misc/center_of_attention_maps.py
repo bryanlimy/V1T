@@ -14,9 +14,7 @@ from v1t import data
 from v1t.utils import utils
 from v1t.models.model import Model
 from v1t.utils.scheduler import Scheduler
-
-
-from vit_visualization import Recorder, attention_rollout
+from v1t.utils.attention_rollout import Recorder, attention_rollout
 
 
 BACKGROUND_COLOR = "#ffffff"
@@ -33,7 +31,7 @@ def extract_attention_maps(
     i_transform_behavior = ds.dataset.i_transform_behavior
     i_transform_pupil_center = ds.dataset.i_transform_pupil_center
     recorder = Recorder(model.core)
-    results = {"images": [], "attentions": [], "pupil_centers": [], "behaviors": []}
+    results = {"images": [], "heatmaps": [], "pupil_centers": [], "behaviors": []}
     for batch in tqdm(ds, desc=f"Mouse {mouse_id}"):
         images = batch["image"].to(device)
         behaviors = batch["behavior"].to(device)
@@ -52,20 +50,25 @@ def extract_attention_maps(
         )
         recorder.clear()
 
-        results["images"].append(i_transform_image(images.cpu()))
-        results["attentions"].append(attentions.cpu())
-        # results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
-        # results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
+        images = i_transform_image(images.cpu().numpy())
+        attentions = attentions.cpu().numpy()
+        behaviors = i_transform_behavior(behaviors.cpu().numpy())
+        pupil_centers = i_transform_pupil_center(pupil_centers.cpu().numpy())
+
+        # extract attention rollout maps
+        heatmaps = np.zeros_like(images)
+        for i in range(len(images)):
+            heatmaps[i] = attention_rollout(image=images[i], attention=attentions[i])
+
+        results["images"].append(images)
+        results["heatmaps"].append(attentions)
+        results["behaviors"].append(behaviors)
+        results["pupil_centers"].append(pupil_centers)
 
     recorder.eject()
     del recorder
-    results = {k: torch.vstack(v).numpy() for k, v in results.items()}
+    results = {k: np.vstack(v) for k, v in results.items()}
 
-    results["heatmaps"] = np.zeros_like(results["images"])
-    for i in range(len(results["images"])):
-        results["heatmaps"][i] = attention_rollout(
-            image=results["images"][i], attention=results["attentions"][i]
-        )
     return results
 
 

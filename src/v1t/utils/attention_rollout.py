@@ -1,6 +1,7 @@
 import math
 import torch
 import numpy as np
+import typing as t
 from torch import nn
 from skimage.transform import resize
 
@@ -69,7 +70,6 @@ class Recorder(nn.Module):
         attentions = None
         if len(self.cache) > 0:
             attentions = torch.stack(self.cache, dim=1)
-        self.clear()
         return outputs, attentions
 
 
@@ -81,8 +81,8 @@ def find_shape(num_patches: int):
     return dim1, dim2
 
 
-def normalize(x: np.ndarray):
-    return (x - np.min(x)) / (np.max(x) - np.min(x))
+def normalize(x: t.Union[np.ndarray, torch.Tensor]):
+    return (x - x.min()) / (x.max() - x.min())
 
 
 def attention_rollout(image: np.ndarray, attention: np.ndarray):
