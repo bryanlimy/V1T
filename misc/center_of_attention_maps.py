@@ -61,7 +61,7 @@ def extract_attention_maps(
             heatmaps[i] = attention_rollout(image=images[i], attention=attentions[i])
 
         results["images"].append(images)
-        results["heatmaps"].append(attentions)
+        results["heatmaps"].append(heatmaps)
         results["behaviors"].append(behaviors)
         results["pupil_centers"].append(pupil_centers)
 
