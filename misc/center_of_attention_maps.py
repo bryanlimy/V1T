@@ -116,7 +116,7 @@ def main(args):
         )
 
     print(
-        f"\nAvg. Corr(center of mass, pupil center)\n"
+        f"Avg. Corr(center of mass, pupil center)\n"
         f'x-axis: {np.mean(center_corrs["x"]):.03f}\n'
         f'y-axis: {np.mean(center_corrs["y"]):.03f}\n'
         f"\nAvg. Corr(attention map std, pupil dilation)\n"
