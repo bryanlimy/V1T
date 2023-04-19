@@ -199,6 +199,8 @@ def extract_attention_maps(
     model.to(device)
     mouse_id = ds.dataset.mouse_id
     i_transform_image = ds.dataset.i_transform_image
+    i_transform_behavior = ds.dataset.i_transform_behavior
+    i_transform_pupil_center = ds.dataset.i_transform_pupil_center
     recorder = Recorder(model.core)
     results = {"images": [], "attentions": [], "pupil_centers": [], "behaviors": []}
     count = num_plots
@@ -222,12 +224,12 @@ def extract_attention_maps(
 
         results["images"].append(i_transform_image(images.cpu()))
         results["attentions"].append(attentions.cpu())
-        results["pupil_centers"].append(pupil_centers.cpu())
-        results["behaviors"].append(behaviors.cpu())
+        results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
+        results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
 
         if (count := count - len(images)) <= 0:
             break
-    
+
     recorder.eject()
     del recorder
     results = {k: torch.vstack(v).numpy()[:num_plots] for k, v in results.items()}
@@ -245,11 +247,10 @@ def main(args):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
     tensorboard.set_font()
 
+    utils.get_device(args)
     utils.set_random_seed(1234)
 
     utils.load_args(args)
-    args.batch_size = 1 if args.batch_size is None else args.batch_size
-    args.device = torch.device(args.device)
 
     _, val_ds, test_ds = data.get_training_ds(
         args,
@@ -290,7 +291,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--batch_size", type=int, default=None)
-    parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--device", type=str, default=None)
 
     main(parser.parse_args())

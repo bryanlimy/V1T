@@ -24,47 +24,47 @@ BACKGROUND_COLOR = "#ffffff"
 
 @torch.no_grad()
 def extract_attention_maps(
-    mouse_id: str,
-    ds: DataLoader,
-    model: Model,
-    hide_pupil_x: bool = False,
-    hide_pupil_y: bool = False,
-):
-    recorder = Recorder(vit=model.core)
+    ds: DataLoader, model: Model, device: torch.device = "cpu"
+) -> t.Dict[str, np.ndarray]:
+    model.to(device)
+    mouse_id = ds.dataset.mouse_id
     i_transform_image = ds.dataset.i_transform_image
-    i_transform_pupil_center = ds.dataset.i_transform_pupil_center
     i_transform_behavior = ds.dataset.i_transform_behavior
-    results = {"images": [], "heatmaps": [], "behaviors": [], "pupil_centers": []}
+    i_transform_pupil_center = ds.dataset.i_transform_pupil_center
+    recorder = Recorder(model.core)
+    results = {"images": [], "attentions": [], "pupil_centers": [], "behaviors": []}
     for batch in tqdm(ds, desc=f"Mouse {mouse_id}"):
-        pupil_center = batch["pupil_center"]
-        if hide_pupil_x:
-            pupil_center[:, 0] = 0.0
-        if hide_pupil_y:
-            pupil_center[:, 1] = 0.0
-        behavior = batch["behavior"]
-        image, _ = model.image_cropper(
-            inputs=batch["image"],
+        images = batch["image"].to(device)
+        behaviors = batch["behavior"].to(device)
+        pupil_centers = batch["pupil_center"].to(device)
+        images, _ = model.image_cropper(
+            inputs=images,
             mouse_id=mouse_id,
-            pupil_centers=pupil_center,
-            behaviors=behavior,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
         )
-        _, attention = recorder(
-            images=image,
-            behaviors=behavior,
-            pupil_centers=pupil_center,
+        _, attentions = recorder(
+            images=images,
+            behaviors=behaviors,
+            pupil_centers=pupil_centers,
             mouse_id=mouse_id,
         )
-        image = i_transform_image(image)
-        image, attention = image.numpy()[0], attention.numpy()[0]
-        heatmap = attention_rollout(image=image, attention=attention)
-        results["images"].append(image)
-        results["heatmaps"].append(heatmap)
-        results["behaviors"].append(i_transform_behavior(behavior))
-        results["pupil_centers"].append(i_transform_pupil_center(pupil_center))
         recorder.clear()
+
+        results["images"].append(i_transform_image(images.cpu()))
+        results["attentions"].append(attentions.cpu())
+        results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
+        results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
+
     recorder.eject()
     del recorder
-    results = {k: np.stack(v, axis=0) for k, v in results.items()}
+    results = {k: torch.vstack(v).numpy() for k, v in results.items()}
+
+    results["heatmaps"] = np.zeros_like(results["images"])
+    for i in range(len(results["images"])):
+        results["heatmaps"][i] = attention_rollout(
+            image=results["images"][i], attention=results["attentions"][i]
+        )
     return results
 
 
@@ -103,10 +103,9 @@ def main(args):
     if not os.path.isdir(args.output_dir):
         raise FileNotFoundError(f"Cannot find {args.output_dir}.")
 
+    utils.get_device(args)
     utils.set_random_seed(1234)
 
-    args.batch_size = 1
-    args.device = torch.device(args.device)
     utils.load_args(args)
 
     filename = os.path.join(args.output_dir, "center_mass.pkl")
@@ -130,7 +129,7 @@ def main(args):
             if mouse_id in ("S0", "S1"):
                 continue
             results[mouse_id] = extract_attention_maps(
-                mouse_id=mouse_id, ds=mouse_ds, model=model
+                ds=mouse_ds, model=model, device=args.device
             )
 
         with open(filename, "wb") as file:
@@ -169,9 +168,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument("--dataset", type=str, default="../data/sensorium")
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--batch_size", type=int, default=1)
+    parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--overwrite", action="store_true")
-    parser.add_argument("--device", type=str, default="cpu")
 
     main(parser.parse_args())
