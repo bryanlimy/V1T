@@ -5,11 +5,9 @@ import argparse
 import warnings
 import numpy as np
 import typing as t
-from torch import nn
 from tqdm import tqdm
 import scipy.optimize as opt
 import matplotlib.pyplot as plt
-from torch.nn import functional as F
 from einops import rearrange, einsum
 
 from v1t import data

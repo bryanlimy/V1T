@@ -19,9 +19,6 @@ from v1t.utils.scheduler import Scheduler
 
 
 sns.set_style("ticks")
-utils.set_random_seed(1234)
-
-BACKGROUND_COLOR = "#ffffff"
 
 
 @torch.no_grad()
@@ -137,6 +134,7 @@ def main(args):
     tensorboard.set_font()
 
     utils.load_args(args)
+    utils.set_random_seed(1234)
     args.device = torch.device(args.device)
 
     _, val_ds, test_ds = data.get_training_ds(

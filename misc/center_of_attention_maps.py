@@ -1,12 +1,9 @@
 import os
-import torch
 import pickle
 import argparse
 import numpy as np
 import typing as t
-from tqdm import tqdm
 from scipy.stats import pearsonr
-from torch.utils.data import DataLoader
 from scipy.ndimage import center_of_mass
 from sklearn.metrics import mutual_info_score
 
@@ -15,9 +12,6 @@ from v1t.utils import utils
 from v1t.models.model import Model
 from v1t.utils.scheduler import Scheduler
 from v1t.utils.attention_rollout import extract_attention_maps
-
-
-BACKGROUND_COLOR = "#ffffff"
 
 
 def computer_centers(heatmaps: np.ndarray):
@@ -91,12 +85,20 @@ def main(args):
         with open(filename, "rb") as file:
             results = pickle.load(file)
 
+    center_corrs, dilation_corrs = {"x": [], "y": []}, {"x": [], "y": []}
     for mouse_id, mouse_dict in results.items():
+        print(f"Mouse {mouse_id}")
         # compute correlation center of mass and pupil center
         mass_centers = computer_centers(mouse_dict["heatmaps"])
         pupil_centers = mouse_dict["pupil_centers"]
         corr_x, p_x = abs_correlation(mass_centers[:, 0], pupil_centers[:, 0])
         corr_y, p_y = abs_correlation(mass_centers[:, 1], pupil_centers[:, 1])
+        center_corrs["x"].append(corr_x)
+        center_corrs["y"].append(corr_y)
+        print(
+            f"\tAbs. Corr(center of mass, pupil center)\n"
+            f"\tx-axis: {corr_x:.03f} ({p_x})\n\ty-axis: {corr_y:.03f} ({p_y})"
+        )
 
         # standard deviation in x and y axes
         spread_x = np.std(np.sum(mouse_dict["heatmaps"], axis=1), axis=1)
@@ -104,18 +106,23 @@ def main(args):
         dilation = mouse_dict["behaviors"][:, 0]
         # absolute correlation between pupil dilation and attention map
         # standard deviation
-        corr_dx, p_dx = abs_correlation(spread_x, dilation)
-        corr_dy, p_dy = abs_correlation(spread_y, dilation)
-
+        corr_x, p_x = abs_correlation(spread_x, dilation)
+        corr_y, p_y = abs_correlation(spread_y, dilation)
+        dilation_corrs["x"].append(corr_x)
+        dilation_corrs["y"].append(corr_y)
         print(
-            f"Mouse {mouse_id}\n"
-            f"\tAbs. Corr(center of mass,  pupil center)\n"
-            f"\t\tx-axis: {corr_x:.03f} ({p_x})\n"
-            f"\t\ty-axis: {corr_y:.03f} ({p_y})\n"
             f"\tAbs. Corr(attention map std, pupil dilation)\n"
-            f"\t\tx-axis: {corr_dx:.03f} ({p_dx})\n"
-            f"\t\ty-axis: {corr_dy:.03f} ({p_dy})\n"
+            f"\tx-axis: {corr_x:.03f} ({p_x})\n\ty-axis: {corr_y:.03f} ({p_y})"
         )
+
+    print(
+        f"\nAvg. Corr(center of mass, pupil center)\n"
+        f'x-axis: {np.mean(center_corrs["x"]):.03f}\n'
+        f'y-axis: {np.mean(center_corrs["y"]):.03f}\n'
+        f"\nAvg. Corr(attention map std, pupil dilation)\n"
+        f'x-axis: {np.mean(dilation_corrs["x"]):.03f}\n'
+        f'y-axis: {np.mean(dilation_corrs["y"]):.03f}'
+    )
 
 
 if __name__ == "__main__":
