@@ -14,7 +14,7 @@ from v1t import data
 from v1t.utils import utils
 from v1t.models.model import Model
 from v1t.utils.scheduler import Scheduler
-from v1t.utils.attention_rollout import Recorder, attention_rollout
+from v1t.utils.attention_rollout import Recorder, attention_rollout, attention_rollout_2
 
 
 BACKGROUND_COLOR = "#ffffff"
@@ -53,7 +53,7 @@ def extract_attention_maps(
         # extract attention rollout maps
         heatmaps = torch.zeros_like(images)
         for i in range(len(images)):
-            heatmaps[i] = attention_rollout(image=images[i], attention=attentions[i])
+            heatmaps[i] = attention_rollout_2(image=images[i], attention=attentions[i])
 
         images = i_transform_image(images.cpu())
         behaviors = i_transform_behavior(behaviors.cpu())
