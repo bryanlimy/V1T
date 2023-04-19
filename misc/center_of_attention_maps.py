@@ -52,7 +52,7 @@ def extract_attention_maps(
         )
         recorder.clear()
 
-        # results["images"].append(i_transform_image(images.cpu()))
+        results["images"].append(i_transform_image(images.cpu()))
         # results["attentions"].append(attentions.cpu())
         # results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
         # results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
