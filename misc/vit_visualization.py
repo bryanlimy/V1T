@@ -197,6 +197,7 @@ def extract_attention_maps(
     device: torch.device = "cpu",
 ) -> t.Dict[str, np.ndarray]:
     model.to(device)
+    model.train(False)
     mouse_id = ds.dataset.mouse_id
     i_transform_image = ds.dataset.i_transform_image
     i_transform_behavior = ds.dataset.i_transform_behavior
