@@ -14,7 +14,7 @@ from v1t import data
 from v1t.utils import utils
 from v1t.models.model import Model
 from v1t.utils.scheduler import Scheduler
-from v1t.utils.attention_rollout import Recorder, attention_rollout, attention_rollout_2
+from v1t.utils.attention_rollout import Recorder, attention_rollouts
 
 
 BACKGROUND_COLOR = "#ffffff"
@@ -51,19 +51,14 @@ def extract_attention_maps(
         recorder.clear()
 
         # extract attention rollout maps within the loop in order to avoid OOM
-        heatmaps = torch.zeros_like(images)
-        heatmaps = torch.squeeze(heatmaps, dim=1)  # remove channel dimension
-        for i in range(len(images)):
-            heatmaps[i] = attention_rollout_2(image=images[i], attention=attentions[i])
+        heatmaps = attention_rollouts(
+            attentions=attentions, image_shape=images.shape[2:]
+        )
 
-        images = i_transform_image(images.cpu())
-        behaviors = i_transform_behavior(behaviors.cpu())
-        pupil_centers = i_transform_pupil_center(pupil_centers.cpu())
-
-        results["images"].append(images)
+        results["images"].append(i_transform_image(images.cpu()))
         results["heatmaps"].append(heatmaps.cpu())
-        results["behaviors"].append(behaviors)
-        results["pupil_centers"].append(pupil_centers)
+        results["behaviors"].append(i_transform_behavior(behaviors.cpu()))
+        results["pupil_centers"].append(i_transform_pupil_center(pupil_centers.cpu()))
 
     recorder.eject()
     del recorder

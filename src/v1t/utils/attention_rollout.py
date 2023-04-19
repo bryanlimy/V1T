@@ -2,7 +2,7 @@ import math
 import torch
 import numpy as np
 from torch import nn
-from skimage.transform import resize
+from torchvision.transforms.functional import resize
 
 from v1t.models.core.vit import ViTCore, Attention
 
@@ -87,51 +87,15 @@ def normalize(x: t.Union[np.ndarray, torch.Tensor]):
     return (x - x.min()) / (x.max() - x.min())
 
 
-def attention_rollout(image: np.ndarray, attention: np.ndarray):
+def attention_rollout(attention: torch.Tensor, image_shape: t.List[int, int]):
     """
-    Attention rollout from https://arxiv.org/abs/2005.00928
+    Apply Attention rollout from https://arxiv.org/abs/2005.00928 to a single
+    sample of softmax attention
     Code examples
     - https://keras.io/examples/vision/probing_vits/#method-ii-attention-rollout
     - https://github.com/jeonsworld/ViT-pytorch/blob/main/visualize_attention_map.ipynb
     """
-    # average the attention heads
-    attention = np.max(attention, axis=1)
-
-    # to account for residual connections, we add an identity matrix to the
-    # attention matrix and re-normalize the weights.
-    residual_att = np.eye(attention.shape[1])
-    aug_att_mat = attention + residual_att
-    aug_att_mat = aug_att_mat / np.expand_dims(aug_att_mat.sum(axis=-1), axis=-1)
-
-    # recursively multiply the weight matrices
-    joint_attentions = np.zeros(aug_att_mat.shape)
-    joint_attentions[0] = aug_att_mat[0]
-
-    for n in range(1, aug_att_mat.shape[0]):
-        joint_attentions[n] = np.matmul(aug_att_mat[n], joint_attentions[n - 1])
-
-    heatmap = joint_attentions[-1, 0, 1:]
-    heatmap = np.reshape(heatmap, newshape=find_shape(len(heatmap)))
-    heatmap = normalize(heatmap)
-    heatmap = resize(
-        heatmap,
-        output_shape=image.shape[1:],
-        preserve_range=True,
-        anti_aliasing=False,
-    )
-    return heatmap
-
-
-from torchvision.transforms import functional as F
-
-
-def attention_rollout_2(image: torch.Tensor, attention: torch.Tensor):
-    """
-    Attention rollout from https://arxiv.org/abs/2005.00928
-    Code examples
-    - https://keras.io/examples/vision/probing_vits/#method-ii-attention-rollout
-    - https://github.com/jeonsworld/ViT-pytorch/blob/main/visualize_attention_map.ipynb
-    """
+    assert attention.dim() == 4
     with torch.device(attention.device):
         # take max values of attention heads
         attention, _ = torch.max(attention, dim=1)
@@ -152,5 +116,16 @@ def attention_rollout_2(image: torch.Tensor, attention: torch.Tensor):
         heatmap = joint_attentions[-1, 0, 1:]
         heatmap = torch.reshape(heatmap, shape=find_shape(len(heatmap)))
         heatmap = normalize(heatmap)
-        heatmap = F.resize(heatmap[None, ...], size=image.shape[1:], antialias=False)
+        heatmap = resize(heatmap[None, ...], size=image_shape, antialias=False)
     return heatmap[0]
+
+
+def attention_rollouts(attentions: torch.Tensor, image_shape: t.List[int, int]):
+    """Apply attention rollout to a batch of softmax attentions"""
+    assert attentions.dim() == 5
+    batch_size = attentions.size(0)
+    with torch.device(attentions.device):
+        heatmaps = torch.zeros((batch_size, *image_shape))
+        for i in range(batch_size):
+            heatmaps[i] = attention_rollout(attentions[i], image_shape=image_shape)
+    return heatmaps
