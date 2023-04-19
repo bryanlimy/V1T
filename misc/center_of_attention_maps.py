@@ -60,13 +60,13 @@ def extract_attention_maps(
         pupil_centers = i_transform_pupil_center(pupil_centers.cpu())
 
         results["images"].append(images)
-        results["heatmaps"].append(heatmaps)
+        results["heatmaps"].append(heatmaps.cpu())
         results["behaviors"].append(behaviors)
         results["pupil_centers"].append(pupil_centers)
 
     recorder.eject()
     del recorder
-    results = {k: np.vstack(v) for k, v in results.items()}
+    results = {k: torch.vstack(v).numpy() for k, v in results.items()}
 
     return results
 
