@@ -41,6 +41,7 @@ class Recorder(nn.Module):
         self.cache.clear()
         torch.cuda.empty_cache()
 
+    @torch.no_grad()
     def forward(
         self,
         images: torch.Tensor,
