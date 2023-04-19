@@ -87,7 +87,7 @@ def normalize(x: t.Union[np.ndarray, torch.Tensor]):
     return (x - x.min()) / (x.max() - x.min())
 
 
-def attention_rollout(attention: torch.Tensor, image_shape: t.List[int, int]):
+def attention_rollout(attention: torch.Tensor, image_shape: t.List[int]):
     """
     Apply Attention rollout from https://arxiv.org/abs/2005.00928 to a single
     sample of softmax attention
@@ -120,7 +120,7 @@ def attention_rollout(attention: torch.Tensor, image_shape: t.List[int, int]):
     return heatmap[0]
 
 
-def attention_rollouts(attentions: torch.Tensor, image_shape: t.List[int, int]):
+def attention_rollouts(attentions: torch.Tensor, image_shape: t.List[int]):
     """Apply attention rollout to a batch of softmax attentions"""
     assert attentions.dim() == 5
     batch_size = attentions.size(0)
