@@ -8,26 +8,23 @@ from v1t.models.core.vit import ViTCore, Attention
 
 
 class Recorder(nn.Module):
-    def __init__(self, vit: ViTCore, device: str = "cpu"):
-        super().__init__()
-        self.vit = vit
-
-        self.data = None
-        self.recordings = []
+    def __init__(self, core: ViTCore):
+        super(Recorder, self).__init__()
+        self.core = core
+        self.cache = []
         self.hooks = []
         self.hook_registered = False
         self.ejected = False
-        self.device = device
-
-    def _hook(self, _, input, output):
-        self.recordings.append(output.clone().detach())
 
     @staticmethod
-    def _find_modules(nn_module, type):
-        return [module for module in nn_module.modules() if isinstance(module, type)]
+    def _find_modules(module: nn.Module, type: nn.Module):
+        return [m for m in module.modules() if isinstance(m, type)]
+
+    def _hook(self, _, inputs: torch.Tensor, outputs: torch.Tensor):
+        self.cache.append(outputs.detach().clone())
 
     def _register_hook(self):
-        modules = self._find_modules(self.vit.transformer, Attention)
+        modules = self._find_modules(self.core.transformer, Attention)
         for module in modules:
             handle = module.attend.register_forward_hook(self._hook)
             self.hooks.append(handle)
@@ -38,14 +35,11 @@ class Recorder(nn.Module):
         for hook in self.hooks:
             hook.remove()
         self.hooks.clear()
-        return self.vit
+        return self.core
 
     def clear(self):
-        self.recordings.clear()
-
-    def record(self, attn):
-        recording = attn.clone().detach()
-        self.recordings.append(recording)
+        self.cache.clear()
+        torch.cuda.empty_cache()
 
     def forward(
         self,
@@ -54,22 +48,28 @@ class Recorder(nn.Module):
         pupil_centers: torch.Tensor,
         mouse_id: str,
     ):
-        """Return attention output from ViT
-        attns has shape (batch size, num blocks, num heads, num patches, num patches)
+        """
+        Return softmax scaled dot product outputs from ViT/V1T
+
+        Returns:
+            outputs: torch.Tensor, the output of the core
+            attentions: torch.Tensor, the softmax scaled dot product outputs in
+                format (batch size, num blocks, num heads, num patches, num patches)
         """
         assert not self.ejected, "recorder has been ejected, cannot be used anymore"
         self.clear()
         if not self.hook_registered:
             self._register_hook()
-        pred = self.vit(
+        outputs = self.core(
             inputs=images,
             behaviors=behaviors,
             pupil_centers=pupil_centers,
             mouse_id=mouse_id,
         )
-        recordings = tuple(map(lambda tensor: tensor.to(self.device), self.recordings))
-        attns = torch.stack(recordings, dim=1) if len(recordings) > 0 else None
-        return pred, attns
+        attentions = None
+        if len(self.cache) > 0:
+            attentions = torch.stack(self.cache, dim=1)
+        return outputs, attentions
 
 
 def find_shape(num_patches: int):

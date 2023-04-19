@@ -41,8 +41,8 @@ GRAY2RGB = COLORMAP(np.arange(256))[:, :3]
 
 
 def set_font():
-    font_path = "/Users/bryanlimy/Git/font-lexend/Lexend-Regular.ttf"
-    if os.path.exists(font_path):
+    font_path = os.getenv("MATPLOTLIB_FONT")
+    if font_path is not None and os.path.exists(font_path):
         font_manager.fontManager.addfont(path=font_path)
         prop = font_manager.FontProperties(fname=font_path)
         plt.rcParams.update(
