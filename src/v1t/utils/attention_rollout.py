@@ -21,7 +21,7 @@ class Recorder(nn.Module):
         return [m for m in module.modules() if isinstance(m, type)]
 
     def _hook(self, _, inputs: torch.Tensor, outputs: torch.Tensor):
-        self.cache.append(outputs.detach().clone())
+        self.cache.append(outputs.clone().detach())
 
     def _register_hook(self):
         modules = self._find_modules(self.core.transformer, Attention)
