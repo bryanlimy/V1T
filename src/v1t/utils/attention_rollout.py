@@ -41,7 +41,6 @@ class Recorder(nn.Module):
         self.cache.clear()
         torch.cuda.empty_cache()
 
-    @torch.no_grad()
     def forward(
         self,
         images: torch.Tensor,
@@ -70,6 +69,7 @@ class Recorder(nn.Module):
         attentions = None
         if len(self.cache) > 0:
             attentions = torch.stack(self.cache, dim=1)
+        self.clear()
         return outputs, attentions
 
 
