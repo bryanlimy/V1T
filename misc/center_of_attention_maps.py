@@ -50,7 +50,7 @@ def extract_attention_maps(
         )
         recorder.clear()
 
-        # extract attention rollout maps
+        # extract attention rollout maps within the loop in order to avoid OOM
         heatmaps = torch.zeros_like(images)
         heatmaps = torch.squeeze(heatmaps, dim=1)  # remove channel dimension
         for i in range(len(images)):
@@ -68,9 +68,7 @@ def extract_attention_maps(
     recorder.eject()
     del recorder
 
-    results = {k: torch.vstack(v).numpy() for k, v in results.items()}
-
-    return results
+    return {k: torch.vstack(v).numpy() for k, v in results.items()}
 
 
 def computer_centers(heatmaps: np.ndarray):
@@ -147,14 +145,14 @@ def main(args):
     for mouse_id, mouse_dict in results.items():
         # compute correlation center of mass and pupil center
         mass_centers = computer_centers(mouse_dict["heatmaps"])
-        pupil_centers = mouse_dict["pupil_centers"][:, 0, :]
+        pupil_centers = mouse_dict["pupil_centers"]
         corr_x, p_x = abs_correlation(mass_centers[:, 0], pupil_centers[:, 0])
         corr_y, p_y = abs_correlation(mass_centers[:, 1], pupil_centers[:, 1])
 
         # standard deviation in x and y axes
         spread_x = np.std(np.sum(mouse_dict["heatmaps"], axis=1), axis=1)
         spread_y = np.std(np.sum(mouse_dict["heatmaps"], axis=2), axis=1)
-        dilation = mouse_dict["behaviors"][:, 0, 0]
+        dilation = mouse_dict["behaviors"][:, 0]
         # absolute correlation between pupil dilation and attention map
         # standard deviation
         corr_dx, p_dx = abs_correlation(spread_x, dilation)
