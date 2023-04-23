@@ -2,6 +2,7 @@ import math
 import torch
 import numpy as np
 from torch import nn
+from tqdm import tqdm
 from torch.utils.data import DataLoader
 from torchvision.transforms.functional import resize
 
@@ -140,6 +141,7 @@ def extract_attention_maps(
     model: Model,
     num_samples: int = None,
     device: torch.device = "cpu",
+    verbose: int = 1,
 ) -> t.Dict[str, np.ndarray]:
     """Extract attention rollout maps for a given DataLoader ds.
 
@@ -161,7 +163,7 @@ def extract_attention_maps(
     results = {"images": [], "heatmaps": [], "pupil_centers": [], "behaviors": []}
 
     count = num_samples
-    for batch in ds:
+    for batch in tqdm(ds, desc=f"Mouse {mouse_id}", disable=not verbose):
         images = batch["image"].to(device)
         behaviors = batch["behavior"].to(device)
         pupil_centers = batch["pupil_center"].to(device)
