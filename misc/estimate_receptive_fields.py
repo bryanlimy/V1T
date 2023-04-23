@@ -7,12 +7,11 @@ import numpy as np
 import typing as t
 from tqdm import tqdm
 import scipy.optimize as opt
-import matplotlib.pyplot as plt
 from einops import rearrange, einsum
 
 from v1t import data
+from v1t.utils import utils
 from v1t.models.model import Model
-from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
 from torch.utils.data import TensorDataset, DataLoader
 
@@ -26,15 +25,15 @@ def normalize(image: t.Union[np.array, torch.Tensor]):
     return (image - image.min()) / (image.max() - image.min())
 
 
-def load_model(args):
-    _, val_ds, _ = data.get_training_ds(
+def load_model(args) -> Model:
+    train_ds, _, _ = data.get_training_ds(
         args,
         data_dir=args.dataset,
         mouse_ids=args.mouse_ids,
         batch_size=args.batch_size,
         device=args.device,
     )
-    model = Model(args, ds=val_ds)
+    model = Model(args, ds=train_ds)
     model.to(args.device)
     scheduler = Scheduler(args, model=model, save_optimizer=False)
     _ = scheduler.restore(force=True)
@@ -42,6 +41,11 @@ def load_model(args):
 
 
 def generate_ds(args, num_samples: int):
+    """Generate num_samples of white noise images from uniform distribution
+    Return:
+        ds: DataLoader, the DataLoader object with the white noise images
+        noise: np.ndarray, the array with the raw white noise images
+    """
     noise = torch.rand((num_samples, *IMAGE_SIZE))
     # standardize images
     mean, std = torch.mean(noise), torch.std(noise)
@@ -79,44 +83,13 @@ def inference(args, model: Model, ds: DataLoader) -> torch.Tensor:
     return responses
 
 
-def estimate_RFs(activations: torch.Tensor, noise: torch.Tensor):
+def estimate_RFs(activations: torch.Tensor, noise: torch.Tensor) -> np.ndarray:
     """
     Compute sum of the white noise images weighted their corresponding
     response value to estimate the artificial RFs
     """
-    return einsum(activations, noise, "b n, b c h w -> n c h w")
-
-
-def plot_grid(args, aRFs: t.Union[torch.Tensor, np.array]):
-    images = aRFs
-    if torch.is_tensor(images):
-        images = aRFs.numpy()
-
-    nrows, ncols = 6, 3
-    tick_fontsize, label_fontsize, title_fontsize = 8, 9, 10
-    figure, axes = plt.subplots(
-        nrows=nrows,
-        ncols=ncols,
-        gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-        figsize=(6, 8),
-        dpi=120,
-    )
-
-    for i, ax in enumerate(axes.flat):
-        unit = args.random_units[i]
-        ax.imshow(normalize(images[unit][0]), cmap="gray", vmin=0, vmax=1)
-        ax.set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
-        ax.axis("off")
-
-    title = "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
-    pos = axes[0, 1].get_position()
-    figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 * 1.04)
-
-    # plt.show()
-
-    filename = os.path.join(args.output_dir, "plots", f"aRFs.{args.format}")
-    tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
-    print(f"Saved aRFs plot to {filename}.")
+    aRFs = einsum(activations, noise, "b n, b c h w -> n c h w")
+    return aRFs.numpy()
 
 
 def Gaussian2d(
@@ -148,33 +121,27 @@ def Gaussian2d(
     return g.ravel()
 
 
-def fit_gaussian(args, aRFs: torch.Tensor):
-    """Reference: https://stackoverflow.com/a/21566831"""
-    aRFs = aRFs.numpy()
-    # standardize RFs
+def fit_gaussian(args, aRFs: np.ndarray) -> np.ndarray:
+    """Fit 2D Gaussian to each aRFs using SciPy curve_fit
+
+    Gaussian fit reference: https://stackoverflow.com/a/21566831
+
+    Returns:
+        popts: np.ndarray, a (num. units, 7) array with fitted parameters in
+            [amplitude, center x, center y, sigma x, sigma y, theta, offset]
+    """
+    num_units = aRFs.shape[0]
+
+    # standardize RFs and take absolute values to remove background noise
     mean = np.mean(aRFs, axis=(1, 2, 3))
     std = np.std(aRFs, axis=(1, 2, 3))
     broadcast = lambda a: rearrange(a, "n -> n 1 1 1")
     aRFs = (aRFs - broadcast(mean)) / broadcast(std)
-    # take absolute values
     aRFs = np.abs(aRFs)
-    num_units = aRFs.shape[0]
 
     height, width = aRFs.shape[2:]
     x, y = np.linspace(0, width, width), np.linspace(0, height, height)
     x, y = np.meshgrid(x, y)
-
-    nrows, ncols = 6, 3
-    tick_fontsize, label_fontsize, title_fontsize = 8, 9, 10
-    figure, axes = plt.subplots(
-        nrows=nrows,
-        ncols=ncols,
-        gridspec_kw={"wspace": 0.02, "hspace": 0.2},
-        figsize=(6, 8),
-        dpi=120,
-    )
-    axes = axes.flatten()
-    ax_idx = 0  # index of the flattened axes
 
     # numpy array of optimal parameters where rows are unit index
     popts = np.full(shape=(num_units, 7), fill_value=np.inf, dtype=np.float32)
@@ -189,32 +156,9 @@ def fit_gaussian(args, aRFs: torch.Tensor):
                 ydata=data_noisy,
                 p0=(3, width // 2, height // 2, 10, 10, 0, 10),
             )
-        except (RuntimeError, opt.OptimizeWarning):
-            popt, pcov = None, None
-
-        if unit in args.random_units:
-            axes[ax_idx].imshow(
-                normalize(data.reshape(height, width)), cmap="gray", vmin=0, vmax=1
-            )
-            if popt is not None:
-                fitted = Gaussian2d((x, y), *popt)
-                fitted = fitted.reshape(height, width)
-                axes[ax_idx].contour(
-                    x,
-                    y,
-                    fitted,
-                    levels=[1],
-                    alpha=0.8,
-                    linewidths=2,
-                    colors="orangered",
-                )
-            axes[ax_idx].set_title(f"Unit #{unit}", pad=0, fontsize=label_fontsize)
-            ax_idx += 1
-        if popt is not None:
             popts[unit] = popt
-
-    for ax in axes:
-        ax.axis("off")
+        except (RuntimeError, opt.OptimizeWarning):
+            pass
 
     # filter out the last 5% of the results to eliminate poor fit
     num_drops = int(0.05 * len(popts))
@@ -228,19 +172,7 @@ def fit_gaussian(args, aRFs: torch.Tensor):
         f"sigma Y: {np.nanmean(popts[:, 4]):.03f} \pm {np.nanstd(popts[:, 4]):.03f}"
     )
 
-    with open(os.path.join(args.output_dir, "gaussian_fit.pkl"), "wb") as file:
-        pickle.dump(popts, file)
-
-    title = "ViT RFs" if "vit" in args.output_dir else "CNN RFs"
-    title += " 2D Gaussian Fit"
-    pos = axes[1].get_position()
-    figure.suptitle(title, fontsize=title_fontsize, y=pos.y1 + 0.04)
-
-    # plt.show()
-
-    filename = os.path.join(args.output_dir, "plots", f"fit_gaussian.{args.format}")
-    tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
-    print(f"Saved plot to {filename}.")
+    return popts
 
 
 def main(args):
@@ -249,11 +181,13 @@ def main(args):
 
     filename = os.path.join(args.output_dir, "aRFs.pkl")
 
-    if os.path.exists(filename) and not args.overwrite:
+    results = {}
+    if os.path.exists(filename):
         print(f"Load aRFs from {filename}.")
         with open(filename, "rb") as file:
-            aRFs = pickle.load(file)
-    else:
+            results = pickle.load(file)
+
+    if "aRFs" not in results or args.overwrite:
         utils.load_args(args)
         model = load_model(args)
 
@@ -262,17 +196,16 @@ def main(args):
 
         aRFs = estimate_RFs(activations=activations, noise=noise)
 
-        with open(filename, "wb") as file:
-            pickle.dump(aRFs, file)
+        results["aRFs"] = aRFs
+    else:
+        aRFs = results["aRFs"]
 
-    # randomly select 18 units to plot
-    args.random_units = np.sort(np.random.choice(aRFs.shape[0], size=18, replace=False))
+    results["popts"] = fit_gaussian(args, aRFs=aRFs)
 
-    tensorboard.set_font()
-    plot_grid(args, aRFs=aRFs)
-    fit_gaussian(args, aRFs=aRFs)
+    with open(filename, "wb") as file:
+        pickle.dump(results, file)
 
-    print(f"Results saved to {args.output_dir}.")
+    print(f"Saved aRFs and Gaussian fits to {filename}.")
 
 
 if __name__ == "__main__":
