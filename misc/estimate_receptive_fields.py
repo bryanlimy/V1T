@@ -21,6 +21,11 @@ warnings.simplefilter("error", opt.OptimizeWarning)
 IMAGE_SIZE = (1, 36, 64)
 
 
+def normalize(image: t.Union[np.array, torch.Tensor]):
+    """Normalize image to [0, 1] using its min and max values."""
+    return (image - image.min()) / (image.max() - image.min())
+
+
 def load_model(args):
     _, val_ds, _ = data.get_training_ds(
         args,
@@ -57,7 +62,7 @@ def inference(args, model: Model, ds: DataLoader) -> torch.Tensor:
     for batch in tqdm(ds, desc=f"Mouse {mouse_id}"):
         images = batch[0].to(device)
         batch_size = images.size(0)
-        # create dummy behaviors but won't be used in the model
+        # create dummy behaviors to match input arguments
         behaviors = torch.zeros((batch_size, 3), device=device)
         pupil_centers = torch.zeros((batch_size, 2), device=device)
         # run model without image cropper
@@ -74,26 +79,20 @@ def inference(args, model: Model, ds: DataLoader) -> torch.Tensor:
     return responses
 
 
-def estimate_RFs(activations: torch.tensor, noise: torch.tensor):
-    RFs = einsum(activations, noise, "b n, b c h w -> n c h w")
-    return RFs
+def estimate_RFs(activations: torch.Tensor, noise: torch.Tensor):
+    """
+    Compute sum of the white noise images weighted their corresponding
+    response value to estimate the artificial RFs
+    """
+    return einsum(activations, noise, "b n, b c h w -> n c h w")
 
 
-def normalize(image: t.Union[np.array, torch.tensor]):
-    if torch.is_tensor(image):
-        i_min, i_max = torch.min(image), torch.max(image)
-    else:
-        i_min, i_max = np.min(image), np.max(image)
-    return (image - i_min) / (i_max - i_min)
-
-
-def plot_grid(args, aRFs: t.Union[torch.tensor, np.array]):
+def plot_grid(args, aRFs: t.Union[torch.Tensor, np.array]):
     images = aRFs
     if torch.is_tensor(images):
         images = aRFs.numpy()
 
     nrows, ncols = 6, 3
-
     tick_fontsize, label_fontsize, title_fontsize = 8, 9, 10
     figure, axes = plt.subplots(
         nrows=nrows,
@@ -117,7 +116,7 @@ def plot_grid(args, aRFs: t.Union[torch.tensor, np.array]):
 
     filename = os.path.join(args.output_dir, "plots", f"aRFs.{args.format}")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
-    print(f"Saved weighted RFs to {filename}.")
+    print(f"Saved aRFs plot to {filename}.")
 
 
 def Gaussian2d(
@@ -149,7 +148,7 @@ def Gaussian2d(
     return g.ravel()
 
 
-def fit_gaussian(args, aRFs: torch.tensor):
+def fit_gaussian(args, aRFs: torch.Tensor):
     """Reference: https://stackoverflow.com/a/21566831"""
     aRFs = aRFs.numpy()
     # standardize RFs
@@ -266,12 +265,12 @@ def main(args):
         with open(filename, "wb") as file:
             pickle.dump(aRFs, file)
 
-    # tensorboard.set_font()
-    #
-    # # randomly select 18 units to plot
-    # args.random_units = np.sort(np.random.choice(aRFs.shape[0], size=18, replace=False))
-    # plot_grid(args, aRFs=aRFs)
-    # fit_gaussian(args, aRFs=aRFs)
+    # randomly select 18 units to plot
+    args.random_units = np.sort(np.random.choice(aRFs.shape[0], size=18, replace=False))
+
+    tensorboard.set_font()
+    plot_grid(args, aRFs=aRFs)
+    fit_gaussian(args, aRFs=aRFs)
 
     print(f"Results saved to {args.output_dir}.")
 
