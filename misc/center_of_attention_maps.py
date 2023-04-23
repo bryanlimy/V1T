@@ -54,7 +54,7 @@ def main(args):
 
     utils.load_args(args)
 
-    filename = os.path.join(args.output_dir, "center_mass.pkl")
+    filename = os.path.join(args.output_dir, "attention_rollout_maps.pkl")
     if not os.path.exists(filename) or args.overwrite:
         _, val_ds, test_ds = data.get_training_ds(
             args,
@@ -81,7 +81,7 @@ def main(args):
         with open(filename, "wb") as file:
             pickle.dump(results, file)
     else:
-        print(f"load attention maps from {filename}.")
+        print(f"Load attention maps from {filename}.")
         with open(filename, "rb") as file:
             results = pickle.load(file)
 
