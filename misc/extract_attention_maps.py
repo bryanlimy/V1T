@@ -2,11 +2,7 @@ import os
 import torch
 import pickle
 import argparse
-import numpy as np
 import typing as t
-from scipy.stats import pearsonr
-from scipy.ndimage import center_of_mass
-from sklearn.metrics import mutual_info_score
 
 from v1t import data
 from v1t.utils import utils
@@ -69,6 +65,5 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--device", type=str, default=None)
-    parser.add_argument("--overwrite", action="store_true")
 
     main(parser.parse_args())
