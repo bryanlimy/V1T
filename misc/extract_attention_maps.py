@@ -49,9 +49,9 @@ def main(args):
 
     results = {}
     print(f"Extract attention rollout maps from validation set.")
-    results["val"] = extract(ds=val_ds, model=model, device=args.device)
+    results["validation"] = extract(ds=val_ds, model=model, device=args.device)
     print(f"\nExtract attention rollout maps from test set.")
-    results["test"] = extract(ds=val_ds, model=model, device=args.device)
+    results["test"] = extract(ds=test_ds, model=model, device=args.device)
 
     filename = os.path.join(args.output_dir, "attention_rollout_maps.pkl")
     with open(filename, "wb") as file:
