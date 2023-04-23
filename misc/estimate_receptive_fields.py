@@ -51,12 +51,13 @@ def generate_ds(args, num_samples: int):
 
 
 @torch.no_grad()
-def inference(args, model: Model, ds: DataLoader):
-    results = []
+def inference(args, model: Model, ds: DataLoader) -> torch.Tensor:
+    responses = []
     device, mouse_id = args.device, args.mouse_ids[0]
     for batch in tqdm(ds, desc="Inference"):
         images = batch[0].to(device)
         batch_size = images.size(0)
+        # create dummy behaviors but won't be used in the model
         behaviors = torch.zeros((batch_size, 3), device=device)
         pupil_centers = torch.zeros((batch_size, 2), device=device)
         # run model without image cropper
@@ -68,10 +69,9 @@ def inference(args, model: Model, ds: DataLoader):
         )
         outputs = model.readouts(outputs, mouse_id=mouse_id, shifts=None)
         outputs = model.elu1(outputs)
-
-        results.append(outputs.cpu())
-    activations = torch.concat(results, dim=0)
-    return activations
+        responses.append(outputs.cpu())
+    responses = torch.concat(responses, dim=0)
+    return responses
 
 
 def estimate_RFs(activations: torch.tensor, noise: torch.tensor):
@@ -87,10 +87,10 @@ def normalize(image: t.Union[np.array, torch.tensor]):
     return (image - i_min) / (i_max - i_min)
 
 
-def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
-    images = weighted_RFs
+def plot_grid(args, aRFs: t.Union[torch.tensor, np.array]):
+    images = aRFs
     if torch.is_tensor(images):
-        images = weighted_RFs.numpy()
+        images = aRFs.numpy()
 
     nrows, ncols = 6, 3
 
@@ -115,7 +115,7 @@ def plot_grid(args, weighted_RFs: t.Union[torch.tensor, np.array]):
 
     # plt.show()
 
-    filename = os.path.join(args.output_dir, "plots", f"receptive_fields.{args.format}")
+    filename = os.path.join(args.output_dir, "plots", f"aRFs.{args.format}")
     tensorboard.save_figure(figure, filename=filename, dpi=240, close=True)
     print(f"Saved weighted RFs to {filename}.")
 
@@ -149,19 +149,19 @@ def Gaussian2d(
     return g.ravel()
 
 
-def fit_gaussian(args, weighted_RFs: torch.tensor):
+def fit_gaussian(args, aRFs: torch.tensor):
     """Reference: https://stackoverflow.com/a/21566831"""
-    weighted_RFs = weighted_RFs.numpy()
+    aRFs = aRFs.numpy()
     # standardize RFs
-    mean = np.mean(weighted_RFs, axis=(1, 2, 3))
-    std = np.std(weighted_RFs, axis=(1, 2, 3))
+    mean = np.mean(aRFs, axis=(1, 2, 3))
+    std = np.std(aRFs, axis=(1, 2, 3))
     broadcast = lambda a: rearrange(a, "n -> n 1 1 1")
-    weighted_RFs = (weighted_RFs - broadcast(mean)) / broadcast(std)
+    aRFs = (aRFs - broadcast(mean)) / broadcast(std)
     # take absolute values
-    weighted_RFs = np.abs(weighted_RFs)
-    num_units = weighted_RFs.shape[0]
+    aRFs = np.abs(aRFs)
+    num_units = aRFs.shape[0]
 
-    height, width = weighted_RFs.shape[2:]
+    height, width = aRFs.shape[2:]
     x, y = np.linspace(0, width, width), np.linspace(0, height, height)
     x, y = np.meshgrid(x, y)
 
@@ -180,7 +180,7 @@ def fit_gaussian(args, weighted_RFs: torch.tensor):
     # numpy array of optimal parameters where rows are unit index
     popts = np.full(shape=(num_units, 7), fill_value=np.inf, dtype=np.float32)
     for i, unit in enumerate(tqdm(range(num_units), desc="Fit 2D Gaussian")):
-        data = weighted_RFs[unit][0]
+        data = aRFs[unit][0]
         data = data.ravel()
         data_noisy = data + 0.2 * np.random.normal(size=data.shape)
         try:
@@ -248,12 +248,12 @@ def main(args):
     utils.get_device(args)
     utils.set_random_seed(args.seed)
 
-    filename = os.path.join(args.output_dir, "weighted_activations.pkl")
+    filename = os.path.join(args.output_dir, "aRFs.pkl")
 
     if os.path.exists(filename) and not args.overwrite:
-        print(f"Load weighted activations from {filename}.")
+        print(f"Load aRFs from {filename}.")
         with open(filename, "rb") as file:
-            weighted_RFs = pickle.load(file)
+            aRFs = pickle.load(file)
     else:
         utils.load_args(args)
         model = load_model(args)
@@ -261,19 +261,17 @@ def main(args):
         ds, noise = generate_ds(args, num_samples=args.sample_size)
         activations = inference(args, model=model, ds=ds)
 
-        weighted_RFs = estimate_RFs(activations=activations, noise=noise)
+        aRFs = estimate_RFs(activations=activations, noise=noise)
 
         with open(filename, "wb") as file:
-            pickle.dump(weighted_RFs, file)
+            pickle.dump(aRFs, file)
 
-    tensorboard.set_font()
-
-    # randomly select 18 units to plot
-    args.random_units = np.sort(
-        np.random.choice(weighted_RFs.shape[0], size=18, replace=False)
-    )
-    plot_grid(args, weighted_RFs=weighted_RFs)
-    fit_gaussian(args, weighted_RFs=weighted_RFs)
+    # tensorboard.set_font()
+    #
+    # # randomly select 18 units to plot
+    # args.random_units = np.sort(np.random.choice(aRFs.shape[0], size=18, replace=False))
+    # plot_grid(args, aRFs=aRFs)
+    # fit_gaussian(args, aRFs=aRFs)
 
     print(f"Results saved to {args.output_dir}.")
 
