@@ -53,8 +53,8 @@ def generate_ds(args, num_samples: int):
 @torch.no_grad()
 def inference(args, model: Model, ds: DataLoader) -> torch.Tensor:
     responses = []
-    device, mouse_id = args.device, args.mouse_ids[0]
-    for batch in tqdm(ds, desc="Inference"):
+    device, mouse_id = args.device, "A"
+    for batch in tqdm(ds, desc=f"Mouse {mouse_id}"):
         images = batch[0].to(device)
         batch_size = images.size(0)
         # create dummy behaviors but won't be used in the model
