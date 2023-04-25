@@ -218,10 +218,10 @@ def main(args, wandb_sweep: bool = False):
     if args.use_wandb:
         utils.wandb_init(args, wandb_sweep=wandb_sweep)
 
+    args.core_lr = args.lr if args.core_lr is None else args.core_lr
     model = get_model(args, ds=train_ds, summary=summary)
-
     optimizer = torch.optim.AdamW(
-        params=model.get_parameters(core_lr=args.core_lr_scale * args.lr),
+        params=model.get_parameters(core_lr=args.core_lr),
         lr=args.lr,
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
@@ -462,12 +462,6 @@ if __name__ == "__main__":
         default="",
         help="path to directory where pre-trained core model is stored.",
     )
-    parser.add_argument(
-        "--core_lr_scale",
-        type=float,
-        default=1,
-        help="scale learning rate for core as it might already be trained.",
-    )
 
     # plot settings
     parser.add_argument(
@@ -535,6 +529,7 @@ if __name__ == "__main__":
             parser.add_argument("--dropout", type=float, default=0.0)
             parser.add_argument("--core_reg_scale", type=float, default=0)
             parser.add_argument("--lr", type=float, default=0.001)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "stacked2d":
             parser.add_argument("--num_layers", type=int, default=4)
             parser.add_argument("--dropout", type=float, default=0.0)
@@ -544,6 +539,7 @@ if __name__ == "__main__":
                 "--linear", action="store_true", help="remove non-linearity in core"
             )
             parser.add_argument("--lr", type=float, default=0.009)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "vit":
             parser.add_argument("--patch_size", type=int, default=8)
             parser.add_argument(
@@ -591,6 +587,7 @@ if __name__ == "__main__":
             )
             parser.add_argument("--core_reg_scale", type=float, default=0.5379)
             parser.add_argument("--lr", type=float, default=0.001647)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "cct":
             parser.add_argument("--patch_size", type=int, default=8)
             parser.add_argument(
@@ -623,12 +620,14 @@ if __name__ == "__main__":
             )
             parser.add_argument("--core_reg_scale", type=float, default=0.5379)
             parser.add_argument("--lr", type=float, default=0.001647)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "stn":
             parser.add_argument("--num_layers", type=int, default=7)
             parser.add_argument("--num_filters", type=int, default=63)
             parser.add_argument("--dropout", type=float, default=0.1135)
             parser.add_argument("--core_reg_scale", type=float, default=0.0450)
             parser.add_argument("--lr", type=float, default=0.001)
+            parser.add_argument("--core_lr", type=float, default=None)
         case _:
             raise NotImplementedError(f"--core {temp_args.core} not implemented.")
 

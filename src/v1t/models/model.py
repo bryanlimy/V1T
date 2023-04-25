@@ -67,7 +67,6 @@ class Model(nn.Module):
         self.input_shape = args.input_shape
         self.output_shapes = args.output_shapes
         self.shift_mode = args.shift_mode
-        self.amp = args.amp
 
         self.add_module(
             "image_cropper",
@@ -112,6 +111,7 @@ class Model(nn.Module):
         return next(self.parameters()).device
 
     def get_parameters(self, core_lr: float):
+
         # separate learning rate for core module from the rest
         params = []
         if not self.core.frozen:
