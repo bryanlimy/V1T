@@ -31,6 +31,8 @@ class Args:
         self.format = "svg"
         self.clear_output_dir = False
         self.amp = False
+        self.compile = False
+        self.deterministic = False
         self.grad_checkpointing = None
         self.verbose = verbose
         self.use_wandb = True
