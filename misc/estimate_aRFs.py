@@ -140,7 +140,7 @@ def fit_gaussian(args, aRFs: np.ndarray) -> np.ndarray:
     aRFs = np.abs(aRFs)
 
     height, width = aRFs.shape[2:]
-    x, y = np.linspace(0, width, width), np.linspace(0, height, height)
+    x, y = np.linspace(0, width - 1, width), np.linspace(0, height - 1, height)
     x, y = np.meshgrid(x, y)
 
     # numpy array of optimal parameters where rows are unit index
