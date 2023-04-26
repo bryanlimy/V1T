@@ -108,7 +108,7 @@ def set_yticks(
 
 
 def set_ticks_params(
-    axis: matplotlib.axes.Axes, length: int = PARAMS_LENGTH, pad: int = PARAMS_PAD
+    axis: matplotlib.axes.Axes, length: float = PARAMS_LENGTH, pad: float = PARAMS_PAD
 ):
     axis.tick_params(axis="both", which="both", length=length, pad=pad, colors="black")
 
