@@ -22,7 +22,8 @@ def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     msse = losses.msse(y_true=y_true, y_pred=y_pred)
     poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
-    correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
+    correlation = losses.correlation(y1=y_pred, y2=y_true, dim=0)
+    correlation = torch.mean(correlation)
     return {
         "metrics/msse": msse,
         "metrics/poisson_loss": poisson_loss,
@@ -44,7 +45,6 @@ def train_step(
     model.to(device)
     batch_size = batch["image"].size(0)
     result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
-    targets, predictions = [], []
     for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
             y_true = micro_batch["response"].to(device)
@@ -66,19 +66,11 @@ def train_step(
         result["loss/loss"].append(loss.detach())
         result["loss/reg_loss"].append(reg_loss.detach())
         result["loss/total_loss"].append(total_loss.detach())
-        targets.append(y_true.detach())
-        predictions.append(y_pred.detach())
     if update:
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
     result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
-    result.update(
-        compute_metrics(
-            y_true=torch.vstack(targets),
-            y_pred=torch.vstack(predictions),
-        )
-    )
     return result
 
 
@@ -126,7 +118,7 @@ def validation_step(
     scaler: GradScaler,
     micro_batch_size: int,
     device: torch.device = "cpu",
-) -> t.Dict[str, torch.Tensor]:
+):
     model.to(device)
     batch_size = batch["image"].size(0)
     result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
@@ -148,19 +140,15 @@ def validation_step(
             )
             reg_loss = (y_true.size(0) / batch_size) * model.regularizer(mouse_id)
             total_loss = loss + reg_loss
-        result["loss/loss"].append(loss.detach())
-        result["loss/reg_loss"].append(reg_loss.detach())
-        result["loss/total_loss"].append(total_loss.detach())
-        targets.append(y_true.detach())
-        predictions.append(y_pred.detach())
+        result["loss/loss"].append(loss)
+        result["loss/reg_loss"].append(reg_loss)
+        result["loss/total_loss"].append(total_loss)
+        targets.append(y_true)
+        predictions.append(y_pred)
     result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
-    result.update(
-        compute_metrics(
-            y_true=torch.vstack(targets),
-            y_pred=torch.vstack(predictions),
-        )
-    )
-    return result
+    targets = torch.vstack(targets).cpu()
+    predictions = torch.vstack(predictions).cpu()
+    return result, targets, predictions
 
 
 def validate(
@@ -176,9 +164,9 @@ def validate(
     results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose < 2) as pbar:
         for mouse_id, mouse_ds in ds.items():
-            mouse_result = {}
+            mouse_result, y_true, y_pred = {}, [], []
             for batch in mouse_ds:
-                result = validation_step(
+                result, targets, predictions = validation_step(
                     mouse_id=mouse_id,
                     batch=batch,
                     model=model,
@@ -188,8 +176,17 @@ def validate(
                     device=args.device,
                 )
                 utils.update_dict(mouse_result, result)
+                y_true.append(targets)
+                y_pred.append(predictions)
                 pbar.update(1)
+            mouse_result.update(
+                compute_metrics(
+                    y_true=torch.vstack(y_true),
+                    y_pred=torch.vstack(y_pred),
+                )
+            )
             results[mouse_id] = mouse_result
+            del y_true, y_pred
     return utils.log_metrics(results, epoch=epoch, summary=summary, mode=1)
 
 
@@ -284,8 +281,7 @@ def main(args, wandb_sweep: bool = False):
             )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_result["loss"]:.04f}\t\t'
-                f'correlation: {train_result["single_trial_correlation"]:.04f}\n'
+                f'Train\t\t\tloss: {train_result["loss"]:.04f}\n'
                 f'Validation\t\tloss: {val_result["loss"]:.04f}\t\t'
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
@@ -295,7 +291,6 @@ def main(args, wandb_sweep: bool = False):
             wandb.log(
                 {
                     "train_loss": train_result["loss"],
-                    "train_corr": train_result["single_trial_correlation"],
                     "val_loss": val_result["loss"],
                     "val_corr": val_result["single_trial_correlation"],
                     "best_corr": scheduler.best_value,
