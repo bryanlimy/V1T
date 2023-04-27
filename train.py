@@ -233,9 +233,11 @@ def main(args, wandb_sweep: bool = False):
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
-    if args.compile:
+    if args.backend is not None:
+        if args.verbose:
+            print(f"torch.compile with {args.backend} backend.")
         model = torch.compile(
-            model, fullgraph=False, backend="inductor", mode="default"
+            model, fullgraph=False, backend=args.backend, mode="default"
         )
 
     utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
@@ -415,7 +417,13 @@ if __name__ == "__main__":
         action="store_true",
         help="automatic mixed precision training",
     )
-    parser.add_argument("--compile", action="store_true", help="use torch.compile")
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default=None,
+        choices=["inductor", "hidet"],
+        help="torch.compile backend, None to disable torch.compile",
+    )
     parser.add_argument(
         "--grad_checkpointing",
         type=int,
