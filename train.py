@@ -146,9 +146,7 @@ def validation_step(
         targets.append(y_true)
         predictions.append(y_pred)
     result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
-    targets = torch.vstack(targets).cpu()
-    predictions = torch.vstack(predictions).cpu()
-    return result, targets, predictions
+    return result, torch.vstack(targets), torch.vstack(predictions)
 
 
 def validate(
