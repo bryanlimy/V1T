@@ -179,8 +179,8 @@ def validate(
                 pbar.update(1)
             mouse_result.update(
                 compute_metrics(
-                    y_true=torch.vstack(y_true),
-                    y_pred=torch.vstack(y_pred),
+                    y_true=torch.vstack(y_true).cpu(),
+                    y_pred=torch.vstack(y_pred).cpu(),
                 )
             )
             results[mouse_id] = mouse_result
