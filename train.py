@@ -118,7 +118,7 @@ def validation_step(
     scaler: GradScaler,
     micro_batch_size: int,
     device: torch.device = "cpu",
-):
+) -> t.Tuple[t.Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
     model.to(device)
     batch_size = batch["image"].size(0)
     result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
