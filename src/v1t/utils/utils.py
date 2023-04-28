@@ -1,5 +1,7 @@
 import os
 import copy
+
+
 import wandb
 import torch
 import random
@@ -324,6 +326,7 @@ def wandb_init(args, wandb_sweep: bool):
             config.pop("save_plots", None)
             config.pop("verbose", None)
             config.pop("use_wandb", None)
+            config.pop("trainable_params", None)
             config.pop("wandb_group", None)
             config.pop("clear_output_dir", None)
             wandb.init(
@@ -336,6 +339,8 @@ def wandb_init(args, wandb_sweep: bool):
         except AssertionError as e:
             print(f"wandb.init error: {e}\n")
             args.use_wandb = False
+    if args.use_wandb and hasattr(args, "trainable_params"):
+        wandb.log({"trainable_params": args.trainable_params}, step=0)
 
 
 def metrics2df(results: t.Dict[int, torch.Tensor]):

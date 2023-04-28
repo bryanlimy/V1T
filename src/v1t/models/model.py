@@ -9,9 +9,9 @@ import torch.distributed
 from torch.utils.data import DataLoader
 
 
-from v1t.utils import tensorboard
 from v1t.models.core import get_core
 from v1t.models.readout import Readouts
+from v1t.utils.tensorboard import Summary
 from v1t.models.core_shifter import CoreShifters
 from v1t.models.image_cropper import ImageCropper
 from v1t.models.utils import ELU1, load_pretrain_core
@@ -22,7 +22,7 @@ def get_model_info(
     input_data: t.Union[torch.Tensor, t.Sequence[t.Any], t.Mapping[str, t.Any]],
     mouse_id: str = None,
     filename: str = None,
-    summary: tensorboard.Summary = None,
+    summary: Summary = None,
     device: torch.device = "cpu",
     tag: str = "model/trainable_parameters",
 ):
@@ -192,7 +192,7 @@ class DataParallel(nn.DataParallel):
         return self.module.regularizer(mouse_id)
 
 
-def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = None):
+def get_model(args, ds: t.Dict[str, DataLoader], summary: Summary = None) -> Model:
     model = Model(args, ds=ds)
 
     if hasattr(args, "pretrain_core") and args.pretrain_core:
@@ -214,10 +214,9 @@ def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = 
         filename=os.path.join(args.output_dir, "model.txt"),
         summary=summary,
     )
+    args.trainable_params = model_info.trainable_params
     if args.verbose > 2:
         print(str(model_info))
-    if args.use_wandb:
-        wandb.log({"trainable_params": model_info.trainable_params}, step=0)
 
     # get core info
     get_model_info(

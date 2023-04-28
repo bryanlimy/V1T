@@ -210,11 +210,8 @@ def main(args, wandb_sweep: bool = False):
     )
     summary = tensorboard.Summary(args)
 
-    if args.use_wandb:
-        utils.wandb_init(args, wandb_sweep=wandb_sweep)
-
-    args.core_lr = args.lr if args.core_lr is None else args.core_lr
     model = get_model(args, ds=train_ds, summary=summary)
+    args.core_lr = args.lr if args.core_lr is None else args.core_lr
     optimizer = torch.optim.AdamW(
         params=model.get_parameters(core_lr=args.core_lr),
         lr=args.lr,
@@ -230,15 +227,16 @@ def main(args, wandb_sweep: bool = False):
         args, model=model, optimizer=optimizer, scaler=scaler, mode="max"
     )
 
+    if args.use_wandb:
+        utils.wandb_init(args, wandb_sweep=wandb_sweep)
+
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
     if args.backend is not None:
         if args.verbose:
             print(f"torch.compile with {args.backend} backend.")
-        model = torch.compile(
-            model, fullgraph=False, backend=args.backend, mode="default"
-        )
+        model = torch.compile(model, backend=args.backend, mode="default")
 
     utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
