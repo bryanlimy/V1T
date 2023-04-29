@@ -70,8 +70,7 @@ def train_step(
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
-    result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
-    return result
+    return {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
 
 
 def train(
@@ -107,6 +106,9 @@ def train(
         )
         utils.update_dict(results[mouse_id], result)
     return utils.log_metrics(results, epoch=epoch, summary=summary, mode=0)
+
+
+vstack = lambda tensors: torch.vstack(tensors).cpu()
 
 
 @torch.no_grad()
@@ -145,8 +147,8 @@ def validation_step(
         result["loss/total_loss"].append(total_loss)
         targets.append(y_true)
         predictions.append(y_pred)
-    result = {k: torch.sum(torch.stack(v)) for k, v in result.items()}
-    return result, torch.vstack(targets), torch.vstack(predictions)
+    result = {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
+    return result, vstack(targets), vstack(predictions)
 
 
 def validate(
@@ -177,12 +179,8 @@ def validate(
                 y_true.append(targets)
                 y_pred.append(predictions)
                 pbar.update(1)
-            mouse_result.update(
-                compute_metrics(
-                    y_true=torch.vstack(y_true).cpu(),
-                    y_pred=torch.vstack(y_pred).cpu(),
-                )
-            )
+            y_true, y_pred = vstack(y_true), vstack(y_pred)
+            mouse_result.update(compute_metrics(y_true=y_true, y_pred=y_pred))
             results[mouse_id] = mouse_result
             del y_true, y_pred
     return utils.log_metrics(results, epoch=epoch, summary=summary, mode=1)
@@ -279,8 +277,8 @@ def main(args, wandb_sweep: bool = False):
             )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_result["loss"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["loss"]:.04f}\t\t'
+                f'Train\t\tloss: {train_result["loss"]:.04f}\n'
+                f'Validation\tloss: {val_result["loss"]:.04f}\t'
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
