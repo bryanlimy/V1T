@@ -105,7 +105,6 @@ def train(
             device=args.device,
         )
         utils.update_dict(results[mouse_id], result)
-        torch.cuda.empty_cache()
     return utils.log_metrics(results, epoch=epoch, summary=summary, mode=0)
 
 
@@ -184,7 +183,6 @@ def validate(
             mouse_result.update(compute_metrics(y_true=y_true, y_pred=y_pred))
             results[mouse_id] = mouse_result
             del y_true, y_pred
-            torch.cuda.empty_cache()
     return utils.log_metrics(results, epoch=epoch, summary=summary, mode=1)
 
 
