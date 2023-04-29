@@ -17,6 +17,10 @@ from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
 
 
+def gather(result: t.Dict[str, t.List[torch.Tensor]]):
+    return {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
+
+
 def vstack(tensors: t.List[torch.Tensor]):
     return torch.vstack(tensors).cpu()
 
@@ -74,7 +78,7 @@ def train_step(
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad(set_to_none=True)
-    return {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
+    return gather(result)
 
 
 def train(
@@ -148,8 +152,7 @@ def validation_step(
         result["loss/total_loss"].append(total_loss)
         targets.append(y_true)
         predictions.append(y_pred)
-    result = {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
-    return result, vstack(targets), vstack(predictions)
+    return gather(result), vstack(targets), vstack(predictions)
 
 
 def validate(
