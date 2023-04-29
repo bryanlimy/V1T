@@ -17,6 +17,10 @@ from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
 
 
+def vstack(tensors: t.List[torch.Tensor]):
+    return torch.vstack(tensors).cpu()
+
+
 @torch.no_grad()
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
@@ -106,9 +110,6 @@ def train(
         )
         utils.update_dict(results[mouse_id], result)
     return utils.log_metrics(results, epoch=epoch, summary=summary, mode=0)
-
-
-vstack = lambda tensors: torch.vstack(tensors).cpu()
 
 
 @torch.no_grad()
