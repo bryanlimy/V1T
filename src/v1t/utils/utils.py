@@ -126,11 +126,7 @@ def evaluate(
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose < 2
     ):
-        if (
-            mouse_ds.dataset.ds_name == "sensorium"
-            and mouse_id in ("S0", "S1")
-            and mouse_ds.dataset.tier == "test"
-        ):
+        if mouse_id in ("S0", "S1") and mouse_ds.dataset.tier == "test":
             continue
         outputs[mouse_id] = inference(
             ds=mouse_ds,
