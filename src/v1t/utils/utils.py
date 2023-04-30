@@ -116,7 +116,12 @@ def evaluate(
         print_result: bool, print result if True.
         save_result: str, path where the result is saved if provided.
     """
-    metrics = ["single_trial_correlation", "correlation_to_average", "feve"]
+    metrics = [
+        "single_trial_correlation",
+        "correlation_to_average",
+        "feve",
+        "normalized_correlation",
+    ]
     outputs, results = {}, {k: {} for k in metrics}
 
     batch_size = args.batch_size
@@ -145,6 +150,9 @@ def evaluate(
                 mouse_id
             ] = mouse_metric.correlation_to_average(per_neuron=True)
             results["feve"][mouse_id] = mouse_metric.feve(per_neuron=True)
+            results["normalized_correlation"][
+                mouse_id
+            ] = mouse_metric.normalized_correlation()
 
     if summary is not None:
         # create box plot for each metric

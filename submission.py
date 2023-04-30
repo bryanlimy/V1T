@@ -124,9 +124,9 @@ def main(args):
     assert args.ds_name == "sensorium"
 
     if "S0" not in args.output_shapes:
-        print("Warning: the saved model was not trained on Mouse 1")
+        print("Warning: the saved model was not trained on Mouse S0")
     if "S1" not in args.output_shapes:
-        print("Warning: the saved model was not trained on Mouse 2")
+        print("Warning: the saved model was not trained on Mouse S1")
 
     utils.get_device(args)
 
