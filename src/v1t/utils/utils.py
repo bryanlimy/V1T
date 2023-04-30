@@ -154,16 +154,7 @@ def evaluate(
                 mouse_id
             ] = mouse_metric.normalized_correlation()
 
-    if summary is not None:
-        # create box plot for each metric
-        for metric, values in results.items():
-            if values:
-                summary.box_plot(
-                    metric,
-                    data=metrics2df(results[metric]),
-                    step=epoch,
-                    mode=mode,
-                )
+        del mouse_metric
 
     # compute the average value for each mouse
     for metric in metrics:
