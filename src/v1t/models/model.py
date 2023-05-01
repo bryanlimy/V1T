@@ -1,5 +1,4 @@
 import os
-import wandb
 import torch
 import warnings
 import torchinfo
