@@ -323,6 +323,7 @@ def wandb_init(args, wandb_sweep: bool):
                 group=args.wandb_group,
                 name=os.path.basename(args.output_dir),
             )
+            del config
         except AssertionError as e:
             print(f"wandb.init error: {e}\n")
             args.use_wandb = False
