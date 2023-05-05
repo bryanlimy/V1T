@@ -320,18 +320,12 @@ class MiceDataset(Dataset):
 
         self.image_shape = get_image_shape(mouse_dir)
 
-        # convert image to gray-scale if args.gray_scale is set and is franke2022 data
         self.gray_scale = False
-        if (
-            hasattr(args, "gray_scale")
-            and args.gray_scale
-            and self.ds_name == "franke2022"
-        ):
+        if args.gray_scale and self.ds_name == "franke2022":
+            # convert franke2022 images to gray-scale
             if args.verbose > 2:
                 print(f"convert mouse {mouse_id} {tier} image to gray-scale")
             self.gray_scale = True
-
-        if self.gray_scale:
             self.image_shape = (1,) + self.image_shape[1:]
 
     def __len__(self):
