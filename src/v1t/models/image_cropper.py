@@ -61,10 +61,10 @@ class ImageCropper(nn.Module):
         super().__init__()
         self.shift_mode = args.shift_mode
         self.input_shape = args.input_shape
+        self.behavior_mode = args.behavior_mode
         c, in_h, in_w = args.input_shape
         out_h, out_w = in_h, in_w
 
-        self.behavior_mode = args.behavior_mode
         if self.behavior_mode == 1:
             c += 3  # include the behavior variables as channel
 
@@ -134,7 +134,7 @@ class ImageCropper(nn.Module):
         if self.resize is not None:
             outputs = self.resize(outputs)
         if self.behavior_mode == 1:
-            _, _, h, w = outputs.shape
+            h, w = outputs.size(2), outputs.size(3)
             behaviors = repeat(behaviors, "b d -> b d h w", h=h, w=w)
             outputs = torch.concat((outputs, behaviors), dim=1)
         return outputs, grid
