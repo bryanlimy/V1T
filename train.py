@@ -236,9 +236,7 @@ def main(args, wandb_sweep: bool = False):
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
 
     if args.backend is not None:
-        if args.verbose:
-            print(f"torch.compile with {args.backend} backend.")
-        model = torch.compile(model, backend=args.backend, mode="default")
+        model = utils.compile(args, model=model)
 
     utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 

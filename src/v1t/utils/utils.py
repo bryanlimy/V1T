@@ -49,6 +49,16 @@ def get_device(args):
     args.device = torch.device(device)
 
 
+def compile(args, model: nn.Module):
+    """use torch.compile"""
+    if args.verbose:
+        print(f"torch.compile with {args.backend} backend.")
+    from einops._torch_specific import allow_ops_in_compiled_graph
+
+    allow_ops_in_compiled_graph()
+    return torch.compile(model, backend=args.backend, mode="default")
+
+
 @torch.no_grad()
 def inference(
     ds: DataLoader,
