@@ -4,7 +4,7 @@ numpy
 scipy
 wandb
 joypy
-einops
+einops>=0.6.1
 pandas
 seaborn
 jupyter
