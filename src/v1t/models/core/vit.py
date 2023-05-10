@@ -207,20 +207,19 @@ class Attention(nn.Module):
         self.grad_checkpointing = grad_checkpointing
         inner_dim = emb_dim * num_heads
 
-        self.num_heads = num_heads
-
-        self.attend = nn.Softmax(dim=-1)
-        self.dropout = nn.Dropout(p=dropout)
+        self.layer_norm = nn.LayerNorm(emb_dim)
 
         self.to_qkv = nn.Linear(
             in_features=emb_dim, out_features=inner_dim * 3, bias=False
         )
+        self.rearrange = Rearrange("b n (h d) -> b h n d", h=num_heads)
+        self.attend = nn.Softmax(dim=-1)
+        self.dropout = nn.Dropout(p=dropout)
 
         self.projection = nn.Sequential(
             nn.Linear(in_features=inner_dim, out_features=emb_dim, bias=use_bias),
             nn.Dropout(p=dropout),
         )
-        self.layer_norm = nn.LayerNorm(emb_dim)
 
         scale = emb_dim**-0.5
         if use_lsa:
@@ -241,23 +240,26 @@ class Attention(nn.Module):
             self.mask = None
             self.register_buffer("scale", torch.tensor(scale))
 
-    def mha(self, inputs: torch.Tensor):
-        batch_size = inputs.size(0)
-        inputs = self.layer_norm(inputs)
-        qkv = self.to_qkv(inputs).chunk(3, dim=-1)
-        q, k, v = map(
-            lambda a: rearrange(a, "b n (h d) -> b h n d", h=self.num_heads),
-            qkv,
-        )
+    def scaled_dot_product_attention(
+        self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
+    ):
         if self.mask is None:
             dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
         else:
-            scale = repeat(self.scale, "h -> b h 1 1", b=batch_size)
+            scale = repeat(self.scale, "h -> b h 1 1", b=q.size(0))
             dots = torch.matmul(q, k.transpose(-1, -2)) * scale
             dots[:, :, self.mask[:, 0], self.mask[:, 1]] = -self.max_value
         attn = self.attend(dots)
         attn = self.dropout(attn)
         outputs = einsum(attn, v, "b h n i, b h i d -> b h n d")
+        return outputs
+
+    def mha(self, inputs: torch.Tensor):
+        inputs = self.layer_norm(inputs)
+        q, k, v = torch.chunk(self.to_qkv(inputs), chunks=3, dim=-1)
+        outputs = self.scaled_dot_product_attention(
+            q=self.rearrange(q), k=self.rearrange(k), v=self.rearrange(v)
+        )
         outputs = rearrange(outputs, "b h n d -> b n (h d)")
         outputs = self.projection(outputs)
         return outputs
@@ -362,12 +364,13 @@ class ViTCore(Core):
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
         self.behavior_mode = args.behavior_mode
 
-        if not hasattr(args, "patch_mode"):
-            print("patch_mode is not defined, set to 0.")
-            args.patch_mode = 0
-        if not hasattr(args, "patch_stride"):
-            print("patch_stride is not defined, set to 1.")
-            args.patch_stride = 1
+        if not hasattr(args, "grad_checkpointing"):
+            args.grad_checkpointing = False
+        elif args.grad_checkpointing is None:
+            args.grad_checkpointing = "cuda" in args.device.type
+        if args.grad_checkpointing and args.verbose:
+            print(f"Enable gradient checkpointing in ViT")
+
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
             patch_mode=args.patch_mode,
@@ -376,12 +379,6 @@ class ViTCore(Core):
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
         )
-        if not hasattr(args, "grad_checkpointing"):
-            args.grad_checkpointing = False
-        elif args.grad_checkpointing is None:
-            args.grad_checkpointing = "cuda" in args.device.type
-        if args.grad_checkpointing and args.verbose:
-            print(f"Enable gradient checkpointing in ViT")
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,
