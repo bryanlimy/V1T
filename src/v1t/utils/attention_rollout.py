@@ -1,6 +1,7 @@
 import math
 import torch
 import numpy as np
+import typing as t
 from torch import nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader
@@ -82,9 +83,6 @@ def find_shape(num_patches: int):
         dim1 -= 1
     dim2 = num_patches // dim1
     return dim1, dim2
-
-
-import typing as t
 
 
 def normalize(x: t.Union[np.ndarray, torch.Tensor]):
