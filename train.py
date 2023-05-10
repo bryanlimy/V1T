@@ -545,11 +545,12 @@ if __name__ == "__main__":
                 "--patch_mode",
                 type=int,
                 default=0,
-                choices=[0, 1, 2],
+                choices=[0, 1, 2, 3],
                 help="patch embedding mode:"
                 "0 - nn.Unfold to extract patches"
                 "1 - nn.Conv2D to extract patches"
-                "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1",
+                "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1"
+                "3 - nn.Unfold with Dual PatchNorm https://openreview.net/forum?id=jgMqve6Qhw",
             )
             parser.add_argument(
                 "--patch_stride",

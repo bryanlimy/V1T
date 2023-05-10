@@ -44,6 +44,7 @@ class Image2Patches(nn.Module):
         0 - nn.Unfold to extract patches
         1 - nn.Conv2D to extract patches
         2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1
+        3 - nn.Unfold with Dual PatchNorm https://openreview.net/forum?id=jgMqve6Qhw
     """
 
     def __init__(
@@ -87,6 +88,15 @@ class Image2Patches(nn.Module):
                     Rearrange("b c l -> b l c"),
                     nn.LayerNorm(normalized_shape=patch_dim),
                     nn.Linear(in_features=patch_dim, out_features=emb_dim),
+                )
+            case 3:
+                patch_dim = patch_size * patch_size * c
+                self.projection = nn.Sequential(
+                    nn.Unfold(kernel_size=patch_size, stride=stride),
+                    Rearrange("b c l -> b l c"),
+                    nn.LayerNorm(normalized_shape=patch_dim),
+                    nn.Linear(in_features=patch_dim, out_features=emb_dim),
+                    nn.LayerNorm(normalized_shape=emb_dim),
                 )
             case _:
                 raise NotImplementedError(f"--patch_mode {patch_mode} not implemented.")
