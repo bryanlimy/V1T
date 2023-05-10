@@ -1,7 +1,6 @@
 from .core import register, Core
 
 import torch
-import numpy as np
 from torch import nn
 
 
@@ -16,7 +15,13 @@ class RandomCore(Core):
     def regularizer(self):
         return 0.0
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        mouse_id: str,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+    ):
         batch_size = inputs.size(0)
         random = torch.rand(*(batch_size, *self.output_shape), device=inputs.device)
         return random + self.weight - self.weight

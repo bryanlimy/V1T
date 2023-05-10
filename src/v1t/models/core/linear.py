@@ -22,7 +22,13 @@ class LinearCore(Core):
         """L1 regularization"""
         return self.reg_scale * sum(p.abs().sum() for p in self.parameters())
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        mouse_id: str,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+    ):
         batch_size = inputs.shape[0]
         outputs = self.flatten(inputs)
         outputs = self.linear(outputs)

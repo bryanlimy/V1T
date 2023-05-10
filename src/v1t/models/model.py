@@ -177,20 +177,6 @@ class Model(nn.Module):
         return outputs, images, image_grids
 
 
-class DataParallel(nn.DataParallel):
-    def __init__(self, module: Model, **kwargs):
-        super(DataParallel, self).__init__(module=module, **kwargs)
-        self.module = module
-        self.input_shape = module.input_shape
-        self.output_shapes = self.module.output_shapes
-
-    def get_parameters(self, core_lr: float):
-        return self.module.get_parameters(core_lr)
-
-    def regularizer(self, mouse_id: int):
-        return self.module.regularizer(mouse_id)
-
-
 def get_model(args, ds: t.Dict[str, DataLoader], summary: Summary = None) -> Model:
     model = Model(args, ds=ds)
 
