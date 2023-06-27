@@ -36,7 +36,7 @@ class OutputModule(nn.Module):
         2 - separate linear layer per animal
     """
 
-    def __init__(self, args, in_features: int):
+    def __init__(self, args: t.Any, in_features: int):
         super(OutputModule, self).__init__()
         self.in_features = in_features
         self.output_shapes = args.output_shapes
@@ -47,7 +47,7 @@ class OutputModule(nn.Module):
         elif self.ensemble_mode == 2:
             self.linear = nn.ModuleDict(
                 {
-                    str(mouse_id): nn.Linear(in_features=in_features, out_features=1)
+                    mouse_id: nn.Linear(in_features=in_features, out_features=1)
                     for mouse_id in self.output_shapes.keys()
                 }
             )
@@ -65,17 +65,20 @@ class OutputModule(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward(self, inputs: torch.Tensor, mouse_id: int):
-        if self.ensemble_mode == 0:
-            outputs = torch.mean(inputs, dim=-1)
-        elif self.ensemble_mode == 1:
-            outputs = self.linear(inputs)
-            outputs = rearrange(outputs, "b d 1 -> b d")
-        elif self.ensemble_mode == 2:
-            outputs = self.linear[str(mouse_id)](inputs)
-            outputs = rearrange(outputs, "b d 1 -> b d")
-        else:
-            raise NotImplementedError("--ensemble_model must be 0 or 1.")
+    def forward(self, inputs: torch.Tensor, mouse_id: str):
+        match self.ensemble_mode:
+            case 0:
+                outputs = torch.mean(inputs, dim=-1)
+            case 1:
+                outputs = self.linear(inputs)
+                outputs = rearrange(outputs, "b d 1 -> b d")
+            case 2:
+                outputs = self.linear[mouse_id](inputs)
+                outputs = rearrange(outputs, "b d 1 -> b d")
+            case _:
+                NotImplementedError(
+                    f"--ensemble_model {self.ensemble_mode} not supported."
+                )
         outputs = self.activation(outputs)
         return outputs
 
@@ -83,9 +86,9 @@ class OutputModule(nn.Module):
 class EnsembleModel(nn.Module):
     def __init__(
         self,
-        args,
+        args: t.Any,
         saved_models: t.Dict[str, str],
-        ds: t.Dict[int, DataLoader],
+        ds: t.Dict[str, DataLoader],
     ):
         super(EnsembleModel, self).__init__()
         self.verbose = args.verbose
@@ -122,7 +125,7 @@ class EnsembleModel(nn.Module):
                 f"(correlation: {ckpt['value']:.04f})."
             )
 
-    def regularizer(self, mouse_id: int):
+    def regularizer(self, mouse_id: str):
         return torch.tensor(0.0)
 
     def forward(
@@ -436,6 +439,9 @@ if __name__ == "__main__":
         "2: add latent behavior variables to each ViT block"
         "3: add latent behavior + pupil centers to each ViT block"
         "4: separate BehaviorMLP for each animal",
+    )
+    parser.add_argument(
+        "--gray_scale", action="store_true", help="convert colored image to gray-scale"
     )
     parser.add_argument(
         "--num_workers",
