@@ -1,7 +1,4 @@
 import os
-import copy
-
-
 import wandb
 import torch
 import random
@@ -282,7 +279,7 @@ def check_output(command: list):
 
 def save_args(args):
     """Save args object as dictionary to args.output_dir/args.json"""
-    arguments = copy.deepcopy(args.__dict__)
+    arguments = deepcopy(args.__dict__)
     try:
         arguments["git_hash"] = check_output(["git", "describe", "--always"])
         arguments["hostname"] = check_output(["hostname"])
