@@ -174,7 +174,7 @@ class BehaviorMLP(nn.Module):
         super(BehaviorMLP, self).__init__()
         assert behavior_mode in (2, 3, 4)
         self.behavior_mode = behavior_mode
-        in_dim = 3 if behavior_mode == 2 else 5
+        in_dim = 3 if behavior_mode == 2 else 4
         mouse_ids = mouse_ids if behavior_mode == 4 else ["share"]
         self.models = nn.ModuleDict(
             {

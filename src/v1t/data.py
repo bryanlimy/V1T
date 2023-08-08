@@ -427,6 +427,8 @@ class MiceDataset(Dataset):
         data["image"] = self.transform_image(data["image"])
         data["response"] = self.transform_response(data["response"])
         data["behavior"] = self.transform_behavior(data["behavior"])
+        # only take pupil dilation and speed
+        data["behavior"] = data["behavior"][[0, 2]]
         data["pupil_center"] = self.transform_pupil_center(data["pupil_center"])
         data["image_id"] = self.image_ids[idx]
         data["trial_id"] = self.trial_ids[idx]

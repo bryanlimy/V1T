@@ -238,7 +238,7 @@ def main(args, wandb_sweep: bool = False):
     if args.backend is not None:
         model = utils.compile(args, model=model)
 
-    utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
+    # utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
     while (epoch := epoch + 1) < args.epochs + 1:
         if args.verbose:
@@ -273,10 +273,10 @@ def main(args, wandb_sweep: bool = False):
                 value=param_group["lr"],
                 step=epoch,
             )
-        if epoch % 10 == 0:
-            utils.plot_samples(
-                args, model=model, ds=val_ds, summary=summary, epoch=epoch
-            )
+        # if epoch % 10 == 0:
+        #     utils.plot_samples(
+        #         args, model=model, ds=val_ds, summary=summary, epoch=epoch
+        #     )
         if args.verbose:
             print(
                 f'Train\t\tloss: {train_result["loss"]:.04f}\n'
@@ -316,9 +316,9 @@ def main(args, wandb_sweep: bool = False):
     )
     if args.use_wandb:
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=epoch)
-    utils.plot_samples(
-        args, model=model, ds=test_ds, summary=summary, epoch=epoch, mode=2
-    )
+    # utils.plot_samples(
+    #     args, model=model, ds=test_ds, summary=summary, epoch=epoch, mode=2
+    # )
     if args.verbose:
         print(f"\nResults saved to {args.output_dir}.")
     summary.close()

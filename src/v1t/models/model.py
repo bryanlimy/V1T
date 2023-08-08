@@ -186,14 +186,17 @@ def get_model(args, ds: t.Dict[str, DataLoader], summary: Summary = None) -> Mod
 
     # get model info
     mouse_id = args.mouse_ids[0]
-    batch_size = args.micro_batch_size
-    random_input = lambda size: torch.rand(*size)
+    random_tensor = lambda size: torch.rand(*size)
+    batch_size = 1
+    behavior_dim = 2
+    pupil_center_dim = 2
+
     model_info = get_model_info(
         model=model,
         input_data={
-            "inputs": random_input((batch_size, *model.input_shape)),
-            "behaviors": random_input((batch_size, 3)),
-            "pupil_centers": random_input((batch_size, 2)),
+            "inputs": random_tensor((batch_size, *model.input_shape)),
+            "behaviors": random_tensor((batch_size, behavior_dim)),
+            "pupil_centers": random_tensor((batch_size, pupil_center_dim)),
         },
         mouse_id=mouse_id,
         filename=os.path.join(args.output_dir, "model.txt"),
@@ -207,9 +210,9 @@ def get_model(args, ds: t.Dict[str, DataLoader], summary: Summary = None) -> Mod
     get_model_info(
         model=model.core,
         input_data={
-            "inputs": random_input((batch_size, *model.core.input_shape)),
-            "behaviors": random_input((batch_size, 3)),
-            "pupil_centers": random_input((batch_size, 2)),
+            "inputs": random_tensor((batch_size, *model.core.input_shape)),
+            "behaviors": random_tensor((batch_size, behavior_dim)),
+            "pupil_centers": random_tensor((batch_size, pupil_center_dim)),
         },
         mouse_id=mouse_id,
         filename=os.path.join(args.output_dir, "model_core.txt"),
@@ -219,7 +222,7 @@ def get_model(args, ds: t.Dict[str, DataLoader], summary: Summary = None) -> Mod
     # get readout summary
     get_model_info(
         model=model.readouts[mouse_id],
-        input_data={"inputs": random_input((batch_size, *model.core.output_shape))},
+        input_data={"inputs": random_tensor((batch_size, *model.core.output_shape))},
         filename=os.path.join(args.output_dir, "model_readout.txt"),
         summary=summary,
         tag=f"model/trainable_parameters/Mouse{mouse_id}Readout",
