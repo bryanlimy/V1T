@@ -325,7 +325,7 @@ def wandb_init(args, wandb_sweep: bool):
             config.pop("clear_output_dir", None)
             wandb.init(
                 config=config,
-                project="sensorium",
+                project="sensorium2022",
                 entity="bryanlimy",
                 group=args.wandb_group,
                 name=os.path.basename(args.output_dir),
@@ -338,7 +338,7 @@ def wandb_init(args, wandb_sweep: bool):
         wandb.log({"trainable_params": args.trainable_params}, step=0)
 
 
-def metrics2df(results: t.Dict[int, torch.Tensor]):
+def metrics2df(results: t.Dict[str, torch.Tensor]):
     mouse_ids, values = [], []
     for mouse_id, v in results.items():
         mouse_ids.extend([mouse_id] * len(v))
