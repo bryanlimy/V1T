@@ -9,7 +9,7 @@ from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, einsum
 from torch.utils.checkpoint import checkpoint
 
-from v1t.models.utils import DropPath
+from v1t.models.utils import DropPath, Interpolate
 
 
 class PatchShifting(nn.Module):
@@ -55,6 +55,7 @@ class Image2Patches(nn.Module):
         stride: int,
         emb_dim: int,
         dropout: float = 0.0,
+        target_shape: t.Tuple[int, int] = None,
     ):
         super(Image2Patches, self).__init__()
         assert 1 <= stride <= patch_size
@@ -100,8 +101,23 @@ class Image2Patches(nn.Module):
                 )
             case _:
                 raise NotImplementedError(f"--patch_mode {patch_mode} not implemented.")
+
+        # compute num_patches to output target_shape if provided
+        self.interpolate = None
+        if target_shape is not None:
+            h, w = target_shape
+            target_patches = h * w
+            if target_patches < num_patches:
+                self.interpolate = nn.Sequential(
+                    Rearrange("b l c -> b c l"),
+                    Interpolate(size=target_patches),
+                    Rearrange("b c l -> b l c"),
+                )
+                num_patches = target_patches
+        # CLS token
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
+        # positional embedding
         self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
         self.dropout = nn.Dropout(p=dropout)
         self.num_patches = num_patches
@@ -122,6 +138,8 @@ class Image2Patches(nn.Module):
     def forward(self, inputs: torch.Tensor):
         batch_size = inputs.size(0)
         patches = self.projection(inputs)
+        if self.interpolate is not None:
+            patches = self.interpolate(patches)
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=batch_size)
         outputs = torch.cat((cls_tokens, patches), dim=1)
         outputs += self.pos_embedding
@@ -381,6 +399,7 @@ class ViTCore(Core):
         if args.grad_checkpointing and args.verbose:
             print(f"Enable gradient checkpointing in ViT")
 
+        target_shape = (28, 56)
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
             patch_mode=args.patch_mode,
@@ -388,6 +407,7 @@ class ViTCore(Core):
             stride=args.patch_stride,
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
+            target_shape=target_shape,
         )
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
@@ -404,7 +424,8 @@ class ViTCore(Core):
             grad_checkpointing=args.grad_checkpointing,
         )
         # calculate latent height and width based on num_patches
-        h, w = self.find_shape(self.patch_embedding.num_patches - 1)
+        # h, w = self.find_shape(self.patch_embedding.num_patches - 1)
+        h, w = target_shape
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
         self.output_shape = (self.transformer.output_shape[-1], h, w)
 

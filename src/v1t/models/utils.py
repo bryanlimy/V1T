@@ -1,10 +1,10 @@
 import os
 import torch
 import collections
-import numpy as np
 import typing as t
 from torch import nn
 from math import floor
+import torch.nn.functional as F
 
 
 def int2tuple(value: t.Union[int, t.Tuple[int, int]]):
@@ -139,6 +139,29 @@ class DropPath(nn.Module):
         random_tensor = torch.floor(self.keep_prop + random_tensor)
         outputs = (inputs / self.keep_prop) * random_tensor
         return outputs
+
+
+class Interpolate(nn.Module):
+    """nn.Module wrapper for F.interpolate"""
+
+    def __init__(
+        self,
+        size: t.Union[int, t.Tuple[int, int], t.Tuple[int, int, int]],
+        mode: str = "nearest",
+        antialias: bool = False,
+    ):
+        super(Interpolate, self).__init__()
+        self.size = size
+        self.mode = mode
+        self.antialias = antialias
+
+    def forward(self, inputs: torch.Tensor):
+        return F.interpolate(
+            inputs,
+            size=self.size,
+            mode=self.mode,
+            antialias=self.antialias,
+        )
 
 
 class BufferDict(nn.Module):
