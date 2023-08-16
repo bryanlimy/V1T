@@ -399,7 +399,6 @@ class ViTCore(Core):
         if args.grad_checkpointing and args.verbose:
             print(f"Enable gradient checkpointing in ViT")
 
-        target_shape = (28, 56)
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
             patch_mode=args.patch_mode,
@@ -407,7 +406,6 @@ class ViTCore(Core):
             stride=args.patch_stride,
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
-            target_shape=target_shape,
         )
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
@@ -424,8 +422,7 @@ class ViTCore(Core):
             grad_checkpointing=args.grad_checkpointing,
         )
         # calculate latent height and width based on num_patches
-        # h, w = self.find_shape(self.patch_embedding.num_patches - 1)
-        h, w = target_shape
+        h, w = self.find_shape(self.patch_embedding.num_patches - 1)
         self.rearrange = Rearrange("b (h w) c -> b c h w", h=h, w=w)
         self.output_shape = (self.transformer.output_shape[-1], h, w)
 
