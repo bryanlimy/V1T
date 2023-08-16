@@ -272,7 +272,7 @@ class Attention(nn.Module):
         self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
     ):
         if self.mask is None:
-            dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+            dots = torch.matmul(q * self.scale, k.transpose(-1, -2))
         else:
             scale = repeat(self.scale, "h -> b h 1 1", b=q.size(0))
             dots = torch.matmul(q, k.transpose(-1, -2)) * scale
