@@ -1,17 +1,21 @@
 # V<font size='5'>1</font>T: Large-scale mouse V1 response prediction using a Vision Transformer
 
-[![arXiv](https://img.shields.io/badge/arXiv-2302.03023-b31b1b.svg)](https://arxiv.org/abs/2302.03023)
+Code for TMLR2023 paper "[V<font size='1'>1</font>T: Large-scale mouse V1 response prediction using a Vision Transformer](https://openreview.net/forum?id=qHZs2p4ZD4)".
 
 ![](misc/images/v1t.png)
 
 Authors: [Bryan M. Li](https://twitter.com/bryanlimy), [Isabel M. Cornacchia](https://twitter.com/isabelmaria_c), [Nathalie L. Rochefort](https://twitter.com/RochefortLab), [Arno Onken](https://homepages.inf.ed.ac.uk/aonken/)
 
 ```bibtex
-@article{li2023v1t,
-    title={V1T: large-scale mouse V1 response prediction using a Vision Transformer},
-    author={Li, Bryan M and Cornacchia, Isabel M and Rochefort, Nathalie L and Onken, Arno},
-    journal={arXiv preprint arXiv:2302.03023},
-    year={2023}
+@article{
+  li2023vt,
+  title={V1T: large-scale mouse V1 response prediction using a Vision Transformer},
+  author={Bryan M. Li and Isabel Maria Cornacchia and Nathalie Rochefort and Arno Onken},
+  journal={Transactions on Machine Learning Research},
+  issn={2835-8856},
+  year={2023},
+  url={https://openreview.net/forum?id=qHZs2p4ZD4},
+  note={}
 }
 ```
 
@@ -45,7 +49,6 @@ sensorium2022/
   ...
 ```
 - [`demo.ipynb`](demo.ipynb) demonstrates how to load the best V1T model and inference the Sensorium+ test set, as well as extracting the attention rollout maps.
-- [`submission.py`](submission.py) creates the submission `csv` files for the Sensorium challenge.
 - [`sweep.py`](sweep.py) performs hyperparameter tuning using [Weights & Biases](https://wandb.ai/site).
 - [`train.py`](train.py) contains the model training procedure.
 - [data](data/) store the datasets, please check [data/README.md](data/README.md) for more information.
