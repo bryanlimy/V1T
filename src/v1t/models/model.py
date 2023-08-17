@@ -1,6 +1,6 @@
 import os
-import wandb
 import torch
+import warnings
 import torchinfo
 import typing as t
 from torch import nn
@@ -8,12 +8,12 @@ import torch.distributed
 from torch.utils.data import DataLoader
 
 
-from v1t.utils import tensorboard
-from v1t.models.utils import ELU1
 from v1t.models.core import get_core
 from v1t.models.readout import Readouts
+from v1t.utils.tensorboard import Summary
 from v1t.models.core_shifter import CoreShifters
 from v1t.models.image_cropper import ImageCropper
+from v1t.models.utils import ELU1, load_pretrain_core
 
 
 def get_model_info(
@@ -21,7 +21,7 @@ def get_model_info(
     input_data: t.Union[torch.Tensor, t.Sequence[t.Any], t.Mapping[str, t.Any]],
     mouse_id: str = None,
     filename: str = None,
-    summary: tensorboard.Summary = None,
+    summary: Summary = None,
     device: torch.device = "cpu",
     tag: str = "model/trainable_parameters",
 ):
@@ -34,7 +34,11 @@ def get_model_info(
     }
     if mouse_id is not None:
         args["mouse_id"] = mouse_id
-    model_info = torchinfo.summary(**args)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning)
+        model_info = torchinfo.summary(**args)
+
     if filename is not None:
         with open(filename, "w") as file:
             file.write(str(model_info))
@@ -53,7 +57,7 @@ class Model(nn.Module):
         4 - shift_mode=3 and provide both behavior and pupil center to cropper
     """
 
-    def __init__(self, args, ds: t.Dict[str, DataLoader], name: str = "Model"):
+    def __init__(self, args: t.Any, ds: t.Dict[str, DataLoader], name: str = "Model"):
         super(Model, self).__init__()
         assert isinstance(
             args.output_shapes, dict
@@ -100,16 +104,24 @@ class Model(nn.Module):
 
         self.elu1 = ELU1()
 
+    @property
+    def device(self) -> torch.device:
+        """return the device that the model parameters is on"""
+        return next(self.parameters()).device
+
     def get_parameters(self, core_lr: float):
+
         # separate learning rate for core module from the rest
-        params = [
-            {
-                "params": self.core.parameters(),
-                "lr": core_lr,
-                "name": "core",
-            },
-            {"params": self.readouts.parameters(), "name": "readouts"},
-        ]
+        params = []
+        if not self.core.frozen:
+            params.append(
+                {
+                    "params": self.core.parameters(),
+                    "lr": core_lr,
+                    "name": "core",
+                }
+            )
+        params.append({"params": self.readouts.parameters(), "name": "readouts"})
         if self.image_cropper.image_shifter is not None:
             params.append(
                 {
@@ -127,7 +139,9 @@ class Model(nn.Module):
         return params
 
     def regularizer(self, mouse_id: str):
-        reg = self.core.regularizer()
+        reg = 0
+        if not self.core.frozen:
+            reg += self.core.regularizer()
         reg += self.readouts.regularizer(mouse_id=mouse_id)
         reg += self.image_cropper.regularizer(mouse_id=mouse_id)
         if self.core_shifter is not None:
@@ -163,22 +177,12 @@ class Model(nn.Module):
         return outputs, images, image_grids
 
 
-class DataParallel(nn.DataParallel):
-    def __init__(self, module: Model, **kwargs):
-        super(DataParallel, self).__init__(module=module, **kwargs)
-        self.module = module
-        self.input_shape = module.input_shape
-        self.output_shapes = self.module.output_shapes
-
-    def get_parameters(self, core_lr: float):
-        return self.module.get_parameters(core_lr)
-
-    def regularizer(self, mouse_id: int):
-        return self.module.regularizer(mouse_id)
-
-
-def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = None):
+def get_model(args, ds: t.Dict[str, DataLoader], summary: Summary = None) -> Model:
     model = Model(args, ds=ds)
+
+    if hasattr(args, "pretrain_core") and args.pretrain_core:
+        load_pretrain_core(args, model=model, device=args.device)
+        model.core.freeze()
 
     # get model info
     mouse_id = args.mouse_ids[0]
@@ -195,10 +199,9 @@ def get_model(args, ds: t.Dict[str, DataLoader], summary: tensorboard.Summary = 
         filename=os.path.join(args.output_dir, "model.txt"),
         summary=summary,
     )
+    args.trainable_params = model_info.trainable_params
     if args.verbose > 2:
         print(str(model_info))
-    if args.use_wandb:
-        wandb.log({"trainable_params": model_info.trainable_params}, step=0)
 
     # get core info
     get_model_info(

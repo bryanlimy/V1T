@@ -17,23 +17,25 @@ from v1t.utils import utils, tensorboard
 from v1t.utils.scheduler import Scheduler
 
 
+def gather(result: t.Dict[str, t.List[torch.Tensor]]):
+    return {k: torch.sum(torch.stack(v)).cpu() for k, v in result.items()}
+
+
+def vstack(tensors: t.List[torch.Tensor]):
+    return torch.vstack(tensors).cpu()
+
+
 @torch.no_grad()
 def compute_metrics(y_true: torch.Tensor, y_pred: torch.Tensor):
     """Metrics to compute as part of training and validation step"""
     msse = losses.msse(y_true=y_true, y_pred=y_pred)
     poisson_loss = losses.poisson_loss(y_true=y_true, y_pred=y_pred)
-    correlation = losses.correlation(y1=y_pred, y2=y_true, dim=None)
+    correlation = losses.correlation(y1=y_pred, y2=y_true, dim=0)
+    correlation = torch.mean(correlation)
     return {
         "metrics/msse": msse,
         "metrics/poisson_loss": poisson_loss,
         "metrics/single_trial_correlation": correlation,
-    }
-
-
-def gather(result: t.Dict[str, t.List[torch.Tensor]]):
-    return {
-        k: torch.sum(torch.stack(v)) if "loss" in k else torch.mean(torch.stack(v))
-        for k, v in result.items()
     }
 
 
@@ -49,44 +51,33 @@ def train_step(
     device: torch.device = "cpu",
 ) -> t.Dict[str, torch.Tensor]:
     model.to(device)
-    result, batch_loss = {}, 0.0
     batch_size = batch["image"].size(0)
-    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
+    result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
+    for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
-            responses = micro_batch["response"].to(device)
-            outputs, _, _ = model(
+            y_true = micro_batch["response"].to(device)
+            y_pred, _, _ = model(
                 inputs=micro_batch["image"].to(device),
                 mouse_id=mouse_id,
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
             loss = criterion(
-                y_true=responses,
-                y_pred=outputs,
+                y_true=y_true,
+                y_pred=y_pred,
                 mouse_id=mouse_id,
                 batch_size=batch_size,
             )
-            batch_loss += loss
-            utils.update_dict(
-                result,
-                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
-            )
-    reg_loss = model.regularizer(mouse_id=mouse_id)
-    total_loss = batch_loss + reg_loss
-    # calculate and accumulate gradients
-    scaler.scale(total_loss).backward()
+            reg_loss = (y_true.size(0) / batch_size) * model.regularizer(mouse_id)
+            total_loss = loss + reg_loss
+        scaler.scale(total_loss).backward()
+        result["loss/loss"].append(loss.detach())
+        result["loss/reg_loss"].append(reg_loss.detach())
+        result["loss/total_loss"].append(total_loss.detach())
     if update:
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad()
-    utils.update_dict(
-        result,
-        {
-            "loss/loss": batch_loss.detach(),
-            "loss/reg_loss": reg_loss.detach(),
-            "loss/total_loss": total_loss.detach(),
-        },
-    )
     return gather(result)
 
 
@@ -134,41 +125,34 @@ def validation_step(
     scaler: GradScaler,
     micro_batch_size: int,
     device: torch.device = "cpu",
-) -> t.Dict[str, torch.Tensor]:
+) -> t.Tuple[t.Dict[str, torch.Tensor], torch.Tensor, torch.Tensor]:
     model.to(device)
-    result, batch_loss = {}, 0.0
     batch_size = batch["image"].size(0)
-    for micro_batch in data.micro_batching(batch, batch_size=micro_batch_size):
+    result = {"loss/loss": [], "loss/reg_loss": [], "loss/total_loss": []}
+    targets, predictions = [], []
+    for micro_batch in data.micro_batching(batch, micro_batch_size):
         with autocast(enabled=scaler.is_enabled(), dtype=torch.float16):
-            responses = micro_batch["response"].to(device)
-            outputs, _, _ = model(
+            y_true = micro_batch["response"].to(device)
+            y_pred, _, _ = model(
                 inputs=micro_batch["image"].to(device),
                 mouse_id=mouse_id,
                 behaviors=micro_batch["behavior"].to(device),
                 pupil_centers=micro_batch["pupil_center"].to(device),
             )
             loss = criterion(
-                y_true=responses,
-                y_pred=outputs,
+                y_true=y_true,
+                y_pred=y_pred,
                 mouse_id=mouse_id,
                 batch_size=batch_size,
             )
-            batch_loss += loss
-            utils.update_dict(
-                result,
-                compute_metrics(y_true=responses.detach(), y_pred=outputs.detach()),
-            )
-    reg_loss = model.regularizer(mouse_id=mouse_id)
-    total_loss = batch_loss + reg_loss
-    utils.update_dict(
-        result,
-        {
-            "loss/loss": batch_loss.detach(),
-            "loss/reg_loss": reg_loss.detach(),
-            "loss/total_loss": total_loss.detach(),
-        },
-    )
-    return gather(result)
+            reg_loss = (y_true.size(0) / batch_size) * model.regularizer(mouse_id)
+            total_loss = loss + reg_loss
+        result["loss/loss"].append(loss)
+        result["loss/reg_loss"].append(reg_loss)
+        result["loss/total_loss"].append(total_loss)
+        targets.append(y_true)
+        predictions.append(y_pred)
+    return gather(result), vstack(targets), vstack(predictions)
 
 
 def validate(
@@ -184,9 +168,9 @@ def validate(
     results = {}
     with tqdm(desc="Val", total=utils.num_steps(ds), disable=args.verbose < 2) as pbar:
         for mouse_id, mouse_ds in ds.items():
-            mouse_result = {}
+            mouse_result, y_true, y_pred = {}, [], []
             for batch in mouse_ds:
-                result = validation_step(
+                result, targets, predictions = validation_step(
                     mouse_id=mouse_id,
                     batch=batch,
                     model=model,
@@ -196,8 +180,13 @@ def validate(
                     device=args.device,
                 )
                 utils.update_dict(mouse_result, result)
+                y_true.append(targets)
+                y_pred.append(predictions)
                 pbar.update(1)
+            y_true, y_pred = vstack(y_true), vstack(y_pred)
+            mouse_result.update(compute_metrics(y_true=y_true, y_pred=y_pred))
             results[mouse_id] = mouse_result
+            del y_true, y_pred
     return utils.log_metrics(results, epoch=epoch, summary=summary, mode=1)
 
 
@@ -209,14 +198,9 @@ def main(args, wandb_sweep: bool = False):
 
     Logger(args)
     utils.get_device(args)
-    utils.set_random_seed(args.seed)
+    utils.set_random_seed(args.seed, deterministic=args.deterministic)
 
     data.get_mouse_ids(args)
-
-    if args.grad_checkpointing is None and args.core in ("vit", "cct"):
-        args.grad_checkpointing = "cuda" in args.device.type
-    if args.grad_checkpointing and args.verbose:
-        print(f"Enable gradient checkpointing for ViT.")
     utils.compute_micro_batch_size(args)
 
     train_ds, val_ds, test_ds = data.get_training_ds(
@@ -228,29 +212,10 @@ def main(args, wandb_sweep: bool = False):
     )
     summary = tensorboard.Summary(args)
 
-    if args.use_wandb:
-        os.environ["WANDB_SILENT"] = "true"
-        if not wandb_sweep:
-            try:
-                wandb.init(
-                    config=args,
-                    dir=os.path.join(args.output_dir, "wandb"),
-                    project="sensorium",
-                    entity="bryanlimy",
-                    group=args.wandb_group,
-                    name=os.path.basename(args.output_dir),
-                )
-            except AssertionError as e:
-                print(f"wandb.init error: {e}\n")
-                args.use_wandb = False
-
     model = get_model(args, ds=train_ds, summary=summary)
-
-    if args.pretrain_core:
-        utils.load_pretrain_core(args, model=model)
-
+    args.core_lr = args.lr if args.core_lr is None else args.core_lr
     optimizer = torch.optim.AdamW(
-        params=model.get_parameters(core_lr=args.core_lr_scale * args.lr),
+        params=model.get_parameters(core_lr=args.core_lr),
         lr=args.lr,
         betas=(args.adam_beta1, args.adam_beta2),
         eps=args.adam_eps,
@@ -264,8 +229,14 @@ def main(args, wandb_sweep: bool = False):
         args, model=model, optimizer=optimizer, scaler=scaler, mode="max"
     )
 
+    if args.use_wandb:
+        utils.wandb_init(args, wandb_sweep=wandb_sweep)
+
     utils.save_args(args)
     epoch = scheduler.restore(load_optimizer=True, load_scheduler=True)
+
+    if args.backend is not None:
+        model = utils.compile(args, model=model)
 
     utils.plot_samples(args, model=model, ds=train_ds, summary=summary, epoch=epoch)
 
@@ -308,9 +279,8 @@ def main(args, wandb_sweep: bool = False):
             )
         if args.verbose:
             print(
-                f'Train\t\t\tloss: {train_result["loss"]:.04f}\t\t'
-                f'correlation: {train_result["single_trial_correlation"]:.04f}\n'
-                f'Validation\t\tloss: {val_result["loss"]:.04f}\t\t'
+                f'Train\t\tloss: {train_result["loss"]:.04f}\n'
+                f'Validation\tloss: {val_result["loss"]:.04f}\t'
                 f'correlation: {val_result["single_trial_correlation"]:.04f}\n'
                 f"Elapse: {elapse:.02f}s"
             )
@@ -319,7 +289,6 @@ def main(args, wandb_sweep: bool = False):
             wandb.log(
                 {
                     "train_loss": train_result["loss"],
-                    "train_corr": train_result["single_trial_correlation"],
                     "val_loss": val_result["loss"],
                     "val_corr": val_result["single_trial_correlation"],
                     "best_corr": scheduler.best_value,
@@ -369,7 +338,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mouse_ids",
         nargs="+",
-        type=int,
+        type=str,
         default=None,
         help="Mouse to use for training.",
     )
@@ -387,38 +356,47 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--center_crop",
-        default=1.0,
         type=float,
+        default=1.0,
         help="crop the center of the image to (scale * height, scale, width)",
     )
     parser.add_argument(
         "--resize_image",
-        default=1,
         type=int,
+        default=1,
         choices=[0, 1],
         help="resize image mode:"
         "0: no resizing, return full image (1, 144, 256)"
         "1: resize image to (1, 36, 64)",
     )
     parser.add_argument(
-        "--num_workers",
-        default=2,
+        "--gray_scale", action="store_true", help="convert colored image to gray-scale"
+    )
+    parser.add_argument(
+        "--limit_data",
         type=int,
+        default=None,
+        help="limit the number of training samples.",
+    )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=2,
         help="number of works for DataLoader.",
     )
 
     # training settings
     parser.add_argument(
         "--epochs",
-        default=200,
         type=int,
+        default=400,
         help="maximum epochs to train the model.",
     )
-    parser.add_argument("--batch_size", default=8, type=int)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument(
         "--micro_batch_size",
-        default=0,
         type=int,
+        default=0,
         help="micro batch size to train the model. if the model is being "
         "trained on CUDA device and micro batch size 0 is provided, then "
         "automatically increase micro batch size until OOM.",
@@ -426,14 +404,23 @@ if __name__ == "__main__":
     parser.add_argument(
         "--device",
         type=str,
-        choices=["cpu", "cuda", "mps"],
         default="",
+        choices=["cpu", "cuda", "mps"],
         help="Device to use for computation. "
         "Use the best available device if --device is not specified.",
     )
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument(
-        "--amp", action="store_true", help="automatic mixed precision training"
+        "--amp",
+        action="store_true",
+        help="automatic mixed precision training",
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default=None,
+        choices=["inductor", "hidet"],
+        help="torch.compile backend, None to disable torch.compile",
     )
     parser.add_argument(
         "--grad_checkpointing",
@@ -443,6 +430,11 @@ if __name__ == "__main__":
         help="Enable gradient checkpointing if 1. If None is provided, then "
         "enable by default if CUDA is detected.",
     )
+    parser.add_argument(
+        "--deterministic",
+        action="store_true",
+        help="use deterministic algorithms in PyTorch",
+    )
 
     # optimizer settings
     parser.add_argument("--adam_beta1", type=float, default=0.9)
@@ -450,13 +442,15 @@ if __name__ == "__main__":
     parser.add_argument("--adam_eps", type=float, default=1e-8)
     parser.add_argument(
         "--criterion",
-        default="poisson",
         type=str,
+        default="poisson",
         help="criterion (loss function) to use.",
     )
     parser.add_argument(
         "--ds_scale",
-        action="store_true",
+        type=int,
+        default=1,
+        choices=[0, 1],
         help="scale loss by the size of the dataset",
     )
 
@@ -466,12 +460,6 @@ if __name__ == "__main__":
         type=str,
         default="",
         help="path to directory where pre-trained core model is stored.",
-    )
-    parser.add_argument(
-        "--core_lr_scale",
-        type=float,
-        default=1,
-        help="scale learning rate for core as it might already be trained.",
     )
 
     # plot settings
@@ -502,7 +490,7 @@ if __name__ == "__main__":
         action="store_true",
         help="overwrite content in --output_dir",
     )
-    parser.add_argument("--verbose", type=int, default=2, choices=[0, 1, 2, 3])
+    parser.add_argument("--verbose", type=int, default=1, choices=[0, 1, 2, 3])
 
     # model settings
     parser.add_argument(
@@ -539,7 +527,8 @@ if __name__ == "__main__":
             parser.add_argument("--num_filters", type=int, default=8)
             parser.add_argument("--dropout", type=float, default=0.0)
             parser.add_argument("--core_reg_scale", type=float, default=0)
-            parser.add_argument("--lr", default=0.001, type=float)
+            parser.add_argument("--lr", type=float, default=0.001)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "stacked2d":
             parser.add_argument("--num_layers", type=int, default=4)
             parser.add_argument("--dropout", type=float, default=0.0)
@@ -548,18 +537,20 @@ if __name__ == "__main__":
             parser.add_argument(
                 "--linear", action="store_true", help="remove non-linearity in core"
             )
-            parser.add_argument("--lr", default=0.009, type=float)
+            parser.add_argument("--lr", type=float, default=0.009)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "vit":
             parser.add_argument("--patch_size", type=int, default=8)
             parser.add_argument(
                 "--patch_mode",
                 type=int,
                 default=0,
-                choices=[0, 1, 2],
+                choices=[0, 1, 2, 3],
                 help="patch embedding mode:"
                 "0 - nn.Unfold to extract patches"
                 "1 - nn.Conv2D to extract patches"
-                "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1",
+                "2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1"
+                "3 - nn.Unfold with Dual PatchNorm https://openreview.net/forum?id=jgMqve6Qhw",
             )
             parser.add_argument(
                 "--patch_stride",
@@ -595,7 +586,8 @@ if __name__ == "__main__":
                 help="Disable bias terms in linear layers in ViT.",
             )
             parser.add_argument("--core_reg_scale", type=float, default=0.5379)
-            parser.add_argument("--lr", default=0.001647, type=float)
+            parser.add_argument("--lr", type=float, default=0.001647)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "cct":
             parser.add_argument("--patch_size", type=int, default=8)
             parser.add_argument(
@@ -627,13 +619,15 @@ if __name__ == "__main__":
                 help="stochastic depth dropout rate",
             )
             parser.add_argument("--core_reg_scale", type=float, default=0.5379)
-            parser.add_argument("--lr", default=0.001647, type=float)
+            parser.add_argument("--lr", type=float, default=0.001647)
+            parser.add_argument("--core_lr", type=float, default=None)
         case "stn":
             parser.add_argument("--num_layers", type=int, default=7)
             parser.add_argument("--num_filters", type=int, default=63)
             parser.add_argument("--dropout", type=float, default=0.1135)
             parser.add_argument("--core_reg_scale", type=float, default=0.0450)
-            parser.add_argument("--lr", default=0.001, type=float)
+            parser.add_argument("--lr", type=float, default=0.001)
+            parser.add_argument("--core_lr", type=float, default=None)
         case _:
             raise NotImplementedError(f"--core {temp_args.core} not implemented.")
 

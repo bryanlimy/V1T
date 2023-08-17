@@ -1,6 +1,5 @@
 import os
-import sys
-import copy
+import wandb
 import torch
 import random
 import subprocess
@@ -9,6 +8,7 @@ import typing as t
 import pandas as pd
 from torch import nn
 from tqdm import tqdm
+from copy import deepcopy
 from torch.utils.data import DataLoader
 
 from v1t.models import Model
@@ -18,17 +18,42 @@ from v1t.utils import yaml, tensorboard
 
 
 def set_random_seed(seed: int, deterministic: bool = False):
-    """Set random seed for Python, Numpy asn PyTorch.
+    """Set random seed for Python, Numpy and PyTorch.
     Args:
         seed: int, the random seed to use.
         deterministic: bool, use "deterministic" algorithms in PyTorch.
     """
     random.seed(seed)
     np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
     if deterministic:
         torch.backends.cudnn.benchmark = False
         torch.use_deterministic_algorithms(True)
-    torch.manual_seed(seed)
+
+
+def get_device(args):
+    """Get the appropriate torch.device from args.device argument"""
+    device = args.device
+    if not device:
+        device = "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+            torch.backends.cudnn.allow_tf32 = True
+            torch.backends.cuda.matmul.allow_tf32 = True
+        elif torch.backends.mps.is_available():
+            device = "mps"
+    args.device = torch.device(device)
+
+
+def compile(args, model: nn.Module):
+    """use torch.compile"""
+    if args.verbose:
+        print(f"torch.compile with {args.backend} backend.")
+    from einops._torch_specific import allow_ops_in_compiled_graph
+
+    allow_ops_in_compiled_graph()
+    return torch.compile(model, backend=args.backend, mode="default")
 
 
 @torch.no_grad()
@@ -108,11 +133,7 @@ def evaluate(
     for mouse_id, mouse_ds in tqdm(
         ds.items(), desc="Evaluation", disable=args.verbose < 2
     ):
-        if (
-            mouse_ds.dataset.ds_name == "sensorium"
-            and mouse_id in ("0", "1")
-            and mouse_ds.dataset.tier == "test"
-        ):
+        if mouse_id in ("S0", "S1") and mouse_ds.dataset.tier == "test":
             continue
         outputs[mouse_id] = inference(
             ds=mouse_ds,
@@ -132,16 +153,7 @@ def evaluate(
             ] = mouse_metric.correlation_to_average(per_neuron=True)
             results["feve"][mouse_id] = mouse_metric.feve(per_neuron=True)
 
-    if summary is not None:
-        # create box plot for each metric
-        for metric, values in results.items():
-            if values:
-                summary.box_plot(
-                    metric,
-                    data=metrics2df(results[metric]),
-                    step=epoch,
-                    mode=mode,
-                )
+        del mouse_metric
 
     # compute the average value for each mouse
     for metric in metrics:
@@ -195,7 +207,7 @@ def plot_samples(
     summary: tensorboard.Summary,
     epoch: int,
     mode: int = 1,
-    num_samples: int = 5,
+    num_plots: int = 5,
 ):
     device = args.device
     model.to(device)
@@ -212,10 +224,10 @@ def plot_samples(
             "image_ids": [],
         }
         i_transform_image = mouse_ds.dataset.i_transform_image
+        num_samples = 0
         for batch in mouse_ds:
-            for micro_batch in data.micro_batching(
-                batch, batch_size=args.micro_batch_size
-            ):
+            should_break = False
+            for micro_batch in data.micro_batching(batch, args.micro_batch_size):
                 images = micro_batch["image"]
                 predictions, crop_images, image_grids = model(
                     inputs=images.to(device),
@@ -223,26 +235,27 @@ def plot_samples(
                     pupil_centers=micro_batch["pupil_center"].to(device),
                     behaviors=micro_batch["behavior"].to(device),
                 )
-                images = i_transform_image(images)
+                images = i_transform_image(images.cpu())
                 crop_images = i_transform_image(crop_images.cpu())
                 image_grids = image_grids.cpu()
                 predictions = predictions.cpu()
-                for i in range(len(predictions)):
-                    results["images"].append(images[i])
-                    results["crop_images"].append(crop_images[i])
-                    results["image_grids"].append(image_grids[i])
-                    results["targets"].append(micro_batch["response"][i])
-                    results["predictions"].append(predictions[i])
-                    results["pupil_center"].append(micro_batch["pupil_center"][i])
-                    results["behaviors"].append(micro_batch["behavior"][i])
-                    results["image_ids"].append(micro_batch["image_id"][i])
-                    if len(results["images"]) == num_samples:
-                        break
-                if len(results["images"]) == num_samples:
+
+                results["images"].append(images)
+                results["crop_images"].append(crop_images)
+                results["image_grids"].append(image_grids)
+                results["targets"].append(micro_batch["response"])
+                results["predictions"].append(predictions)
+                results["pupil_center"].append(micro_batch["pupil_center"])
+                results["behaviors"].append(micro_batch["behavior"])
+                results["image_ids"].append(micro_batch["image_id"])
+                should_break = (num_samples := num_samples + len(images)) >= num_plots
+                if should_break:
                     break
-            if len(results["images"]) == num_samples:
+            if should_break:
                 break
-        results = {k: torch.stack(v, dim=0).numpy() for k, v in results.items()}
+        results = {k: torch.vstack(v) for k, v in results.items()}
+        results["image_ids"] = torch.flatten(results["image_ids"])
+        results = {k: v[:num_plots].cpu().numpy() for k, v in results.items()}
         summary.plot_image_response(
             f"image_response/mouse{mouse_id}", results=results, step=epoch, mode=mode
         )
@@ -266,7 +279,7 @@ def check_output(command: list):
 
 def save_args(args):
     """Save args object as dictionary to args.output_dir/args.json"""
-    arguments = copy.deepcopy(args.__dict__)
+    arguments = deepcopy(args.__dict__)
     try:
         arguments["git_hash"] = check_output(["git", "describe", "--always"])
         arguments["hostname"] = check_output(["hostname"])
@@ -292,19 +305,37 @@ def load_args(args):
         args.output_shapes = {str(k): v for k, v in args.output_shapes.items()}
 
 
-def get_device(args):
-    """Get the appropriate torch.device from args.device argument"""
-    device = args.device
-    if not device:
-        device = "cpu"
-        if torch.cuda.is_available():
-            device = "cuda"
-            # allow TensorFloat32 computation
-            torch.backends.cudnn.allow_tf32 = True
-            torch.backends.cuda.matmul.allow_tf32 = True
-        elif torch.backends.mps.is_available():
-            device = "mps"
-    args.device = torch.device(device)
+def wandb_init(args, wandb_sweep: bool):
+    """initialize wandb and strip information from args"""
+    os.environ["WANDB_SILENT"] = "true"
+    if not wandb_sweep:
+        try:
+            config = deepcopy(args.__dict__)
+            config.pop("input_shape", None)
+            config.pop("output_shapes", None)
+            config.pop("output_dir", None)
+            config.pop("device", None)
+            config.pop("format", None)
+            config.pop("dpi", None)
+            config.pop("save_plots", None)
+            config.pop("verbose", None)
+            config.pop("use_wandb", None)
+            config.pop("trainable_params", None)
+            config.pop("wandb_group", None)
+            config.pop("clear_output_dir", None)
+            wandb.init(
+                config=config,
+                project="sensorium",
+                entity="bryanlimy",
+                group=args.wandb_group,
+                name=os.path.basename(args.output_dir),
+            )
+            del config
+        except AssertionError as e:
+            print(f"wandb.init error: {e}\n")
+            args.use_wandb = False
+    if args.use_wandb and hasattr(args, "trainable_params"):
+        wandb.log({"trainable_params": args.trainable_params}, step=0)
 
 
 def metrics2df(results: t.Dict[int, torch.Tensor]):
@@ -316,7 +347,7 @@ def metrics2df(results: t.Dict[int, torch.Tensor]):
 
 
 def log_metrics(
-    results: t.Dict[t.Union[int, str], t.Dict[str, t.Any]],
+    results: t.Dict[str, t.Dict[str, t.Any]],
     epoch: int,
     summary: tensorboard.Summary = None,
     mode: int = 0,
@@ -324,7 +355,7 @@ def log_metrics(
     """Compute the mean of the metrics in results and log to Summary
 
     Args:
-        results: t.Dict[t.Union[int, str], t.Dict[str, t.List[float]]],
+        results: t.Dict[str, t.Dict[str, t.List[float]]],
             a dictionary of tensors where keys are the name of the metrics
             that represent results from of a mouse.
         epoch: int, the current epoch number.
@@ -357,26 +388,9 @@ def log_metrics(
     return overall_result
 
 
-def num_steps(ds: t.Dict[int, DataLoader]):
+def num_steps(ds: t.Dict[str, DataLoader]):
     """Return the number of total steps to iterate all the DataLoaders"""
     return sum([len(ds[k]) for k in ds.keys()])
-
-
-def load_pretrain_core(args, model: Model, device: torch.device = "cpu"):
-    filename = os.path.join(args.pretrain_core, "ckpt", "model_state.pt")
-    assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
-    model_dict = model.state_dict()
-    core_ckpt = torch.load(filename, map_location=device)
-    # add 'core.' to parameters in pretrained core
-    core_dict = {f"core.{k}": v for k, v in core_ckpt["model_state_dict"].items()}
-    # check pretrained core has the same parameters in core module
-    for key in model_dict.keys():
-        if key.startswith("core."):
-            assert key in core_dict
-    model_dict.update(core_dict)
-    model.load_state_dict(model_dict)
-    if args.verbose:
-        print(f"\nLoaded pretrained core from {args.pretrain_core}.\n")
 
 
 def compute_micro_batch_size(

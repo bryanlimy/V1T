@@ -30,13 +30,15 @@ install_torch() {
     printf "\nInstalling PyTorch...\n"
     case $device in
         osx-arm64)
-            conda install -c pytorch pytorch=1.13.1 torchvision torchaudio -y
+            export GRPC_PYTHON_BUILD_SYSTEM_OPENSSL=1
+            export GRPC_PYTHON_BUILD_SYSTEM_ZLIB=1
+            conda install pytorch=2.0 torchvision torchaudio -c pytorch -y
             ;;
         osx-64)
-            conda install -c pytorch pytorch=1.13.1 torchvision torchaudio -y
+            conda install pytorch=2.0 torchvision torchaudio -c pytorch -y
             ;;
         linux-64)
-             conda install pytorch=1.13.1 torchvision torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -y
+             conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
 #            conda install pytorch torchvision torchaudio pytorch-cuda=11.7 libcufft=10.9 libcublas=11.11 libcusparse=11.7 libnvjpeg=11.9 -c pytorch -c nvidia -y
             ;;
         *)

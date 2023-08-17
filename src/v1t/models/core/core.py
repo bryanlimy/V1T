@@ -17,13 +17,31 @@ def register(name):
 
 
 class Core(nn.Module):
-    def __init__(self, args, input_shape: t.Tuple[int, int, int], name: str = "Core"):
+    def __init__(
+        self, args: t.Any, input_shape: t.Tuple[int, int, int], name: str = "Core"
+    ):
         super(Core, self).__init__()
         self.input_shape = input_shape
         self.name = name
         self.behavior_mode = args.behavior_mode
         if args.core != "vit":
             assert self.behavior_mode != 2
+        self.frozen = False
+        self.verbose = args.verbose
+
+    def freeze(self):
+        for param in self.parameters():
+            param.requires_grad_(False)
+        self.frozen = True
+        if self.verbose:
+            print("Freeze core module.")
+
+    def unfreeze(self):
+        for param in self.parameters():
+            param.requires_grad_(True)
+        self.forzen = False
+        if self.verbose:
+            print("Unfreeze core module.")
 
     def initialize(self):
         raise NotImplementedError("initialize function has not been implemented")

@@ -126,7 +126,13 @@ class SpatialTransformerCore(Core):
         outputs = F.grid_sample(inputs, grid=grid, align_corners=align_corners)
         return outputs
 
-    def forward(self, inputs: torch.Tensor):
+    def forward(
+        self,
+        inputs: torch.Tensor,
+        mouse_id: str,
+        behaviors: torch.Tensor,
+        pupil_centers: torch.Tensor,
+    ):
         outputs = self.stn(inputs)
         for i, block in enumerate(self.cnn):
             outputs = block(outputs) if i == 0 else block(outputs) + outputs

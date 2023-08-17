@@ -15,51 +15,29 @@ DS_NAMES = t.Literal["sensorium", "franke2022"]
 
 
 # key - mouse ID, value - filename of the recordings
-# Mouse 0: Sensorium, Mouse 1: Sensorium+, Mouse 3-7: pre-training
+# Mouse S0: Sensorium, Mouse S1: Sensorium+
 SENSORIUM = {
-    "0": "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "1": "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "2": "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "3": "static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "4": "static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "5": "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
-    "6": "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "S0": "static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "S1": "static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "A": "static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "B": "static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "C": "static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "D": "static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
+    "E": "static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6",
 }
 
 FRANKE2022 = {
-    "static25311-10-26": "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static25340-3-19": "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static25704-2-12": "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    "static25830-10-4": "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static26085-6-3": "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static26142-2-11": "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
-    "static26426-18-13": "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    "static26470-4-5": "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
-    "static26644-6-2": "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
-    "static26872-21-6": "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "F": "static25311-10-26-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "G": "static25340-3-19-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "H": "static25704-2-12-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "I": "static25830-10-4-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "J": "static26085-6-3-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "K": "static26142-2-11-ColorImageNet-6a21297215f4dbb802554a60c0e72877",
+    "L": "static26426-18-13-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "M": "static26470-4-5-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
+    "N": "static26644-6-2-ColorImageNet-b23ac8521543becfd382e56c657ba29b",
+    "O": "static26872-21-6-ColorImageNet-104e446ed0128d89c639eef0abe4655b",
 }
-
-
-def convert_id(mouse_id: str):
-    """convert mouse ID to the ID used in paper"""
-    pairs = {
-        "2": "A",
-        "3": "B",
-        "4": "C",
-        "5": "D",
-        "6": "E",
-        "static25311-10-26": "F",
-        "static25340-3-19": "G",
-        "static25704-2-12": "H",
-        "static25830-10-4": "I",
-        "static26085-6-3": "J",
-        "static26142-2-11": "K",
-        "static26426-18-13": "L",
-        "static26470-4-5": "M",
-        "static26644-6-2": "N",
-        "static26872-21-6": "O",
-    }
-    return pairs[mouse_id] if mouse_id in pairs else mouse_id
 
 
 def get_mouse2path(ds_name: DS_NAMES):
@@ -70,15 +48,24 @@ def get_mouse2path(ds_name: DS_NAMES):
 def get_mouse_ids(args):
     """retrieve the mouse IDs when args.mouse_ids is not provided"""
     args.ds_name = os.path.basename(args.dataset)
-    assert args.ds_name in ("sensorium", "franke2022")
-    if not args.mouse_ids:
-        if args.ds_name == "sensorium":
-            mouse_ids = list(SENSORIUM.keys())
-            if args.behavior_mode > 0:
-                mouse_ids.remove("0")
-        else:
-            mouse_ids = list(FRANKE2022.keys())
-        args.mouse_ids = mouse_ids
+    match args.ds_name:
+        case "sensorium":
+            all_animals = list(SENSORIUM.keys())
+            if not args.mouse_ids:
+                args.mouse_ids = all_animals
+                if args.behavior_mode > 0:
+                    # mouse S0 does not have behavioral data
+                    args.mouse_ids.remove("S0")
+            for mouse_id in args.mouse_ids:
+                assert mouse_id in all_animals
+        case "franke2022":
+            all_animals = list(FRANKE2022.keys())
+            if not args.mouse_ids:
+                args.mouse_ids = all_animals
+            for mouse_id in args.mouse_ids:
+                assert mouse_id in all_animals
+        case _:
+            raise KeyError(f"--dataset {args.ds_name} not implemented.")
 
 
 class CycleDataloaders:
@@ -89,7 +76,7 @@ class CycleDataloaders:
     Code reference: https://github.com/sinzlab/neuralpredictors/blob/9b85300ab854be1108b4bf64b0e4fa2e960760e0/neuralpredictors/training/cyclers.py#L68
     """
 
-    def __init__(self, ds: t.Dict[int, DataLoader]):
+    def __init__(self, ds: t.Dict[str, DataLoader]):
         self.ds = ds
         self.max_iterations = max([len(ds) for ds in self.ds.values()])
 
@@ -306,23 +293,40 @@ class MiceDataset(Dataset):
         mouse_dir = os.path.join(data_dir, mouse2path[mouse_id])
         metadata = load_mouse_metadata(self.ds_name, mouse_dir=mouse_dir)
         self.behavior_mode = args.behavior_mode
-        if self.behavior_mode and mouse_id == 0:
-            raise ValueError("Mouse 0 does not have behaviour data.")
+        if self.behavior_mode and mouse_id == "S0":
+            raise ValueError("Mouse S0 does not have behaviour data.")
         self.mouse_dir = metadata["mouse_dir"]
         self.neuron_ids = metadata["neuron_ids"]
         self.coordinates = metadata["coordinates"]
         self.stats = metadata["stats"]
         # extract indexes that correspond to the tier
-        self.indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
+        indexes = np.where(metadata["tiers"] == tier)[0].astype(np.int32)
+        if tier == "train" and hasattr(args, "limit_data") and args.limit_data:
+            if len(indexes) > args.limit_data:
+                rng = np.random.default_rng(seed=args.seed)
+                indexes = rng.choice(indexes, size=args.limit_data, replace=False)
+                if args.verbose > 2:
+                    print(
+                        f"limit mouse {mouse_id} training samples to {args.limit_data}."
+                    )
+        self.indexes = indexes
         self.image_ids = metadata["image_ids"][self.indexes]
         self.trial_ids = metadata["trial_ids"][self.indexes]
         # standardizer for responses
         self.compute_response_precision()
 
         # indicate if trial IDs and targets are hashed
-        self.hashed = self.ds_name == "sensorium" and mouse_id in ("0", "1")
+        self.hashed = self.ds_name == "sensorium" and mouse_id in ("S0", "S1")
 
         self.image_shape = get_image_shape(mouse_dir)
+
+        self.gray_scale = False
+        if args.gray_scale and self.ds_name == "franke2022":
+            # convert franke2022 images to gray-scale
+            if args.verbose > 2:
+                print(f"convert mouse {mouse_id} {tier} image to gray-scale")
+            self.gray_scale = True
+            self.image_shape = (1,) + self.image_shape[1:]
 
     def __len__(self):
         return len(self.indexes)
@@ -347,9 +351,15 @@ class MiceDataset(Dataset):
     def num_neurons(self):
         return len(self.neuron_ids)
 
+    def color2gray(self, image: np.ndarray):
+        return np.mean(image, axis=0, keepdims=True)
+
     def transform_image(self, image: np.ndarray):
         stats = self.image_stats
-        return (image - stats["mean"]) / stats["std"]
+        image = (image - stats["mean"]) / stats["std"]
+        if self.gray_scale:
+            image = self.color2gray(image)
+        return image
 
     def i_transform_image(self, image: t.Union[np.ndarray, torch.Tensor]):
         """Reverse standardized image"""
@@ -504,8 +514,12 @@ def get_submission_ds(
     if not hasattr(args, "ds_name"):
         args.ds_name = os.path.basename(args.dataset)
     # settings for DataLoader
-    test_kwargs = {"batch_size": batch_size, "num_workers": 0, "shuffle": False}
-    if device.type in ["cuda", "mps"]:
+    test_kwargs = {
+        "batch_size": batch_size,
+        "num_workers": args.num_workers,
+        "shuffle": False,
+    }
+    if device.type in ("cuda", "mps"):
         test_kwargs.update({"prefetch_factor": 2, "pin_memory": True})
 
     # a dictionary of DataLoader for each live test and final test set
@@ -516,7 +530,7 @@ def get_submission_ds(
             MiceDataset(args, tier="test", data_dir=data_dir, mouse_id=mouse_id),
             **test_kwargs,
         )
-        if mouse_id in ("0", "1"):
+        if mouse_id in ("S0", "S1"):
             final_test_ds[mouse_id] = DataLoader(
                 MiceDataset(
                     args, tier="final_test", data_dir=data_dir, mouse_id=mouse_id

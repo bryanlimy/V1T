@@ -128,6 +128,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# custom .gitgire
 .idea
 .DS_Store
 .vscode
@@ -143,4 +144,5 @@ dmypy.json
 *.json
 /runs
 wandb/
-jobs.sh
+*.sh
+!setup.sh

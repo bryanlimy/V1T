@@ -1,3 +1,4 @@
+import os
 import torch
 import collections
 import numpy as np
@@ -8,6 +9,25 @@ from math import floor
 
 def int2tuple(value: t.Union[int, t.Tuple[int, int]]):
     return (value, value) if isinstance(value, int) else value
+
+
+def load_pretrain_core(args, model: nn.Module, device: torch.device = "cpu"):
+    filename = os.path.join(args.pretrain_core, "ckpt", "model_state.pt")
+    assert os.path.exists(filename), f"Cannot find pretrain core {filename}."
+    model_dict = model.state_dict()
+    ckpt = torch.load(filename, map_location=device)
+    # extract core parameters 'core.' from pretrained model
+    core_dict = {k: v for k, v in ckpt["model"].items() if k.startswith("core.")}
+    # check pretrained core has the same parameters in core module
+    for k in model_dict.keys():
+        assert not k.startswith("core.") or k in core_dict
+    model_dict.update(core_dict)
+    model.load_state_dict(model_dict)
+    if args.verbose:
+        print(
+            f"\nLoaded pretrained core from {args.pretrain_core} "
+            f"(correlation: {ckpt['value']:.04f})."
+        )
 
 
 def conv2d_shape(

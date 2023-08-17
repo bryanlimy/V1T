@@ -36,7 +36,7 @@ class OutputModule(nn.Module):
         2 - separate linear layer per animal
     """
 
-    def __init__(self, args, in_features: int):
+    def __init__(self, args: t.Any, in_features: int):
         super(OutputModule, self).__init__()
         self.in_features = in_features
         self.output_shapes = args.output_shapes
@@ -47,7 +47,7 @@ class OutputModule(nn.Module):
         elif self.ensemble_mode == 2:
             self.linear = nn.ModuleDict(
                 {
-                    str(mouse_id): nn.Linear(in_features=in_features, out_features=1)
+                    mouse_id: nn.Linear(in_features=in_features, out_features=1)
                     for mouse_id in self.output_shapes.keys()
                 }
             )
@@ -65,17 +65,20 @@ class OutputModule(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def forward(self, inputs: torch.Tensor, mouse_id: int):
-        if self.ensemble_mode == 0:
-            outputs = torch.mean(inputs, dim=-1)
-        elif self.ensemble_mode == 1:
-            outputs = self.linear(inputs)
-            outputs = rearrange(outputs, "b d 1 -> b d")
-        elif self.ensemble_mode == 2:
-            outputs = self.linear[str(mouse_id)](inputs)
-            outputs = rearrange(outputs, "b d 1 -> b d")
-        else:
-            raise NotImplementedError("--ensemble_model must be 0 or 1.")
+    def forward(self, inputs: torch.Tensor, mouse_id: str):
+        match self.ensemble_mode:
+            case 0:
+                outputs = torch.mean(inputs, dim=-1)
+            case 1:
+                outputs = self.linear(inputs)
+                outputs = rearrange(outputs, "b d 1 -> b d")
+            case 2:
+                outputs = self.linear[mouse_id](inputs)
+                outputs = rearrange(outputs, "b d 1 -> b d")
+            case _:
+                NotImplementedError(
+                    f"--ensemble_model {self.ensemble_mode} not supported."
+                )
         outputs = self.activation(outputs)
         return outputs
 
@@ -83,9 +86,9 @@ class OutputModule(nn.Module):
 class EnsembleModel(nn.Module):
     def __init__(
         self,
-        args,
+        args: t.Any,
         saved_models: t.Dict[str, str],
-        ds: t.Dict[int, DataLoader],
+        ds: t.Dict[str, DataLoader],
     ):
         super(EnsembleModel, self).__init__()
         self.verbose = args.verbose
@@ -122,7 +125,7 @@ class EnsembleModel(nn.Module):
                 f"(correlation: {ckpt['value']:.04f})."
             )
 
-    def regularizer(self, mouse_id: int):
+    def regularizer(self, mouse_id: str):
         return torch.tensor(0.0)
 
     def forward(
@@ -272,42 +275,8 @@ def main(args):
             args.use_wandb = False
 
     # pretrained model to load
-    # args.saved_models = {
-    #     "1": "runs/vit_ensemble/001_vit_gaussian2d_seed1",
-    #     "2": "runs/vit_ensemble/002_vit_gaussian2d_seed2",
-    #     "3": "runs/vit_ensemble/003_vit_gaussian2d_seed3",
-    #     "4": "runs/vit_ensemble/004_vit_gaussian2d_seed4",
-    #     "5": "runs/vit_ensemble/005_vit_gaussian2d_seed5",
-    #     "6": "runs/vit_ensemble/006_vit_gaussian2d_seed6",
-    #     "7": "runs/vit_ensemble/007_vit_gaussian2d_seed7",
-    #     "8": "runs/vit_ensemble/008_vit_gaussian2d_seed8",
-    #     "9": "runs/vit_ensemble/009_vit_gaussian2d_seed9",
-    #     "10": "runs/vit_ensemble/010_vit_gaussian2d_seed10",
-    # }
-    # args.saved_models = {
-    #     # "1": "runs/stacked2d_ensemble/001_stacked2d_gaussian2d_seed1",
-    #     "2": "runs/stacked2d_ensemble/002_stacked2d_gaussian2d_seed2",
-    #     "3": "runs/stacked2d_ensemble/003_stacked2d_gaussian2d_seed3",
-    #     # "4": "runs/stacked2d_ensemble/004_stacked2d_gaussian2d_seed4",
-    #     # "5": "runs/stacked2d_ensemble/005_stacked2d_gaussian2d_seed5",
-    #     # "6": "runs/stacked2d_ensemble/006_stacked2d_gaussian2d_seed6",
-    #     # "7": "runs/stacked2d_ensemble/007_stacked2d_gaussian2d_seed7",
-    #     "8": "runs/stacked2d_ensemble/008_stacked2d_gaussian2d_seed8",
-    #     "9": "runs/stacked2d_ensemble/009_stacked2d_gaussian2d_seed9",
-    #     "10": "runs/stacked2d_ensemble/010_stacked2d_gaussian2d_seed10",
-    # }
-    args.saved_models = {
-        "1": "runs/franke2022_ensemble/011_stacked2d_gaussian2d_seed1",
-        "2": "runs/franke2022_ensemble/012_stacked2d_gaussian2d_seed2",
-        "3": "runs/franke2022_ensemble/013_stacked2d_gaussian2d_seed3",
-        "4": "runs/franke2022_ensemble/014_stacked2d_gaussian2d_seed4",
-        "5": "runs/franke2022_ensemble/015_stacked2d_gaussian2d_seed5",
-        "6": "runs/franke2022_ensemble/016_stacked2d_gaussian2d_seed6",
-        "7": "runs/franke2022_ensemble/017_stacked2d_gaussian2d_seed7",
-        "8": "runs/franke2022_ensemble/018_stacked2d_gaussian2d_seed8",
-        "9": "runs/franke2022_ensemble/019_stacked2d_gaussian2d_seed9",
-        "10": "runs/franke2022_ensemble/020_stacked2d_gaussian2d_seed10",
-    }
+    args.saved_models = {}
+    assert hasattr(args, "saved_models") and args.saved_models
 
     model = EnsembleModel(args, saved_models=args.saved_models, ds=train_ds)
 
@@ -420,19 +389,19 @@ def main(args):
         wandb.log({"test_corr": eval_result["single_trial_correlation"]}, step=0)
 
     if "sensorium" in args.dataset:
-        if 0 in test_ds:  # Sensorium challenge
+        if "S0" in test_ds:  # Sensorium challenge
             submission.generate_submission(
                 args,
-                mouse_id="0",
+                mouse_id="S0",
                 test_ds=test_ds,
                 final_test_ds=final_test_ds,
                 model=model,
                 csv_dir=os.path.join(csv_dir, "sensorium"),
             )
-        if 1 in test_ds:  # Sensorium+ challenge
+        if "S1" in test_ds:  # Sensorium+ challenge
             submission.generate_submission(
                 args,
-                mouse_id="1",
+                mouse_id="S1",
                 test_ds=test_ds,
                 final_test_ds=final_test_ds,
                 model=model,
@@ -470,6 +439,9 @@ if __name__ == "__main__":
         "2: add latent behavior variables to each ViT block"
         "3: add latent behavior + pupil centers to each ViT block"
         "4: separate BehaviorMLP for each animal",
+    )
+    parser.add_argument(
+        "--gray_scale", action="store_true", help="convert colored image to gray-scale"
     )
     parser.add_argument(
         "--num_workers",

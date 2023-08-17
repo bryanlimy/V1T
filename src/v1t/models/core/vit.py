@@ -44,6 +44,7 @@ class Image2Patches(nn.Module):
         0 - nn.Unfold to extract patches
         1 - nn.Conv2D to extract patches
         2 - Shifted Patch Tokenization https://arxiv.org/abs/2112.13492v1
+        3 - nn.Unfold with Dual PatchNorm https://openreview.net/forum?id=jgMqve6Qhw
     """
 
     def __init__(
@@ -56,38 +57,49 @@ class Image2Patches(nn.Module):
         dropout: float = 0.0,
     ):
         super(Image2Patches, self).__init__()
-        assert patch_mode in (0, 1, 2)
         assert 1 <= stride <= patch_size
         c, h, w = image_shape
         self.input_shape = image_shape
 
         num_patches = self.unfold_dim(h, w, patch_size=patch_size, stride=stride)
-        if patch_mode == 0:
-            patch_dim = patch_size * patch_size * c
-            self.projection = nn.Sequential(
-                nn.Unfold(kernel_size=patch_size, stride=stride),
-                Rearrange("b c l -> b l c"),
-                nn.Linear(in_features=patch_dim, out_features=emb_dim),
-            )
-        elif patch_mode == 1:
-            self.projection = nn.Sequential(
-                nn.Conv2d(
-                    in_channels=c,
-                    out_channels=emb_dim,
-                    kernel_size=patch_size,
-                    stride=stride,
-                ),
-                Rearrange("b c h w -> b (h w) c"),
-            )
-        else:
-            patch_dim = patch_size * patch_size * (c + 4)
-            self.projection = nn.Sequential(
-                PatchShifting(patch_size=patch_size),
-                nn.Unfold(kernel_size=patch_size, stride=stride),
-                Rearrange("b c l -> b l c"),
-                nn.LayerNorm(normalized_shape=patch_dim),
-                nn.Linear(in_features=patch_dim, out_features=emb_dim),
-            )
+        match patch_mode:
+            case 0:
+                patch_dim = patch_size * patch_size * c
+                self.projection = nn.Sequential(
+                    nn.Unfold(kernel_size=patch_size, stride=stride),
+                    Rearrange("b c l -> b l c"),
+                    nn.Linear(in_features=patch_dim, out_features=emb_dim),
+                )
+            case 1:
+                self.projection = nn.Sequential(
+                    nn.Conv2d(
+                        in_channels=c,
+                        out_channels=emb_dim,
+                        kernel_size=patch_size,
+                        stride=stride,
+                    ),
+                    Rearrange("b c h w -> b (h w) c"),
+                )
+            case 2:
+                patch_dim = patch_size * patch_size * (c + 4)
+                self.projection = nn.Sequential(
+                    PatchShifting(patch_size=patch_size),
+                    nn.Unfold(kernel_size=patch_size, stride=stride),
+                    Rearrange("b c l -> b l c"),
+                    nn.LayerNorm(normalized_shape=patch_dim),
+                    nn.Linear(in_features=patch_dim, out_features=emb_dim),
+                )
+            case 3:
+                patch_dim = patch_size * patch_size * c
+                self.projection = nn.Sequential(
+                    nn.Unfold(kernel_size=patch_size, stride=stride),
+                    Rearrange("b c l -> b l c"),
+                    nn.LayerNorm(normalized_shape=patch_dim),
+                    nn.Linear(in_features=patch_dim, out_features=emb_dim),
+                    nn.LayerNorm(normalized_shape=emb_dim),
+                )
+            case _:
+                raise NotImplementedError(f"--patch_mode {patch_mode} not implemented.")
         self.cls_token = nn.Parameter(torch.randn(1, 1, emb_dim))
         num_patches += 1
         self.pos_embedding = nn.Parameter(torch.randn(num_patches, emb_dim))
@@ -163,44 +175,31 @@ class BehaviorMLP(nn.Module):
         assert behavior_mode in (2, 3, 4)
         self.behavior_mode = behavior_mode
         in_dim = 3 if behavior_mode == 2 else 5
-        if behavior_mode == 4:
-            self.model = nn.ModuleDict(
-                {
-                    mouse_id: self.build_model(
-                        in_dim=in_dim,
-                        out_dim=out_dim,
-                        dropout=dropout,
-                        use_bias=use_bias,
-                    )
-                    for mouse_id in mouse_ids
-                }
-            )
-        else:
-            self.model = self.build_model(
-                in_dim=in_dim, out_dim=out_dim, dropout=dropout
-            )
-
-    def build_model(
-        self,
-        in_dim: int,
-        out_dim: int,
-        dropout: float = 0.0,
-        use_bias: bool = True,
-    ):
-        return nn.Sequential(
-            nn.Linear(in_features=in_dim, out_features=out_dim // 2, bias=use_bias),
-            nn.Tanh(),
-            nn.Dropout(p=dropout),
-            nn.Linear(in_features=out_dim // 2, out_features=out_dim, bias=use_bias),
-            nn.Tanh(),
+        mouse_ids = mouse_ids if behavior_mode == 4 else ["share"]
+        self.models = nn.ModuleDict(
+            {
+                mouse_id: nn.Sequential(
+                    nn.Linear(
+                        in_features=in_dim,
+                        out_features=out_dim // 2,
+                        bias=use_bias,
+                    ),
+                    nn.Tanh(),
+                    nn.Dropout(p=dropout),
+                    nn.Linear(
+                        in_features=out_dim // 2,
+                        out_features=out_dim,
+                        bias=use_bias,
+                    ),
+                    nn.Tanh(),
+                )
+                for mouse_id in mouse_ids
+            }
         )
 
     def forward(self, inputs: torch.Tensor, mouse_id: str):
-        if self.behavior_mode == 4:
-            outputs = self.model[mouse_id](inputs)
-        else:
-            outputs = self.model(inputs)
-        return outputs
+        mouse_id = mouse_id if self.behavior_mode == 4 else "share"
+        return self.models[mouse_id](inputs)
 
 
 class Attention(nn.Module):
@@ -212,24 +211,25 @@ class Attention(nn.Module):
         dropout: float = 0.0,
         use_lsa: bool = False,
         use_bias: bool = True,
+        grad_checkpointing: bool = False,
     ):
         super(Attention, self).__init__()
+        self.grad_checkpointing = grad_checkpointing
         inner_dim = emb_dim * num_heads
 
-        self.num_heads = num_heads
-
-        self.attend = nn.Softmax(dim=-1)
-        self.dropout = nn.Dropout(p=dropout)
+        self.layer_norm = nn.LayerNorm(emb_dim)
 
         self.to_qkv = nn.Linear(
             in_features=emb_dim, out_features=inner_dim * 3, bias=False
         )
+        self.rearrange = Rearrange("b n (h d) -> b h n d", h=num_heads)
+        self.attend = nn.Softmax(dim=-1)
+        self.dropout = nn.Dropout(p=dropout)
 
         self.projection = nn.Sequential(
             nn.Linear(in_features=inner_dim, out_features=emb_dim, bias=use_bias),
             nn.Dropout(p=dropout),
         )
-        self.layer_norm = nn.LayerNorm(emb_dim)
 
         scale = emb_dim**-0.5
         if use_lsa:
@@ -250,27 +250,37 @@ class Attention(nn.Module):
             self.mask = None
             self.register_buffer("scale", torch.tensor(scale))
 
-    def forward(self, inputs: torch.Tensor):
-        batch_size = inputs.size(0)
-        inputs = self.layer_norm(inputs)
-        qkv = self.to_qkv(inputs).chunk(3, dim=-1)
-        q, k, v = map(
-            lambda a: rearrange(a, "b n (h d) -> b h n d", h=self.num_heads),
-            qkv,
-        )
-
+    def scaled_dot_product_attention(
+        self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
+    ):
         if self.mask is None:
             dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
         else:
-            scale = repeat(self.scale, "h -> b h 1 1", b=batch_size)
+            scale = repeat(self.scale, "h -> b h 1 1", b=q.size(0))
             dots = torch.matmul(q, k.transpose(-1, -2)) * scale
             dots[:, :, self.mask[:, 0], self.mask[:, 1]] = -self.max_value
-
         attn = self.attend(dots)
         attn = self.dropout(attn)
         outputs = einsum(attn, v, "b h n i, b h i d -> b h n d")
+        return outputs
+
+    def mha(self, inputs: torch.Tensor):
+        inputs = self.layer_norm(inputs)
+        q, k, v = torch.chunk(self.to_qkv(inputs), chunks=3, dim=-1)
+        outputs = self.scaled_dot_product_attention(
+            q=self.rearrange(q), k=self.rearrange(k), v=self.rearrange(v)
+        )
         outputs = rearrange(outputs, "b h n d -> b n (h d)")
         outputs = self.projection(outputs)
+        return outputs
+
+    def forward(self, inputs: torch.Tensor):
+        if self.grad_checkpointing:
+            outputs = checkpoint(
+                self.mha, inputs, preserve_rng_state=True, use_reentrant=False
+            )
+        else:
+            outputs = self.mha(inputs)
         return outputs
 
 
@@ -290,9 +300,8 @@ class Transformer(nn.Module):
         use_bias: bool = True,
         grad_checkpointing: bool = False,
     ):
-        super().__init__()
+        super(Transformer, self).__init__()
         self.blocks = nn.ModuleList([])
-        self.grad_checkpointing = grad_checkpointing
         for i in range(num_blocks):
             block = nn.ModuleDict(
                 {
@@ -303,6 +312,7 @@ class Transformer(nn.Module):
                         dropout=dropout,
                         use_lsa=use_lsa,
                         use_bias=use_bias,
+                        grad_checkpointing=grad_checkpointing,
                     ),
                     "mlp": MLP(
                         in_dim=emb_dim,
@@ -335,15 +345,6 @@ class Transformer(nn.Module):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
 
-    def checkpointing(self, fn: t.Callable, inputs: torch.Tensor):
-        if self.grad_checkpointing:
-            outputs = checkpoint(
-                fn, inputs, preserve_rng_state=True, use_reentrant=False
-            )
-        else:
-            outputs = fn(inputs)
-        return self.drop_path(outputs) + inputs
-
     def forward(
         self,
         inputs: torch.Tensor,
@@ -356,7 +357,7 @@ class Transformer(nn.Module):
                 b_latent = block["b-mlp"](behaviors, mouse_id=mouse_id)
                 b_latent = repeat(b_latent, "b d -> b 1 d")
                 outputs = outputs + b_latent
-            outputs = self.checkpointing(block["mha"], outputs)
+            outputs = self.drop_path(block["mha"](outputs)) + outputs
             outputs = self.drop_path(block["mlp"](outputs)) + outputs
         return outputs
 
@@ -373,12 +374,13 @@ class ViTCore(Core):
         self.register_buffer("reg_scale", torch.tensor(args.core_reg_scale))
         self.behavior_mode = args.behavior_mode
 
-        if not hasattr(args, "patch_mode"):
-            print("patch_mode is not defined, set to 0.")
-            args.patch_mode = 0
-        if not hasattr(args, "patch_stride"):
-            print("patch_stride is not defined, set to 1.")
-            args.patch_stride = 1
+        if not hasattr(args, "grad_checkpointing"):
+            args.grad_checkpointing = False
+        elif args.grad_checkpointing is None:
+            args.grad_checkpointing = "cuda" in args.device.type
+        if args.grad_checkpointing and args.verbose:
+            print(f"Enable gradient checkpointing in ViT")
+
         self.patch_embedding = Image2Patches(
             image_shape=input_shape,
             patch_mode=args.patch_mode,
@@ -387,10 +389,6 @@ class ViTCore(Core):
             emb_dim=args.emb_dim,
             dropout=args.p_dropout,
         )
-        if not hasattr(args, "grad_checkpointing"):
-            args.grad_checkpointing = False
-        if not hasattr(args, "disable_bias"):
-            args.disable_bias = False
         self.transformer = Transformer(
             input_shape=self.patch_embedding.output_shape,
             emb_dim=args.emb_dim,

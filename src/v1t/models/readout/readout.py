@@ -23,7 +23,7 @@ class Readout(nn.Module):
 
     def __init__(
         self,
-        args,
+        args: t.Any,
         input_shape: tuple,
         output_shape: tuple,
         ds: DataLoader,
@@ -54,7 +54,7 @@ class Readouts(nn.ModuleDict):
 
     def __init__(
         self,
-        args,
+        args: t.Any,
         model: str,
         input_shape: t.Tuple[int],
         output_shapes: t.Dict[str, tuple],
