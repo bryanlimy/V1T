@@ -88,7 +88,7 @@ sensorium2022/
   - TensorBoard
     - Use the following command to monitor training performance with TensorBoard
       ```bash
-      tensorboard --logidr runs/v1t_model --port 6006
+      tensorboard --logdir runs/v1t_model --port 6006
       ```
     - Visit `localhost:6006` on your browser
   - Weights & Biases
