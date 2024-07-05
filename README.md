@@ -67,8 +67,9 @@ sensorium2022/
 - Install PyTorch 2.0 and all the relevant packages with:
   ```bash
   # install PyTorch
-  conda install -c pytorch pytorch=2.0 torchvision torchaudio -y
-  #conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
+  conda install -c pytorch pytorch=2.0 torchvision torchaudio
+  # conda install pytorch=2.0 torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+  
   # install V1T package
   pip install -e .
   ```
