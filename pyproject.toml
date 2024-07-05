@@ -1,13 +1,10 @@
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
-]
+requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "v1t"
-version = "0.0.1"
+version = "1.0"
 authors = [
   { name="Bryan M. Li", email="bryan.li@ed.ac.uk" },
 ]
@@ -20,6 +17,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+keywords = [
+    "transformer",
+    "neuro-ai",
+    "sensorium2022",
+    "visual-response-prediction",
+    "sensorium",
+]
+dynamic = ["dependencies", "optional-dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
 
 [project.urls]
 "Homepage" = "https://github.com/bryanlimy/v1t"
