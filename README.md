@@ -64,14 +64,11 @@ sensorium2022/
   ```bash
   conda activate v1t
   ```
-- We have created a [`setup.sh`](setup.sh) script to install the relevant `conda` and `pip` packages for macOS and Ubuntu devices.
-  ```bash
-  sh setup.sh
-  ```
-- Alternative, you can install PyTorch 2.0 and all the relevant packages with:
+- Install PyTorch 2.0 and all the relevant packages with:
   ```bash
   # install PyTorch
   conda install -c pytorch pytorch=2.0 torchvision torchaudio -y
+  #conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia -y
   # install V1T package
   pip install -e .
   ```
