@@ -68,7 +68,7 @@ sensorium2022/
   ```bash
   sh setup.sh
   ```
-- Alternative, you can install PyTorch 2.0 and all the relevant packages with:
+- Alternatively, you can install PyTorch 2.0 and all the relevant packages with:
   ```bash
   # install PyTorch
   conda install -c pytorch pytorch=2.0 torchvision torchaudio -y
@@ -83,6 +83,9 @@ sensorium2022/
   ```
 - use the `--help` flag to see all available options
 
+## Trained model weight(s)
+- The model weights trained on the Sensorium 2022 dataset and Franke et al. 2022 dataset are available at [huggingface.co/bryanlimy/V1T](https://huggingface.co/bryanlimy/V1T).
+  
 ## Visualize training performance
 - The training code `train.py` uses both [TensorBoard](https://www.tensorflow.org/tensorboard) and [Weights & Biases](https://wandb.ai/site) to log training information.
   - TensorBoard
